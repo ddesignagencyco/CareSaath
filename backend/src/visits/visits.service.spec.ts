@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { VisitsService } from './visits.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
   createAuditMock,
   createNotificationsMock,
   createPrismaMock,
+  createRedisMock,
+  createSmsMock,
   wireTransaction,
 } from '../../test/test-helpers.js';
 
@@ -17,7 +19,11 @@ function visitFixture(overrides: Record<string, unknown> = {}) {
     bookingId: 'b-1',
     status: 'CONFIRMED',
     note: null,
-    booking: { customerId: 'u-cust', customer: { id: 'u-cust', phone: '+923000000001' } },
+    booking: {
+      customerId: 'u-cust',
+      customer: { id: 'u-cust', phone: '+923000000001' },
+      patient: { medicalContext: null },
+    },
     ...overrides,
   };
 }
@@ -25,16 +31,22 @@ function visitFixture(overrides: Record<string, unknown> = {}) {
 describe('VisitsService transitions', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let notifications: ReturnType<typeof createNotificationsMock>;
+  let redis: ReturnType<typeof createRedisMock>;
+  let sms: ReturnType<typeof createSmsMock>;
   let service: VisitsService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     notifications = createNotificationsMock();
+    redis = createRedisMock();
+    sms = createSmsMock();
     wireTransaction(prisma);
     service = new VisitsService(
       prisma as never,
       createAuditMock() as never,
       notifications as never,
+      redis as never,
+      sms as never,
     );
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
   });
@@ -83,5 +95,48 @@ describe('VisitsService transitions', () => {
     await expect(
       service.submitNote(caregiver, 'v-1', { summary: 'done' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('issues a check-in OTP to the customer and stores it in Redis', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+    prisma.otpCode.create.mockResolvedValue({});
+
+    const result = await service.requestCheckInOtp(caregiver, 'v-1');
+
+    expect(result.sentTo).toBe('+923000000001');
+    expect(redis.client.set).toHaveBeenCalled();
+    expect(sms.sendOtp).toHaveBeenCalledWith('+923000000001', expect.any(String));
+  });
+
+  it('rejects a check-in OTP request on a completed visit', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'COMPLETED' }));
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('rejects an OTP check-in when no code was requested', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+    redis.client.get.mockResolvedValue(null);
+    await expect(
+      service.checkIn(caregiver, 'v-1', { method: 'OTP', code: '123456' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('accepts a matching OTP check-in and consumes the code', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+    prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+    prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
+    // sha256('123456')
+    const hash = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
+    redis.client.get.mockResolvedValue(hash);
+    redis.client.incr.mockResolvedValue(1);
+    prisma.otpCode.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.checkIn(caregiver, 'v-1', { method: 'OTP', code: '123456' });
+
+    expect(result).toMatchObject({ status: 'CHECKED_IN' });
+    expect(redis.client.del).toHaveBeenCalled();
+    expect(prisma.otpCode.updateMany).toHaveBeenCalled();
   });
 });

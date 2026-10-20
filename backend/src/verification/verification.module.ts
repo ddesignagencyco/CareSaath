@@ -21,12 +21,21 @@ import {
   VerificationStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
+import { decryptMaybe, deriveKey } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { paginate } from '../common/dto/pagination.js';
+
+/** Must match the key used by CaregiversModule to encrypt CNIC. */
+const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
+
+/** Admins need the CNIC for PNC/PMDC cross-check; decrypt it for display. */
+function presentCnic<T extends { cnic: string }>(profile: T): T {
+  return { ...profile, cnic: decryptMaybe(profile.cnic, CNIC_KEY) ?? profile.cnic };
+}
 
 class DecisionDto {
   @ApiPropertyOptional()
@@ -88,7 +97,7 @@ export class VerificationService {
         },
       }),
     ]);
-    return paginate(items, query.page, query.limit, total);
+    return paginate(items.map(presentCnic), query.page, query.limit, total);
   }
 
   private async load(id: string) {

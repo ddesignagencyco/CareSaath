@@ -16,7 +16,6 @@ import {
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import {
   PaymentStatus,
   PayoutAccountType,
@@ -25,6 +24,11 @@ import {
   UserRole,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
+import {
+  decryptField,
+  deriveKey,
+  encryptField,
+} from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -34,37 +38,21 @@ import { NotificationsModule, NotificationsService } from '../notifications/noti
 
 /**
  * ERD §3.5 / TRD §9: payout account numbers are sensitive and must be encrypted
- * at rest. Key management is TBD, so a single env key drives AES-256-GCM here.
+ * at rest (AES-256-GCM, shared field-encryption utility).
  */
-const ENC_KEY = createHash('sha256')
-  .update(process.env['PAYOUT_ENCRYPTION_KEY'] ?? 'caresaath-dev-payout-key')
-  .digest();
+const ENC_KEY = deriveKey('PAYOUT_ENCRYPTION_KEY', 'caresaath-dev-payout-key');
 
 export function encryptAccountNumber(plain: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return [iv.toString('base64'), tag.toString('base64'), enc.toString('base64')].join(':');
+  return encryptField(plain, ENC_KEY);
 }
 
 export function decryptAccountNumber(stored: string): string {
-  const [ivB64, tagB64, dataB64] = stored.split(':');
-  if (!ivB64 || !tagB64 || !dataB64) {
-    throw new BadRequestException('Malformed account number');
-  }
-  const decipher = createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivB64, 'base64'));
-  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
-  return Buffer.concat([
-    decipher.update(Buffer.from(dataB64, 'base64')),
-    decipher.final(),
-  ]).toString('utf8');
+  return decryptField(stored, ENC_KEY);
 }
 
 /** Last four digits only, for display. */
 export function maskAccountNumber(accountNumber: string): string {
-  const tail = accountNumber.slice(-4);
-  return `****${tail}`;
+  return `****${accountNumber.slice(-4)}`;
 }
 
 export class CreatePayoutAccountDto {

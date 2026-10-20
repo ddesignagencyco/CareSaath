@@ -11,8 +11,11 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -40,6 +43,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { StorageService } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 
@@ -114,6 +118,28 @@ export class CancelBookingDto {
   reason?: string;
 }
 
+export class RescheduleVisitDto {
+  @ApiProperty({
+    description: 'Visit id to reschedule',
+  })
+  @IsUUID()
+  visitId!: string;
+
+  @ApiProperty()
+  @IsDateString()
+  newDate!: string;
+
+  @ApiProperty({ example: '09:00' })
+  @IsString()
+  @Matches(TIME_RE)
+  timeWindowStart!: string;
+
+  @ApiProperty({ example: '11:00' })
+  @IsString()
+  @Matches(TIME_RE)
+  timeWindowEnd!: string;
+}
+
 export class RejectBookingDto extends CancelBookingDto {}
 
 export class ListBookingsQueryDto {
@@ -169,6 +195,7 @@ export class BookingsService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly promos: PromosService,
+    private readonly storage: StorageService,
   ) {}
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
@@ -303,6 +330,16 @@ export class BookingsService {
       patient: { select: { id: true, name: true, relationship: true } },
       address: true,
       caregiver: { select: { id: true, specialty: true, userId: true } },
+      prescriptions: {
+        orderBy: { createdAt: 'desc' as const },
+        select: {
+          id: true,
+          mimeType: true,
+          sizeBytes: true,
+          createdAt: true,
+          uploadedById: true,
+        },
+      },
     } satisfies Prisma.BookingInclude;
   }
 
@@ -344,6 +381,87 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
     return booking;
+  }
+
+  /** FR-C5: attach a doctor's prescription / care-plan document to a booking. */
+  async uploadPrescription(
+    user: AuthUser,
+    bookingId: string,
+    file: { originalname: string; mimetype: string; buffer: Buffer },
+  ) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, customerId: user.sub },
+      select: {
+        id: true,
+        status: true,
+        caregiver: { select: { userId: true } },
+      },
+    });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.DECLINED) {
+      throw new BadRequestException('Cannot attach documents to a closed booking');
+    }
+    this.storage.validateUpload(file.mimetype, file.buffer.length);
+    const stored = await this.storage.put(
+      `bookings/${bookingId}/prescriptions`,
+      file.originalname,
+      file.buffer,
+      file.mimetype,
+    );
+    const doc = await this.prisma.prescriptionDocument.create({
+      data: {
+        bookingId,
+        uploadedById: user.sub,
+        fileKey: stored.fileKey,
+        mimeType: stored.mimeType,
+        sizeBytes: stored.sizeBytes,
+      },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'prescription.uploaded',
+      entityType: 'PrescriptionDocument',
+      entityId: doc.id,
+      metadata: { bookingId },
+    });
+    await this.notifications.notify({
+      userId: booking.caregiver.userId,
+      event: 'booking.prescription.uploaded',
+      payload: { bookingId, documentId: doc.id },
+    });
+    return {
+      id: doc.id,
+      bookingId: doc.bookingId,
+      mimeType: doc.mimeType,
+      sizeBytes: doc.sizeBytes,
+      createdAt: doc.createdAt,
+    };
+  }
+
+  /** Signed URL to view a prescription; visible to the owning customer and assigned caregiver. */
+  async prescriptionUrl(user: AuthUser, bookingId: string, documentId: string) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId },
+      select: { customerId: true, caregiverId: true },
+    });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+    const caregiverId = await this.caregiverProfileId(user).catch(() => null);
+    const isCustomer = booking.customerId === user.sub;
+    const isCaregiver = caregiverId !== null && booking.caregiverId === caregiverId;
+    if (!isCustomer && !isCaregiver && user.role !== UserRole.ADMIN) {
+      throw new NotFoundException('Prescription not found');
+    }
+    const doc = await this.prisma.prescriptionDocument.findFirst({
+      where: { id: documentId, bookingId },
+    });
+    if (!doc) {
+      throw new NotFoundException('Prescription not found');
+    }
+    return { url: await this.storage.presignedGet(doc.fileKey), mimeType: doc.mimeType };
   }
 
   async listCaregiver(user: AuthUser, query: ListBookingsQueryDto): Promise<Paginated<unknown>> {
@@ -483,14 +601,92 @@ export class BookingsService {
     return this.getBooking(id);
   }
 
+  /**
+   * FR-C13: reschedule a single not-yet-started visit. The original visit is
+   * CANCELLED and a replacement visit with the new date/time is created and
+   * linked via rescheduledFromId (history preserved).
+   */
+  async rescheduleCustomer(user: AuthUser, bookingId: string, dto: RescheduleVisitDto) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, customerId: user.sub },
+      include: { caregiver: { select: { id: true, userId: true } } },
+    });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+    if (booking.status === BookingStatus.CANCELLED || booking.status === BookingStatus.DECLINED) {
+      throw new BadRequestException('Cannot reschedule a closed booking');
+    }
+    if (dto.timeWindowStart >= dto.timeWindowEnd) {
+      throw new BadRequestException('timeWindowStart must be before timeWindowEnd');
+    }
+    const visit = await this.prisma.visit.findFirst({
+      where: { id: dto.visitId, bookingId },
+    });
+    if (!visit) {
+      throw new NotFoundException('Visit not found');
+    }
+    const reschedulable = ['REQUESTED', 'CONFIRMED'] as const;
+    if (!reschedulable.includes(visit.status as (typeof reschedulable)[number])) {
+      throw new BadRequestException('Only requested or confirmed visits can be rescheduled');
+    }
+
+    const replacement = await this.prisma.$transaction(async (tx) => {
+      await tx.visit.update({
+        where: { id: visit.id },
+        data: { status: 'CANCELLED' },
+      });
+      await tx.visitStatusHistory.create({
+        data: {
+          visitId: visit.id,
+          fromStatus: visit.status,
+          toStatus: 'CANCELLED',
+          actorId: user.sub,
+        },
+      });
+      const created = await tx.visit.create({
+        data: {
+          bookingId,
+          scheduledDate: toDateOnly(dto.newDate),
+          timeWindowStart: dto.timeWindowStart,
+          timeWindowEnd: dto.timeWindowEnd,
+          status: booking.status === BookingStatus.CONFIRMED ? 'CONFIRMED' : 'REQUESTED',
+          rescheduledFromId: visit.id,
+        },
+      });
+      await tx.visitStatusHistory.create({
+        data: { visitId: created.id, toStatus: created.status, actorId: user.sub },
+      });
+      return created;
+    });
+
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'visit.rescheduled',
+      entityType: 'Visit',
+      entityId: visit.id,
+      metadata: { bookingId, replacementVisitId: replacement.id, newDate: dto.newDate },
+    });
+    await this.notifications.notify({
+      userId: booking.caregiver.userId,
+      event: 'visit.rescheduled',
+      payload: {
+        bookingId,
+        originalVisitId: visit.id,
+        visitId: replacement.id,
+        scheduledDate: dto.newDate,
+      },
+    });
+    return replacement;
+  }
+
   private async notifyCustomer(
     customerId: string,
     event: string,
     payload: Prisma.InputJsonObject,
   ) {
     await this.notifications.notify({ userId: customerId, event, payload });
-  }
-}
+  }}
 
 @ApiTags('customer-bookings')
 @ApiBearerAuth()
@@ -522,6 +718,35 @@ export class CustomerBookingsController {
   ) {
     return this.bookings.cancelCustomer(user, id, dto);
   }
+
+  @Post(':id/prescriptions')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadPrescription(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: { originalname: string; mimetype: string; buffer: Buffer },
+  ) {
+    return this.bookings.uploadPrescription(user, id, file);
+  }
+
+  @Get(':id/prescriptions/:documentId')
+  prescriptionUrl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+  ) {
+    return this.bookings.prescriptionUrl(user, id, documentId);
+  }
+
+  @Patch(':id/reschedule')
+  reschedule(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleVisitDto,
+  ) {
+    return this.bookings.rescheduleCustomer(user, id, dto);
+  }
 }
 
 @ApiTags('caregiver-bookings')
@@ -548,6 +773,15 @@ export class CaregiverBookingsController {
     @Body() dto: RejectBookingDto,
   ) {
     return this.bookings.decline(user, id, dto);
+  }
+
+  @Get(':id/prescriptions/:documentId')
+  prescriptionUrl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('documentId', ParseUUIDPipe) documentId: string,
+  ) {
+    return this.bookings.prescriptionUrl(user, id, documentId);
   }
 }
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { CaregiversService } from './caregivers.module.js';
+import { deriveKey, encryptField } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
   createAuditMock,
@@ -118,5 +119,34 @@ describe('CaregiversService', () => {
   it('throws when no photo is available for a URL', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1', photoKey: null });
     await expect(service.photoUrl(user)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('stores the CNIC encrypted at rest (not plaintext)', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+    prisma.commissionRate.findUnique.mockResolvedValue({ id: 'comm-1' });
+    prisma.caregiverProfile.create.mockResolvedValue({ id: 'cg-1' });
+    await service.register(user, {
+      cnic: '35201-1234567-1',
+      licenseNumber: 'PNC-1',
+      licenseBody: 'PNC' as never,
+      specialty: 'NURSING' as never,
+      serviceCities: ['Lahore'],
+      ratePerVisit: 5000,
+    });
+    const data = prisma.caregiverProfile.create.mock.calls[0][0].data;
+    expect(data.cnic).not.toBe('35201-1234567-1');
+    expect(data.cnic).toContain(':');
+  });
+
+  it('masks the CNIC when the caregiver reads their own profile', async () => {
+    const encrypted = encryptField('35201-1234567-1', deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key'));
+    prisma.caregiverProfile.findUnique.mockResolvedValue({
+      id: 'cg-1',
+      cnic: encrypted,
+      documents: [],
+      credentialReviews: [],
+    });
+    const result = (await service.getMine(user)) as { cnic: string };
+    expect(result.cnic).toBe('***********67-1');
   });
 });

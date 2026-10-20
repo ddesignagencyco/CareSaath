@@ -22,9 +22,25 @@ import {
 } from 'class-validator';
 import { PatientRelation } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
+import {
+  decryptMaybe,
+  deriveKey,
+  encryptField,
+} from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+
+/** ERD §3.2 / TRD §9: patient medical context is stored encrypted at rest. */
+const MEDICAL_KEY = deriveKey('MEDICAL_ENCRYPTION_KEY', 'caresaath-dev-medical-key');
+
+/** Return the profile with medicalContext decrypted for the owner. */
+function present<T extends { medicalContext: string | null }>(profile: T): T {
+  return {
+    ...profile,
+    medicalContext: decryptMaybe(profile.medicalContext, MEDICAL_KEY),
+  };
+}
 
 class CreatePatientDto {
   @IsString()
@@ -94,10 +110,12 @@ export class PatientsService {
   ) {}
 
   list(user: AuthUser) {
-    return this.prisma.patientProfile.findMany({
-      where: { ownerUserId: user.sub },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.patientProfile
+      .findMany({
+        where: { ownerUserId: user.sub },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((rows) => rows.map(present));
   }
 
   async get(user: AuthUser, id: string) {
@@ -107,7 +125,7 @@ export class PatientsService {
     if (!profile) {
       throw new NotFoundException('Patient profile not found');
     }
-    return profile;
+    return present(profile);
   }
 
   async create(user: AuthUser, dto: CreatePatientDto) {
@@ -118,7 +136,7 @@ export class PatientsService {
         relationship: dto.relationship ?? PatientRelation.SELF,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
         gender: dto.gender ?? null,
-        medicalContext: dto.medicalContext ?? null,
+        medicalContext: dto.medicalContext ? encryptField(dto.medicalContext, MEDICAL_KEY) : null,
       },
     });
     await this.audit.log({
@@ -127,7 +145,7 @@ export class PatientsService {
       entityType: 'PatientProfile',
       entityId: profile.id,
     });
-    return profile;
+    return present(profile);
   }
 
   async update(user: AuthUser, id: string, dto: UpdatePatientDto) {
@@ -142,7 +160,7 @@ export class PatientsService {
           : {}),
         ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
         ...(dto.medicalContext !== undefined
-          ? { medicalContext: dto.medicalContext }
+          ? { medicalContext: encryptField(dto.medicalContext, MEDICAL_KEY) }
           : {}),
       },
     });
@@ -152,7 +170,7 @@ export class PatientsService {
       entityType: 'PatientProfile',
       entityId: id,
     });
-    return profile;
+    return present(profile);
   }
 
   async remove(user: AuthUser, id: string) {

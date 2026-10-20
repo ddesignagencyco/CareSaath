@@ -15,7 +15,8 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 6 | Bookings + visit lifecycle, notifications, reviews, safety reports | Done |
 | 7 | Payments (cash + gateway webhook), payouts, commission config | Done |
 | 8 | Admin promos, disputes, safety triage, analytics, CSV reports | Done |
-| 9+ | Remaining hardening (config, SOS, retention) | Not started |
+| 9 | Gap-fill: OTP visit check-in, prescription upload, visit reschedule, SOS, CNIC/medical-context encryption | Done |
+| 10+ | Remaining hardening (config module, WhatsApp/push channels, search caching, retention, CI) | Not started |
 
 _Update this table as each phase progresses._
 
@@ -85,8 +86,9 @@ Unit tests live beside their modules as `*.spec.ts` (services covered with mocke
 Prisma/Redis/storage via `test/test-helpers.ts`). E2E tests require the Docker
 services to be running and live in `test/*.e2e-spec.ts` (shared app bootstrap via
 `test/e2e-helpers.ts`), covering auth, caregiver onboarding/verification,
-booking -> visit lifecycle, notifications, reviews, and customer/caregiver
-self-service.
+booking -> visit lifecycle, notifications, reviews, payments/payouts, admin
+promos/disputes/analytics, customer/caregiver self-service, and the phase-9
+gap-fills (OTP check-in, prescription upload, reschedule, SOS, field encryption).
 
 ## Branching
 

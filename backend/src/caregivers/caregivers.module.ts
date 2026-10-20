@@ -39,12 +39,21 @@ import {
   VerificationStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
+import {
+  decryptMaybe,
+  deriveKey,
+  encryptField,
+  maskValue,
+} from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
+
+/** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
+const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
 
 export class RegisterCaregiverDto {
   @ApiProperty()
@@ -180,7 +189,7 @@ export class CaregiversService {
       return tx.caregiverProfile.create({
         data: {
           userId: user.sub,
-          cnic: dto.cnic,
+          cnic: encryptField(dto.cnic, CNIC_KEY),
           licenseNumber: dto.licenseNumber,
           licenseBody: dto.licenseBody,
           specialty: dto.specialty,
@@ -214,7 +223,8 @@ export class CaregiversService {
     if (!profile) {
       throw new NotFoundException('Caregiver profile not found');
     }
-    return profile;
+    const cnic = decryptMaybe(profile.cnic, CNIC_KEY);
+    return { ...profile, cnic: cnic ? maskValue(cnic, 4) : null };
   }
 
   async updateProfile(user: AuthUser, dto: UpdateCaregiverProfileDto) {

@@ -37,6 +37,7 @@ export function createPrismaMock() {
     visit: model(),
     visitStatusHistory: model(),
     visitNote: model(),
+    prescriptionDocument: model(),
     review: model(),
     safetyIncident: model(),
     incidentEvent: model(),
@@ -58,6 +59,25 @@ export function createAuditMock() {
 
 export function createNotificationsMock() {
   return { notify: vi.fn().mockResolvedValue(undefined) };
+}
+
+export function createRedisMock() {
+  return {
+    client: {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue('OK'),
+      del: vi.fn().mockResolvedValue(1),
+      incr: vi.fn().mockResolvedValue(0),
+      expire: vi.fn().mockResolvedValue(1),
+    },
+  };
+}
+
+export function createSmsMock() {
+  return {
+    sendOtp: vi.fn().mockResolvedValue(undefined),
+    sendVisitAlert: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 export function createStorageMock() {

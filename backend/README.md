@@ -155,10 +155,10 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 | caregivers | `/caregiver`, `/caregivers` | Register, profile, photo, public search/profile |
 | availability | `/caregiver/availability` | Weekly rules + date blocks |
 | verification | `/admin/caregivers` | Verification queue: approve/reject/suspend/etc. |
-| bookings | `/customer/bookings`, `/caregiver/bookings` | Create (incl. recurring + promo), accept/decline/cancel |
-| visits | `/caregiver/visits`, `/customer/visits` | Visit state machine, check-in/out, notes |
+| bookings | `/customer/bookings`, `/caregiver/bookings` | Create (incl. recurring + promo), accept/decline/cancel, reschedule, prescription upload/view (FR-C5, FR-C13) |
+| visits | `/caregiver/visits`, `/customer/visits` | Visit state machine, GPS/OTP check-in (FR-CG7), check-out, notes |
 | notifications | `/notifications` | Persist + dispatch status-change notifications |
-| feedback | `/customer/visits/:id/review`, safety reports | Reviews (FR-C12), customer/caregiver safety reports |
+| feedback | `/customer/visits/:id/review`, safety reports, `/sos` | Reviews (FR-C12), safety reports, SOS incident (FR-C14) |
 | payments | `/customer/payments`, `/caregiver/payments`, `/payments/webhook` | Cash + gateway payments, idempotent webhook |
 | payouts | `/caregiver/payout-accounts`, `/caregiver/earnings`, `/caregiver/payouts`, `/admin/payouts` | Payout accounts, earnings, payout requests + approval |
 | commissions | `/admin/commissions` | Per-category commission config (FR-A4) |
@@ -175,6 +175,7 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 /caregiver/...               register, profile, photo, availability, bookings, visits, payments, payout-accounts, earnings, payouts, safety-reports
 /caregivers                  public search + profile
 /disputes                    raise / list own (customer + caregiver)
+/sos                         raise an SOS during an active visit (customer + caregiver)
 /notifications               own notifications
 /admin/caregivers            verification + management
 /admin/commissions           GET/PUT commission rates
@@ -204,7 +205,12 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 - **Payout earnings** = paid payments with no payout request; requesting a payout
   attaches settled payments to it; rejecting a payout releases them back.
 - **Payout account numbers** are encrypted (AES-256-GCM via
-  `PAYOUT_ENCRYPTION_KEY`) and only ever returned masked (`****1234`).
+  `PAYOUT_ENCRYPTION_KEY`) and only ever returned masked (`****1234`). The same
+  utility encrypts caregiver CNIC (`CNIC_ENCRYPTION_KEY`) and patient medical
+  context (`MEDICAL_ENCRYPTION_KEY`); reads decrypt transparently and legacy
+  plaintext rows still read correctly.
+- **Visit check-in** accepts GPS coordinates or an OTP issued to the
+  *customer's* phone; the OTP is hashed in Redis + `OtpCode` and consumed on use.
 - **Promo discounts** are clamped to the base amount; redeeming a code increments
   `usesCount`.
 - **Caregivers** only appear in search once `verificationStatus = APPROVED`.

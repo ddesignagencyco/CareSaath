@@ -10,9 +10,11 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { createHash, randomInt } from 'node:crypto';
 import {
   IsEnum,
   IsInt,
@@ -26,17 +28,45 @@ import {
 } from 'class-validator';
 import {
   CheckMethod,
+  OtpPurpose,
   Prisma,
   UserRole,
   VisitStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
+import { decryptMaybe, deriveKey } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RedisService } from '../common/redis/redis.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { SmsService } from '../auth/sms.service.js';
+
+/** FR-CG7 check-in OTP lifetime and verification limits. */
+const CHECKIN_OTP_TTL_SECONDS = Number(process.env['CHECKIN_OTP_TTL_SECONDS'] ?? 600);
+const CHECKIN_OTP_MAX_ATTEMPTS = 5;
+const VISIT_CHECKIN_STATUSES: VisitStatus[] = [VisitStatus.CONFIRMED, VisitStatus.EN_ROUTE];
+
+/** Must match the key used by PatientsModule to encrypt medical context. */
+const MEDICAL_KEY = deriveKey('MEDICAL_ENCRYPTION_KEY', 'caresaath-dev-medical-key');
+
+/** Decrypt the patient's medical context for the caregiver (FR-CG6). */
+function presentVisit<T extends { booking: { patient: { medicalContext: string | null } } }>(
+  visit: T,
+): T {
+  return {
+    ...visit,
+    booking: {
+      ...visit.booking,
+      patient: {
+        ...visit.booking.patient,
+        medicalContext: decryptMaybe(visit.booking.patient.medicalContext, MEDICAL_KEY),
+      },
+    },
+  };
+}
 
 /**
  * Visit state machine (TRD §6.3). Transitions are enforced here only; every
@@ -75,6 +105,13 @@ export class CheckInDto {
   @Type(() => Number)
   @IsNumber()
   lng?: number;
+
+  @ApiPropertyOptional({ description: 'OTP code the customer received (OTP method only).' })
+  @IsOptional()
+  @IsString()
+  @MinLength(4)
+  @MaxLength(8)
+  code?: string;
 }
 
 export class VisitNoteDto {
@@ -83,6 +120,13 @@ export class VisitNoteDto {
   @MinLength(1)
   @MaxLength(4000)
   summary!: string;
+}
+
+export class RequestCheckInOtpDto {
+  @ApiPropertyOptional({ enum: CheckMethod, default: CheckMethod.OTP })
+  @IsOptional()
+  @IsEnum(CheckMethod)
+  method?: CheckMethod;
 }
 
 export class ListVisitsQueryDto {
@@ -113,7 +157,17 @@ export class VisitsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly redis: RedisService,
+    private readonly sms: SmsService,
   ) {}
+
+  private hashOtp(code: string): string {
+    return createHash('sha256').update(code).digest('hex');
+  }
+
+  private checkInOtpKey(visitId: string): string {
+    return `otp:${OtpPurpose.VISIT_CHECKIN}:${visitId}`;
+  }
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
@@ -151,7 +205,7 @@ export class VisitsService {
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
-    return visit;
+    return presentVisit(visit);
   }
 
   private async loadForCustomer(user: AuthUser, id: string) {
@@ -162,7 +216,7 @@ export class VisitsService {
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
-    return visit;
+    return presentVisit(visit);
   }
 
   async listCaregiver(user: AuthUser, query: ListVisitsQueryDto): Promise<Paginated<unknown>> {
@@ -250,11 +304,75 @@ export class VisitsService {
     });
   }
 
+  /**
+   * FR-CG7: issue a check-in OTP to the *customer's* phone. The customer reads
+   * the code to the caregiver, who then checks in with method=OTP.
+   */
+  async requestCheckInOtp(user: AuthUser, id: string) {
+    const visit = await this.loadForCaregiver(user, id);
+    if (!VISIT_CHECKIN_STATUSES.includes(visit.status)) {
+      throw new BadRequestException(
+        `A check-in OTP can only be issued for a confirmed or en-route visit (now ${visit.status})`,
+      );
+    }
+    const code = randomInt(100000, 999999).toString();
+    const codeHash = this.hashOtp(code);
+    const key = this.checkInOtpKey(id);
+    await this.redis.client.set(key, codeHash, 'EX', CHECKIN_OTP_TTL_SECONDS);
+    await this.prisma.otpCode.create({
+      data: {
+        userId: visit.booking.customer.id,
+        phone: visit.booking.customer.phone,
+        codeHash,
+        purpose: OtpPurpose.VISIT_CHECKIN,
+        visitId: id,
+        expiresAt: new Date(Date.now() + CHECKIN_OTP_TTL_SECONDS * 1000),
+      },
+    });
+    await this.sms.sendOtp(visit.booking.customer.phone, code);
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'visit.checkin_otp.requested',
+      entityType: 'Visit',
+      entityId: id,
+    });
+    return { ttlSeconds: CHECKIN_OTP_TTL_SECONDS, sentTo: visit.booking.customer.phone };
+  }
+
+  /** Validate and consume a check-in OTP; throws on mismatch or expiry. */
+  private async verifyCheckInOtp(visitId: string, code: string | undefined) {
+    const key = this.checkInOtpKey(visitId);
+    const stored = await this.redis.client.get(key);
+    if (!stored) {
+      throw new UnauthorizedException('Check-in OTP expired or not requested');
+    }
+    const attemptsKey = `${key}:attempts`;
+    const attempts = await this.redis.client.incr(attemptsKey);
+    if (attempts === 1) {
+      await this.redis.client.expire(attemptsKey, CHECKIN_OTP_TTL_SECONDS);
+    }
+    if (attempts > CHECKIN_OTP_MAX_ATTEMPTS) {
+      await this.redis.client.del(key, attemptsKey);
+      throw new UnauthorizedException('Too many attempts, request a new OTP');
+    }
+    if (!code || stored !== this.hashOtp(code)) {
+      throw new UnauthorizedException('Invalid check-in OTP');
+    }
+    await this.redis.client.del(key, attemptsKey);
+    await this.prisma.otpCode.updateMany({
+      where: { visitId, purpose: OtpPurpose.VISIT_CHECKIN, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+  }
+
   /** FR-CG7: check in with GPS or OTP confirmation. */
   async checkIn(user: AuthUser, id: string, dto: CheckInDto) {
     const method = dto.method ?? CheckMethod.GPS;
     if (method === CheckMethod.GPS && (dto.lat === undefined || dto.lng === undefined)) {
       throw new BadRequestException('GPS check-in requires lat and lng');
+    }
+    if (method === CheckMethod.OTP) {
+      await this.verifyCheckInOtp(id, dto.code);
     }
     return this.runCaregiverTransition(user, id, VisitStatus.CHECKED_IN, {
       checkInAt: new Date(),
@@ -335,6 +453,14 @@ export class CaregiverVisitsController {
     return this.visits.enRoute(user, id);
   }
 
+  @Post(':id/check-in-otp')
+  requestCheckInOtp(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.visits.requestCheckInOtp(user, id);
+  }
+
   @Post(':id/check-in')
   checkIn(
     @CurrentUser() user: AuthUser,
@@ -379,7 +505,7 @@ export class CustomerVisitsController {
 @Module({
   imports: [NotificationsModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
-  providers: [VisitsService],
+  providers: [VisitsService, SmsService],
   exports: [VisitsService],
 })
 export class VisitsModule {}

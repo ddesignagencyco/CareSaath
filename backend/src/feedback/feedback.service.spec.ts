@@ -4,6 +4,7 @@ import { FeedbackService } from './feedback.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
   createAuditMock,
+  createNotificationsMock,
   createPrismaMock,
   wireTransaction,
 } from '../../test/test-helpers.js';
@@ -13,12 +14,14 @@ const caregiver: AuthUser = { sub: 'u-cg', role: 'CAREGIVER', phone: '+923001234
 
 describe('FeedbackService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
+  let notifications: ReturnType<typeof createNotificationsMock>;
   let service: FeedbackService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
+    notifications = createNotificationsMock();
     wireTransaction(prisma);
-    service = new FeedbackService(prisma as never, createAuditMock() as never);
+    service = new FeedbackService(prisma as never, createAuditMock() as never, notifications as never);
   });
 
   it('rejects reviewing a visit that is not completed', async () => {
@@ -101,6 +104,56 @@ describe('FeedbackService', () => {
       expect.objectContaining({
         data: expect.objectContaining({ source: 'CAREGIVER_REPORT' }),
       }),
+    );
+  });
+
+  it('raises a CRITICAL SOS incident and alerts admins + emergency contacts', async () => {
+    prisma.visit.findFirst.mockResolvedValue({
+      id: 'v-1',
+      status: 'IN_PROGRESS',
+      booking: {
+        customerId: 'u-cust',
+        customer: {
+          id: 'u-cust',
+          fullName: 'Ali',
+          emergencyContacts: [{ name: 'Sara', phone: '+923009999999' }],
+        },
+        address: { addressLine: '12 Mall Rd', city: 'Lahore' },
+      },
+    });
+    prisma.safetyIncident.create.mockResolvedValue({ id: 'inc-sos', priority: 'CRITICAL' });
+    prisma.incidentEvent.create.mockResolvedValue({});
+    prisma.user.findMany.mockResolvedValue([{ id: 'admin-1', phone: '+923000000000' }]);
+
+    const result = await service.raiseSos(customer, { visitId: 'v-1', note: 'collapsed' });
+
+    expect(prisma.safetyIncident.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: 'SOS',
+          priority: 'CRITICAL',
+          visitId: 'v-1',
+        }),
+      }),
+    );
+    expect(result.notifiedAdmins).toBe(1);
+    expect(result.notifiedContacts).toBe(1);
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'safety_incident.sos' }),
+    );
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'safety_incident.sos.contact', phone: '+923009999999' }),
+    );
+  });
+
+  it('rejects an SOS on a completed visit', async () => {
+    prisma.visit.findFirst.mockResolvedValue({
+      id: 'v-1',
+      status: 'COMPLETED',
+      booking: { customerId: 'u-cust', customer: { emergencyContacts: [] } },
+    });
+    await expect(service.raiseSos(customer, { visitId: 'v-1' })).rejects.toBeInstanceOf(
+      BadRequestException,
     );
   });
 });

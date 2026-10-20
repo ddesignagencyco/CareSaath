@@ -33,6 +33,7 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 export class CreateReviewDto {
   @ApiProperty({ minimum: 1, maximum: 5 })
@@ -61,11 +62,24 @@ export class ReportIncidentDto {
   priority?: IncidentPriority;
 }
 
+export class SosDto {
+  @ApiProperty({ description: 'Visit the SOS is raised during.' })
+  @IsString()
+  visitId!: string;
+
+  @ApiPropertyOptional({ description: 'Optional note about the emergency.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+}
+
 @Injectable()
 export class FeedbackService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** FR-C12: rate and review a caregiver after a completed visit. */
@@ -172,6 +186,114 @@ export class FeedbackService {
     return incident;
   }
 
+  /**
+   * FR-C14: SOS during an active visit. Raises a CRITICAL incident (source SOS)
+   * with an audit trail, then alerts admins and the customer's emergency
+   * contacts. Any party on the visit may trigger it.
+   */
+  async raiseSos(user: AuthUser, dto: SosDto) {
+    const caregiverProfile =
+      user.role === UserRole.CAREGIVER
+        ? await this.prisma.caregiverProfile.findUnique({
+            where: { userId: user.sub },
+            select: { id: true },
+          })
+        : null;
+    const caregiverId = caregiverProfile?.id ?? null;
+
+    const visit = await this.prisma.visit.findFirst({
+      where: {
+        id: dto.visitId,
+        booking:
+          user.role === UserRole.CAREGIVER
+            ? { caregiverId: caregiverId ?? '__none__' }
+            : { customerId: user.sub },
+      },
+      include: {
+        booking: {
+          include: {
+            customer: { include: { emergencyContacts: true } },
+            address: { select: { addressLine: true, city: true } },
+          },
+        },
+      },
+    });
+    if (!visit) {
+      throw new NotFoundException('Visit not found');
+    }
+    const closed: VisitStatus[] = [
+      VisitStatus.COMPLETED,
+      VisitStatus.CANCELLED,
+      VisitStatus.DECLINED,
+    ];
+    if (closed.includes(visit.status)) {
+      throw new BadRequestException('SOS can only be raised during an active visit');
+    }
+
+    const incident = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.safetyIncident.create({
+        data: {
+          visitId: visit.id,
+          reportedById: user.sub,
+          source: IncidentSource.SOS,
+          priority: IncidentPriority.CRITICAL,
+          description: dto.note ?? 'SOS raised during visit',
+        },
+      });
+      await tx.incidentEvent.create({
+        data: {
+          incidentId: created.id,
+          actorId: user.sub,
+          action: 'sos.raised',
+          note: dto.note ?? null,
+        },
+      });
+      return created;
+    });
+
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'safety_incident.sos',
+      entityType: 'SafetyIncident',
+      entityId: incident.id,
+      metadata: { visitId: visit.id, priority: IncidentPriority.CRITICAL },
+    });
+
+    const admins = await this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN, status: 'ACTIVE' },
+      select: { id: true, phone: true },
+    });
+    const location = visit.booking.address
+      ? `${visit.booking.address.addressLine}, ${visit.booking.address.city}`
+      : undefined;
+    for (const admin of admins) {
+      await this.notifications.notify({
+        userId: admin.id,
+        phone: admin.phone,
+        event: 'safety_incident.sos',
+        payload: { incidentId: incident.id, visitId: visit.id, priority: 'CRITICAL' },
+        message: `SOS on visit ${visit.id}${location ? ` at ${location}` : ''}. Immediate review required.`,
+      });
+    }
+    for (const contact of visit.booking.customer.emergencyContacts) {
+      await this.notifications.notify({
+        userId: visit.booking.customer.id,
+        phone: contact.phone,
+        event: 'safety_incident.sos.contact',
+        payload: { incidentId: incident.id, visitId: visit.id, contact: contact.name },
+        message: `Emergency alert: an SOS was raised for ${
+          visit.booking.customer.fullName || 'your contact'
+        } during a CareSaath visit.`,
+      });
+    }
+
+    return {
+      incident,
+      notifiedAdmins: admins.length,
+      notifiedContacts: visit.booking.customer.emergencyContacts.length,
+    };
+  }
+
   listMine(user: AuthUser): Promise<Prisma.SafetyIncidentGetPayload<object>[]> {
     return this.prisma.safetyIncident.findMany({
       where: { reportedById: user.sub },
@@ -235,8 +357,27 @@ export class CaregiverIncidentController {
   }
 }
 
+@ApiTags('sos')
+@ApiBearerAuth()
+@Roles(UserRole.CUSTOMER, UserRole.CAREGIVER)
+@Controller('sos')
+export class SosController {
+  constructor(private readonly feedback: FeedbackService) {}
+
+  @Post()
+  raise(@CurrentUser() user: AuthUser, @Body() dto: SosDto) {
+    return this.feedback.raiseSos(user, dto);
+  }
+}
+
 @Module({
-  controllers: [ReviewController, CustomerIncidentController, CaregiverIncidentController],
+  imports: [NotificationsModule],
+  controllers: [
+    ReviewController,
+    CustomerIncidentController,
+    CaregiverIncidentController,
+    SosController,
+  ],
   providers: [FeedbackService],
 })
 export class FeedbackModule {}
