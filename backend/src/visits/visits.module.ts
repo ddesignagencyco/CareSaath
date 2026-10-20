@@ -244,14 +244,14 @@ export class VisitsService {
   }
 
   /** FR-C9 / TRD §6.3: "Visit day arrives" caregiver action. */
-  enRoute(user: AuthUser, id: string) {
+  async enRoute(user: AuthUser, id: string) {
     return this.runCaregiverTransition(user, id, VisitStatus.EN_ROUTE, {
       enRouteAt: new Date(),
     });
   }
 
   /** FR-CG7: check in with GPS or OTP confirmation. */
-  checkIn(user: AuthUser, id: string, dto: CheckInDto) {
+  async checkIn(user: AuthUser, id: string, dto: CheckInDto) {
     const method = dto.method ?? CheckMethod.GPS;
     if (method === CheckMethod.GPS && (dto.lat === undefined || dto.lng === undefined)) {
       throw new BadRequestException('GPS check-in requires lat and lng');

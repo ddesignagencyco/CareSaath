@@ -76,7 +76,12 @@ Credentials in `.env.example` are for local development only. Never commit `.env
 | `npm run start:dev` | Run the API in watch mode |
 | `npm run build` | Compile to `dist/` |
 | `npm test` | Unit tests |
+| `npm run test:cov` | Unit tests with coverage |
 | `npm run test:e2e` | End-to-end tests |
+
+Unit tests live beside their modules as `*.spec.ts` (services covered with mocked
+Prisma/Redis/storage via `test/test-helpers.ts`). E2E tests require the Docker
+services to be running.
 
 ## Branching
 
