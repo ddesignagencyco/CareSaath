@@ -1,5 +1,6 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Public } from './common/decorators/public.decorator.js';
 import { PrismaService } from './common/prisma/prisma.service.js';
 import { RedisService } from './common/redis/redis.module.js';
 
@@ -11,6 +12,7 @@ export class AppController {
     private readonly redis: RedisService,
   ) {}
 
+  @Public()
   @Get('health')
   async health() {
     try {
