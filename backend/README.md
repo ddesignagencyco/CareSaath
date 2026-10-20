@@ -1,124 +1,274 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# CareSaath Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS API for **CareSaath**, a home nursing and physiotherapy marketplace for
+Pakistan (1–2 pilot cities). One API serves three clients: the customer app, the
+caregiver panel and the admin panel. See the [root README](../Readme.md) for the
+project-wide overview and [docs/](../docs) for requirements, data model and
+architecture.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> This file is the working reference for the backend. It is written to be useful
+> to both humans and AI agents: conventions, module map, API surface and gotchas
+> are documented here so changes stay consistent.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Overview
 
-## Project setup
+CareSaath connects patients/families with **verified** caregivers (nurses,
+physiotherapists, post-surgery and elderly-care attendants). Core flows:
 
-```bash
-$ npm install
-```
+1. **Identity** — phone + OTP login, JWT access/refresh, role guards
+   (CUSTOMER, CAREGIVER, ADMIN).
+2. **Onboarding** — caregivers register, upload credentials to MinIO, and are
+   approved by an admin before appearing in search.
+3. **Booking → visit** — customers book single/recurring visits; caregivers
+   accept/decline; each visit walks a state machine
+   `REQUESTED → CONFIRMED → EN_ROUTE → CHECKED_IN → IN_PROGRESS → CHECKED_OUT → COMPLETED`
+   with GPS/OTP check-in, notes and reviews.
+4. **Money** — cash-on-visit and digital payments (gateway webhook, idempotent),
+   per-category commission, caregiver earnings and admin payout approval.
+5. **Trust & safety** — reviews, safety incidents with admin triage, disputes,
+   and an append-only audit trail.
 
-## Compile and run the project
+### Status
 
-```bash
-# development
-$ npm run start
+Phases 0–8 are complete (auth, users/patients, caregiver onboarding, bookings +
+visit lifecycle, payments/payouts/commissions, admin promos/disputes/safety/
+analytics/reports). Remaining hardening is tracked in the root README and TRD.
 
-# watch mode
-$ npm run start:dev
+---
 
-# production mode
-$ npm run start:prod
-```
+## Tech stack
 
-## Run tests
+| Layer | Choice |
+|---|---|
+| Language / runtime | TypeScript, Node.js 24+, ESM (`"type": "module"`) |
+| Framework | NestJS 12 (REST) |
+| ORM | Prisma 7 (driver adapter `@prisma/adapter-pg`), client generated into `src/generated/prisma` |
+| Database | PostgreSQL |
+| Cache / OTP store | Redis (ioredis) |
+| Object storage | MinIO (S3-compatible) |
+| API docs | Swagger at `/docs`, OpenAPI JSON at `/docs-json` |
+| Validation | `class-validator` + `class-transformer` |
+| Lint / format | oxlint (`--type-aware`) + Prettier |
+| Tests | Vitest (unit `*.spec.ts`, e2e `*.e2e-spec.ts`) |
 
-```bash
-# unit tests
-$ npm run test
+---
 
-# e2e tests
-$ npm run test:e2e
+## Getting started
 
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Prerequisites: Node.js 24+, npm, Docker. Services (Postgres, Redis, MinIO,
+MailHog) are defined in [`../docker/docker-compose.yml`](../docker/docker-compose.yml).
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# from the repository root
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up -d
+
+# then, in backend/
+npm install
+npx prisma migrate deploy      # or: npx prisma migrate dev
+npm run seed                   # admin user + commission rates
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Configuration is read from `../.env` (repo root), then `.env`
+(`ConfigModule.forRoot({ envFilePath: ['../.env', '.env'] })`). Never commit
+`.env`.
 
-## Observability
+Startup logs print the API base (`/api/v1`), Swagger UI and OpenAPI JSON URLs.
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+---
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+## Scripts
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+| Command | Purpose |
+|---|---|
+| `npm run start:dev` | Run in watch mode |
+| `npm run build` | Compile to `dist/` (nest build) |
+| `npm run start:prod` | Run the compiled build |
+| `npm run lint` | `oxlint --type-aware src/ test/` |
+| `npm run format` | Prettier over `src/` and `test/` |
+| `npm test` | Unit tests (Vitest) |
+| `npm run test:cov` | Unit tests with coverage |
+| `npm run test:e2e` | End-to-end tests (requires Docker services) |
+| `npm run seed` | Seed admin + commission rates |
 
-To add it to this project:
+**Definition of done for a change:** `npm run lint`, `npm run build`, `npm test`
+and `npm run test:e2e` all pass. Always run these before committing.
 
-```bash
-$ npm install @nestjs/observe
+---
+
+## Source layout
+
+```
+src/
+  main.ts                 Bootstrap: global prefix, ValidationPipe, exception filter, CORS, Swagger
+  app.module.ts           Root module: config, infra modules, feature modules, global guards
+  common/                 Cross-cutting building blocks (see below)
+  generated/prisma/       Generated Prisma client — do not edit by hand
+  <feature>/              Feature modules, each self-contained (see module map)
+test/
+  test-helpers.ts         vi.fn() Prisma/audit/storage/notifications mocks + wireTransaction
+  e2e-helpers.ts          createTestApp(), signAccessToken(), bearer(), uniquePhone()
+  *.e2e-spec.ts           End-to-end suites
+prisma/
+  schema.prisma           Data model (source of truth)
+  migrations/             SQL migrations
+  seed.mjs                Seed script
 ```
 
-Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
+### `common/`
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+| Path | Role |
+|---|---|
+| `common/prisma/prisma.service.ts` | `PrismaService` (global) |
+| `common/redis/redis.module.ts` | `RedisService` (global) |
+| `common/storage/storage.module.ts` | `StorageService.put/presignedGet/validateUpload` (global, MinIO) |
+| `common/audit/audit.module.ts` | `AuditService.log(...)` append-only audit (global); never throws into request path |
+| `common/guards/jwt-auth.guard.ts` | Global JWT guard; bypassed by `@Public()` |
+| `common/guards/roles.guard.ts` | Global role guard driven by `@Roles(...)` |
+| `common/decorators/current-user.decorator.ts` | `@CurrentUser()` → `AuthUser { sub, role, phone }` |
+| `common/decorators/public.decorator.ts` | `@Public()` to skip JWT auth |
+| `common/decorators/roles.decorator.ts` | `@Roles('CUSTOMER' \| 'CAREGIVER' \| 'ADMIN')` |
+| `common/dto/pagination.ts` | `PaginationDto`, `Paginated<T>`, `paginate()` |
+| `common/filters/http-exception.filter.ts` | Consistent JSON error envelope |
 
-## Resources
+Global guards are registered in `app.module.ts` via `APP_GUARD`:
+`JwtAuthGuard` then `RolesGuard`. Every route is authenticated unless marked
+`@Public()`.
 
-Check out a few resources that may come in handy when working with NestJS:
+---
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Module map
 
-## Support
+Each feature lives in a single `<feature>.module.ts` file that bundles its DTOs,
+service and controllers, following the existing modules. The Prisma client's
+generated enums/types are imported from `../generated/prisma/client.js`.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+| Module | Path prefix(es) | Responsibility |
+|---|---|---|
+| auth | `/auth` | Phone + OTP login, JWT access/refresh, current user |
+| users | `/customer` | Profile + emergency contacts |
+| patients | `/customer/patients` | Patient profiles (FR-C2) |
+| addresses | `/customer/addresses` | Saved addresses with lat/lng |
+| caregivers | `/caregiver`, `/caregivers` | Register, profile, photo, public search/profile |
+| availability | `/caregiver/availability` | Weekly rules + date blocks |
+| verification | `/admin/caregivers` | Verification queue: approve/reject/suspend/etc. |
+| bookings | `/customer/bookings`, `/caregiver/bookings` | Create (incl. recurring + promo), accept/decline/cancel |
+| visits | `/caregiver/visits`, `/customer/visits` | Visit state machine, check-in/out, notes |
+| notifications | `/notifications` | Persist + dispatch status-change notifications |
+| feedback | `/customer/visits/:id/review`, safety reports | Reviews (FR-C12), customer/caregiver safety reports |
+| payments | `/customer/payments`, `/caregiver/payments`, `/payments/webhook` | Cash + gateway payments, idempotent webhook |
+| payouts | `/caregiver/payout-accounts`, `/caregiver/earnings`, `/caregiver/payouts`, `/admin/payouts` | Payout accounts, earnings, payout requests + approval |
+| commissions | `/admin/commissions` | Per-category commission config (FR-A4) |
+| promos | `/admin/promos` | Promo codes + discount calculation (FR-A8) |
+| disputes | `/disputes`, `/admin/disputes` | Raise + admin mediation (FR-A7) |
+| admin | `/admin/analytics`, `/admin/reports/export`, `/admin/safety-incidents` | Analytics (FR-A5), CSV reports (FR-A9), incident triage (FR-A6) |
 
-## Stay in touch
+### Route groups at a glance
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```
+/health
+/auth                        phone OTP, refresh
+/customer/...                me, emergency-contacts, patients, addresses, bookings, payments, visits
+/caregiver/...               register, profile, photo, availability, bookings, visits, payments, payout-accounts, earnings, payouts, safety-reports
+/caregivers                  public search + profile
+/disputes                    raise / list own (customer + caregiver)
+/notifications               own notifications
+/admin/caregivers            verification + management
+/admin/commissions           GET/PUT commission rates
+/admin/promos                GET/POST/PATCH promo codes
+/admin/payouts               GET + approve/mark-paid/reject
+/admin/disputes              GET + resolve
+/admin/safety-incidents      GET + PATCH
+/admin/analytics             platform metrics
+/admin/reports/export        CSV reports
+/payments/webhook/:provider  public gateway callback
+```
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Domain rules worth knowing
+
+- **Commission** is configured per `Specialty` and captured on the payment row at
+  payment time (`splitCommission`), so later rate changes don't rewrite history.
+- **Amounts** are integer minor units (paisa).
+- **Visit lifecycle** transitions are enforced only in `visits.module.ts`
+  (`ALLOWED_TRANSITIONS` / `canTransition`); every accepted transition writes a
+  `VisitStatusHistory` row and notifies the customer.
+- **Payments**: cash starts `PENDING` and settles when the assigned caregiver
+  confirms receipt; digital methods return a `gatewayRef` and settle via the
+  public webhook. The webhook is **idempotent** — replays never move a payment
+  out of a terminal state.
+- **Payout earnings** = paid payments with no payout request; requesting a payout
+  attaches settled payments to it; rejecting a payout releases them back.
+- **Payout account numbers** are encrypted (AES-256-GCM via
+  `PAYOUT_ENCRYPTION_KEY`) and only ever returned masked (`****1234`).
+- **Promo discounts** are clamped to the base amount; redeeming a code increments
+  `usesCount`.
+- **Caregivers** only appear in search once `verificationStatus = APPROVED`.
+
+---
+
+## Conventions
+
+- **Module-per-feature**: DTO + service + controllers in one `<feature>.module.ts`
+  unless a module grows large. DTOs use `class-validator` decorators +
+  `@ApiProperty`/`@ApiPropertyOptional`.
+- **Auth**: annotate controllers/services with `@Roles(...)`; use `@Public()` for
+  unauthenticated routes; read the caller via `@CurrentUser()`.
+- **Pagination**: reuse `PaginationDto`/`paginate`; numeric query params need
+  `@Type(() => Number)` when a default value is set (otherwise the global
+  `ValidationPipe` with `forbidNonWhitelisted` rejects them).
+- **Audit**: call `AuditService.log({ actorId, action, entityType, entityId, metadata })`
+  for state-changing actions.
+- **Notifications**: `NotificationsService.notify(...)` never throws into the
+  request path — safe to call after the business write.
+- **ESM imports** use the `.js` extension (e.g. `./foo.module.js`) because the
+  project is ESM with `isolatedModules`.
+- **Prisma JSON filters**: use snake_case operators, e.g.
+  `serviceArea: { path: ['cities'], array_contains: [city] }`.
+- **Errors**: throw Nest HTTP exceptions (`BadRequestException`,
+  `NotFoundException`, …); `AllExceptionsFilter` shapes the response.
+- No comments unless they explain non-obvious intent; no secrets in code.
+
+---
+
+## Testing
+
+- **Unit** (`*.spec.ts`, beside the module): services constructed directly with
+  mocks from `test/test-helpers.ts` (`createPrismaMock`, `createAuditMock`,
+  `createNotificationsMock`, `createStorageMock`, `wireTransaction`). When a
+  service gains a new Prisma model, add it to `createPrismaMock`.
+- **E2E** (`test/*.e2e-spec.ts`): boot the full app via `createTestApp()` against
+  the real Docker Postgres/Redis/MinIO, sign tokens with `signAccessToken`, and
+  clean up created rows in `afterAll` (watch FK order: incidents → payments →
+  visits → bookings → profiles → users).
+
+Suites currently cover: health, auth, caregiver onboarding/verification,
+booking → visit lifecycle, payments & payouts, admin promos/disputes/analytics/
+reports/safety, and customer/caregiver self-service.
+
+---
+
+## Database
+
+- Schema: `prisma/schema.prisma` (models for identity, caregivers, bookings,
+  visits, payments/payouts, safety, disputes, notifications, audit).
+- Migrations: `prisma/migrations/`.
+- Change workflow: edit schema → `npx prisma migrate dev --name <change>` →
+  regenerate client → update seeds/tests.
+- Seed (`npm run seed`): an admin user (`ADMIN_PHONE`) and commission rates for
+  every `Specialty` (default 20%).
+
+---
+
+## Documentation
+
+- [Root README](../Readme.md): project overview, status, local ports
+- [SRS](../docs/Caresaath-SRS.md): functional requirements (FR-C/CG/A)
+- [ERD](../docs/CARESAATH_ERD.md): data model per entity
+- [TRD](../docs/CARESAATH_TRD.md): architecture, module/API design, security, infrastructure
+
+Swagger UI (`/docs`) is the authoritative reference for request/response shapes.
