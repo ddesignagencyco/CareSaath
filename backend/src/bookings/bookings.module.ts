@@ -41,6 +41,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { PromosModule, PromosService } from '../promos/promos.module.js';
 
 /** FR-CG5 response window: caregivers must respond within this many minutes. */
 const RESPOND_WINDOW_MINUTES = Number(process.env['BOOKING_RESPOND_WINDOW_MINUTES'] ?? 60);
@@ -97,6 +98,12 @@ export class CreateBookingDto {
   @Min(1, { each: true })
   @Max(7, { each: true })
   weekdays?: number[];
+
+  @ApiPropertyOptional({ description: 'Optional promo code to apply (FR-A8).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(24)
+  promoCode?: string;
 }
 
 export class CancelBookingDto {
@@ -161,6 +168,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly promos: PromosService,
   ) {}
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
@@ -226,6 +234,14 @@ export class BookingsService {
     const respondBy = new Date(now.getTime() + RESPOND_WINDOW_MINUTES * 60 * 1000);
     const rateSnapshot = caregiver.ratePerVisit;
 
+    let promoId: string | null = null;
+    let discountAmount = 0;
+    if (dto.promoCode) {
+      const quote = await this.promos.quote(dto.promoCode, rateSnapshot, now);
+      promoId = quote.promo.id;
+      discountAmount = quote.discountAmount;
+    }
+
     const booking = await this.prisma.$transaction(async (tx) => {
       const created = await tx.booking.create({
         data: {
@@ -244,6 +260,8 @@ export class BookingsService {
           timeWindowEnd: dto.timeWindowEnd,
           serviceType: caregiver.specialty,
           rateSnapshot,
+          promoCodeId: promoId,
+          discountAmount,
           respondBy,
           status: BookingStatus.REQUESTED,
         },
@@ -260,12 +278,16 @@ export class BookingsService {
       return created;
     });
 
+    if (promoId) {
+      await this.promos.redeem(promoId);
+    }
+
     await this.audit.log({
       actorId: user.sub,
       action: 'booking.created',
       entityType: 'Booking',
       entityId: booking.id,
-      metadata: { visits: occurrences.length, caregiverId: caregiver.id },
+      metadata: { visits: occurrences.length, caregiverId: caregiver.id, discountAmount },
     });
     await this.notifications.notify({
       userId: caregiver.userId,
@@ -530,7 +552,7 @@ export class CaregiverBookingsController {
 }
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, PromosModule],
   controllers: [CustomerBookingsController, CaregiverBookingsController],
   providers: [BookingsService],
   exports: [BookingsService],

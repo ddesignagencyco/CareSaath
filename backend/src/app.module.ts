@@ -23,6 +23,10 @@ import { FeedbackModule } from './feedback/feedback.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { PayoutsModule } from './payouts/payouts.module.js';
 import { CommissionsModule } from './commissions/commissions.module.js';
+import { PromosModule } from './promos/promos.module.js';
+import { DisputesModule } from './disputes/disputes.module.js';
+import { AdminAnalyticsModule } from './admin/analytics.module.js';
+import { AdminSafetyModule } from './admin/safety.module.js';
 
 @Module({
   imports: [
@@ -45,6 +49,10 @@ import { CommissionsModule } from './commissions/commissions.module.js';
     PaymentsModule,
     PayoutsModule,
     CommissionsModule,
+    PromosModule,
+    DisputesModule,
+    AdminAnalyticsModule,
+    AdminSafetyModule,
   ],
   controllers: [AppController],
   providers: [

@@ -18,6 +18,7 @@ export function createPrismaMock() {
     deleteMany: vi.fn(),
     count: vi.fn(),
     aggregate: vi.fn(),
+    groupBy: vi.fn(),
   });
 
   return {
@@ -38,6 +39,9 @@ export function createPrismaMock() {
     visitNote: model(),
     review: model(),
     safetyIncident: model(),
+    incidentEvent: model(),
+    dispute: model(),
+    promoCode: model(),
     notification: model(),
     auditLog: model(),
     payment: model(),
