@@ -36,7 +36,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { NotificationsService } from '../notifications/notifications.module.js';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 /**
  * Visit state machine (TRD §6.3). Transitions are enforced here only; every
@@ -377,6 +377,7 @@ export class CustomerVisitsController {
 }
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
   providers: [VisitsService],
   exports: [VisitsService],

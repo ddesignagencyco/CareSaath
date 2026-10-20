@@ -41,6 +41,7 @@ import {
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
@@ -475,6 +476,7 @@ export class CaregiverController {
 }
 
 @ApiTags('caregivers')
+@Public()
 @Controller('caregivers')
 export class PublicCaregiverController {
   constructor(private readonly caregivers: CaregiversService) {}

@@ -12,7 +12,6 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import { IsDecimal, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -36,11 +35,9 @@ class AddressDto {
   @MaxLength(80)
   city!: string;
 
-  @Type(() => Number)
   @IsDecimal({ decimal_digits: '1,8' })
   latitude!: string;
 
-  @Type(() => Number)
   @IsDecimal({ decimal_digits: '1,8' })
   longitude!: string;
 }

@@ -40,7 +40,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { NotificationsService } from '../notifications/notifications.module.js';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 /** FR-CG5 response window: caregivers must respond within this many minutes. */
 const RESPOND_WINDOW_MINUTES = Number(process.env['BOOKING_RESPOND_WINDOW_MINUTES'] ?? 60);
@@ -530,6 +530,7 @@ export class CaregiverBookingsController {
 }
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [CustomerBookingsController, CaregiverBookingsController],
   providers: [BookingsService],
   exports: [BookingsService],

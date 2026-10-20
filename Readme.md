@@ -81,7 +81,10 @@ Credentials in `.env.example` are for local development only. Never commit `.env
 
 Unit tests live beside their modules as `*.spec.ts` (services covered with mocked
 Prisma/Redis/storage via `test/test-helpers.ts`). E2E tests require the Docker
-services to be running.
+services to be running and live in `test/*.e2e-spec.ts` (shared app bootstrap via
+`test/e2e-helpers.ts`), covering auth, caregiver onboarding/verification,
+booking -> visit lifecycle, notifications, reviews, and customer/caregiver
+self-service.
 
 ## Branching
 
