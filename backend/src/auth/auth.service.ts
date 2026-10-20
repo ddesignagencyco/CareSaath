@@ -9,9 +9,9 @@ import { createHash, randomInt } from 'node:crypto';
 import { OtpPurpose, UserStatus, UserRole } from '../generated/prisma/client.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
+import { ConfigService } from '../config/platform-config.module.js';
 import { SmsService } from './sms.service.js';
 
-const OTP_TTL_SECONDS = Number(process.env['OTP_TTL_SECONDS'] ?? 300);
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_REQUEST_LIMIT = 3;
 const OTP_REQUEST_WINDOW_SECONDS = 600;
@@ -29,7 +29,12 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly jwt: JwtService,
     private readonly sms: SmsService,
+    private readonly config: ConfigService,
   ) {}
+
+  private async otpTtlSeconds(): Promise<number> {
+    return this.config.getNumber('otp.ttlSeconds');
+  }
 
   private hash(code: string): string {
     return createHash('sha256').update(code).digest('hex');
@@ -51,23 +56,24 @@ export class AuthService {
 
     const code = randomInt(100000, 999999).toString();
     const existing = await this.prisma.user.findUnique({ where: { phone } });
+    const ttlSeconds = await this.otpTtlSeconds();
     await this.prisma.otpCode.create({
       data: {
         userId: existing?.id ?? null,
         phone,
         codeHash: this.hash(code),
         purpose: 'LOGIN',
-        expiresAt: new Date(Date.now() + OTP_TTL_SECONDS * 1000),
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
       },
     });
     await this.redis.client.set(
       this.otpKey(phone, 'LOGIN'),
       this.hash(code),
       'EX',
-      OTP_TTL_SECONDS,
+      ttlSeconds,
     );
     await this.sms.sendOtp(phone, code);
-    return { ttlSeconds: OTP_TTL_SECONDS };
+    return { ttlSeconds };
   }
 
   async verifyOtp(phone: string, code: string): Promise<TokenPair> {
@@ -79,7 +85,7 @@ export class AuthService {
 
     const attempts = await this.redis.client.incr(`${key}:attempts`);
     if (attempts === 1) {
-      await this.redis.client.expire(`${key}:attempts`, OTP_TTL_SECONDS);
+      await this.redis.client.expire(`${key}:attempts`, await this.otpTtlSeconds());
     }
     if (attempts > OTP_MAX_ATTEMPTS) {
       await this.redis.client.del(key, `${key}:attempts`);

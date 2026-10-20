@@ -49,8 +49,10 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
+import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
@@ -163,6 +165,8 @@ export class CaregiversService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly redis: RedisService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(user: AuthUser, dto: RegisterCaregiverDto) {
@@ -323,6 +327,15 @@ export class CaregiversService {
 
   /** Public search (FR-C3, FR-C4): only APPROVED caregivers of ACTIVE users. */
   async search(query: SearchQueryDto): Promise<Paginated<unknown>> {
+    const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${query.page}:${query.limit}`;
+    const ttlSeconds = await this.config.getNumber('search.cacheTtlSeconds');
+    if (ttlSeconds > 0) {
+      const cached = await this.redis.client.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached) as Paginated<unknown>;
+      }
+    }
+
     const where: Prisma.CaregiverProfileWhereInput = {
       verificationStatus: VerificationStatus.APPROVED,
       user: { status: 'ACTIVE' },
@@ -351,7 +364,11 @@ export class CaregiversService {
         },
       }),
     ]);
-    return paginate(items, query.page, query.limit, total);
+    const result = paginate(items, query.page, query.limit, total);
+    if (ttlSeconds > 0) {
+      await this.redis.client.set(cacheKey, JSON.stringify(result), 'EX', ttlSeconds);
+    }
+    return result;
   }
 
   /** Public caregiver profile (FR-C4). */
@@ -503,6 +520,7 @@ export class PublicCaregiverController {
 }
 
 @Module({
+  imports: [PlatformConfigModule],
   controllers: [CaregiverController, PublicCaregiverController],
   providers: [CaregiversService],
 })

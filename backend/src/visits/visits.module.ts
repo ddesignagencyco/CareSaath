@@ -43,9 +43,9 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
+import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 
-/** FR-CG7 check-in OTP lifetime and verification limits. */
-const CHECKIN_OTP_TTL_SECONDS = Number(process.env['CHECKIN_OTP_TTL_SECONDS'] ?? 600);
+/** FR-CG7 check-in OTP verification limits. */
 const CHECKIN_OTP_MAX_ATTEMPTS = 5;
 const VISIT_CHECKIN_STATUSES: VisitStatus[] = [VisitStatus.CONFIRMED, VisitStatus.EN_ROUTE];
 
@@ -159,7 +159,12 @@ export class VisitsService {
     private readonly notifications: NotificationsService,
     private readonly redis: RedisService,
     private readonly sms: SmsService,
+    private readonly config: ConfigService,
   ) {}
+
+  private async checkinTtlSeconds(): Promise<number> {
+    return this.config.getNumber('otp.checkinTtlSeconds');
+  }
 
   private hashOtp(code: string): string {
     return createHash('sha256').update(code).digest('hex');
@@ -318,7 +323,8 @@ export class VisitsService {
     const code = randomInt(100000, 999999).toString();
     const codeHash = this.hashOtp(code);
     const key = this.checkInOtpKey(id);
-    await this.redis.client.set(key, codeHash, 'EX', CHECKIN_OTP_TTL_SECONDS);
+    const ttlSeconds = await this.checkinTtlSeconds();
+    await this.redis.client.set(key, codeHash, 'EX', ttlSeconds);
     await this.prisma.otpCode.create({
       data: {
         userId: visit.booking.customer.id,
@@ -326,7 +332,7 @@ export class VisitsService {
         codeHash,
         purpose: OtpPurpose.VISIT_CHECKIN,
         visitId: id,
-        expiresAt: new Date(Date.now() + CHECKIN_OTP_TTL_SECONDS * 1000),
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
       },
     });
     await this.sms.sendOtp(visit.booking.customer.phone, code);
@@ -336,7 +342,7 @@ export class VisitsService {
       entityType: 'Visit',
       entityId: id,
     });
-    return { ttlSeconds: CHECKIN_OTP_TTL_SECONDS, sentTo: visit.booking.customer.phone };
+    return { ttlSeconds, sentTo: visit.booking.customer.phone };
   }
 
   /** Validate and consume a check-in OTP; throws on mismatch or expiry. */
@@ -349,7 +355,7 @@ export class VisitsService {
     const attemptsKey = `${key}:attempts`;
     const attempts = await this.redis.client.incr(attemptsKey);
     if (attempts === 1) {
-      await this.redis.client.expire(attemptsKey, CHECKIN_OTP_TTL_SECONDS);
+      await this.redis.client.expire(attemptsKey, await this.checkinTtlSeconds());
     }
     if (attempts > CHECKIN_OTP_MAX_ATTEMPTS) {
       await this.redis.client.del(key, attemptsKey);
@@ -503,7 +509,7 @@ export class CustomerVisitsController {
 }
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, PlatformConfigModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
   providers: [VisitsService, SmsService],
   exports: [VisitsService],

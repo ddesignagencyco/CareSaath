@@ -3,9 +3,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { SmsService } from './sms.service.js';
+import { PlatformConfigModule } from '../config/platform-config.module.js';
 
 @Module({
-  imports: [JwtModule.register({ global: true })],
+  imports: [JwtModule.register({ global: true }), PlatformConfigModule],
   controllers: [AuthController],
   providers: [AuthService, SmsService],
   exports: [AuthService],

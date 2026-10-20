@@ -16,7 +16,8 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 7 | Payments (cash + gateway webhook), payouts, commission config | Done |
 | 8 | Admin promos, disputes, safety triage, analytics, CSV reports | Done |
 | 9 | Gap-fill: OTP visit check-in, prescription upload, visit reschedule, SOS, CNIC/medical-context encryption | Done |
-| 10+ | Remaining hardening (config module, WhatsApp/push channels, search caching, retention, CI) | Not started |
+| 10 | Hardening: platform config (admin-tunable), notification channels (SMS/WhatsApp/push), search caching, data retention job, CI | Done |
+| 11+ | Remaining: WhatsApp/push vendor integration, SMS gateway, hosting/CD, monitoring | Not started |
 
 _Update this table as each phase progresses._
 

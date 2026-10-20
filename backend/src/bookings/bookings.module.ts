@@ -46,9 +46,8 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
+import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 
-/** FR-CG5 response window: caregivers must respond within this many minutes. */
-const RESPOND_WINDOW_MINUTES = Number(process.env['BOOKING_RESPOND_WINDOW_MINUTES'] ?? 60);
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toDateOnly(value: string): Date {
@@ -196,6 +195,7 @@ export class BookingsService {
     private readonly notifications: NotificationsService,
     private readonly promos: PromosService,
     private readonly storage: StorageService,
+    private readonly config: ConfigService,
   ) {}
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
@@ -258,7 +258,8 @@ export class BookingsService {
     }
 
     const now = new Date();
-    const respondBy = new Date(now.getTime() + RESPOND_WINDOW_MINUTES * 60 * 1000);
+    const respondWindowMinutes = await this.config.getNumber('booking.respondWindowMinutes');
+    const respondBy = new Date(now.getTime() + respondWindowMinutes * 60 * 1000);
     const rateSnapshot = caregiver.ratePerVisit;
 
     let promoId: string | null = null;
@@ -786,7 +787,7 @@ export class CaregiverBookingsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PromosModule],
+  imports: [NotificationsModule, PromosModule, PlatformConfigModule],
   controllers: [CustomerBookingsController, CaregiverBookingsController],
   providers: [BookingsService],
   exports: [BookingsService],

@@ -31,4 +31,21 @@ for (const category of Object.values(Specialty)) {
 }
 console.log(`Seeded commission rates: ${Object.values(Specialty).join(', ')}`);
 
+const platformConfig = [
+  { key: 'booking.respondWindowMinutes', value: 60 },
+  { key: 'booking.cancelNoticeMinutes', value: 0 },
+  { key: 'otp.ttlSeconds', value: 300 },
+  { key: 'otp.checkinTtlSeconds', value: 600 },
+  { key: 'retention.notificationDays', value: 90 },
+  { key: 'search.cacheTtlSeconds', value: 30 },
+];
+for (const setting of platformConfig) {
+  await prisma.platformConfig.upsert({
+    where: { key: setting.key },
+    update: {},
+    create: setting,
+  });
+}
+console.log(`Seeded ${platformConfig.length} platform config values`);
+
 await prisma.$disconnect();

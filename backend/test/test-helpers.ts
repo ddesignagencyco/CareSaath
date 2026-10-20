@@ -45,6 +45,7 @@ export function createPrismaMock() {
     promoCode: model(),
     notification: model(),
     auditLog: model(),
+    platformConfig: model(),
     payment: model(),
     payoutAccount: model(),
     payoutRequest: model(),
@@ -59,6 +60,13 @@ export function createAuditMock() {
 
 export function createNotificationsMock() {
   return { notify: vi.fn().mockResolvedValue(undefined) };
+}
+
+/** Config mock resolving every key to a fixed value unless overridden. */
+export function createConfigMock(values: Record<string, number> = {}) {
+  return {
+    getNumber: vi.fn((key: string) => Promise.resolve(values[key] ?? 600)),
+  };
 }
 
 export function createRedisMock() {

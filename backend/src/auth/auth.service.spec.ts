@@ -29,11 +29,13 @@ function makeService() {
     verifyAsync: vi.fn(),
   };
   const sms = { sendOtp: vi.fn().mockResolvedValue(undefined) };
+  const config = { getNumber: vi.fn().mockResolvedValue(300) };
   const service = new AuthService(
     prisma as unknown as PrismaService,
     redis as never,
     jwt as never,
     sms as never,
+    config as never,
   );
   return { service, redis, prisma, jwt, sms };
 }

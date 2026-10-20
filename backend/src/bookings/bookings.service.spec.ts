@@ -33,14 +33,16 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const notifications = { notify: vi.fn() };
   const promos = { quote: vi.fn(), redeem: vi.fn() };
   const storage = { validateUpload: vi.fn(), put: vi.fn(), presignedGet: vi.fn() };
+  const config = { getNumber: vi.fn().mockResolvedValue(60) };
   const service = new BookingsService(
     prisma as never,
     audit as never,
     notifications as never,
     promos as never,
     storage as never,
+    config as never,
   );
-  return { service, prisma, audit, notifications, promos, storage };
+  return { service, prisma, audit, notifications, promos, storage, config };
 }
 
 describe('BookingsService.accept', () => {

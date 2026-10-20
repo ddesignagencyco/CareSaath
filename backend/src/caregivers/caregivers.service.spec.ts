@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { CaregiversService } from './caregivers.module.js';
 import { deriveKey, encryptField } from '../common/crypto/field-encryption.js';
@@ -21,7 +21,15 @@ describe('CaregiversService', () => {
     prisma = createPrismaMock();
     storage = createStorageMock();
     wireTransaction(prisma);
-    service = new CaregiversService(prisma as never, createAuditMock() as never, storage as never);
+    const redis = { client: { get: vi.fn().mockResolvedValue(null), set: vi.fn() } };
+    const config = { getNumber: vi.fn().mockResolvedValue(30) };
+    service = new CaregiversService(
+      prisma as never,
+      createAuditMock() as never,
+      storage as never,
+      redis as never,
+      config as never,
+    );
   });
 
   it('rejects registering twice', async () => {

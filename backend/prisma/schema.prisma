@@ -672,3 +672,17 @@ model AuditLog {
 
   @@index([entityType, entityId, at])
 }
+
+// ---------------------------------------------------------------------------
+// Platform configuration (TRD §6.x): operator-tunable values such as response
+// windows, cancellation notice windows and OTP lifetimes. Env provides
+// defaults; rows here override them without a redeploy.
+// ---------------------------------------------------------------------------
+
+model PlatformConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}

@@ -17,7 +17,12 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { SmsService } from '../auth/sms.service.js';
+import {
+  NotificationChannelAdapter,
+  PushChannelAdapter,
+  SmsChannelAdapter,
+  WhatsAppChannelAdapter,
+} from './channels.js';
 
 export interface NotifyInput {
   userId: string;
@@ -51,36 +56,52 @@ export class ListNotificationsQueryDto {
  */
 @Injectable()
 export class NotificationsService {
+  private readonly adapters: NotificationChannelAdapter[];
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sms: SmsService,
-  ) {}
+    smsAdapter: SmsChannelAdapter,
+    whatsappAdapter: WhatsAppChannelAdapter,
+    pushAdapter: PushChannelAdapter,
+  ) {
+    this.adapters = [pushAdapter, smsAdapter, whatsappAdapter];
+  }
 
   /** Persist + dispatch one notification. Never throws into the request path. */
   async notify(input: NotifyInput): Promise<void> {
-    const records: Array<{ channel: NotificationChannel; status: NotificationStatus }> = [
-      { channel: NotificationChannel.PUSH, status: NotificationStatus.SENT },
-    ];
-    if (input.phone) {
-      records.push({ channel: NotificationChannel.SMS, status: NotificationStatus.QUEUED });
-    }
     try {
-      for (const record of records) {
+      for (const adapter of this.adapters) {
+        if (!adapter.enabled()) {
+          continue;
+        }
+        const requiresPhone =
+          adapter.channel !== NotificationChannel.PUSH;
+        if (requiresPhone && !input.phone) {
+          continue;
+        }
         const created = await this.prisma.notification.create({
           data: {
             userId: input.userId,
-            channel: record.channel,
+            channel: adapter.channel,
             event: input.event,
             payload: input.payload,
-            status: record.status,
-            sentAt: record.status === NotificationStatus.SENT ? new Date() : null,
+            status: NotificationStatus.QUEUED,
           },
         });
-        if (record.channel === NotificationChannel.SMS && input.message && input.phone) {
-          await this.sms.sendVisitAlert(input.phone, input.message);
+        try {
+          await adapter.send({
+            phone: input.phone,
+            message: input.message,
+            event: input.event,
+          });
           await this.prisma.notification.update({
             where: { id: created.id },
             data: { status: NotificationStatus.SENT, sentAt: new Date() },
+          });
+        } catch {
+          await this.prisma.notification.update({
+            where: { id: created.id },
+            data: { status: NotificationStatus.FAILED },
           });
         }
       }
@@ -118,7 +139,12 @@ export class NotificationsController {
 
 @Module({
   controllers: [NotificationsController],
-  providers: [NotificationsService, SmsService],
+  providers: [
+    NotificationsService,
+    SmsChannelAdapter,
+    WhatsAppChannelAdapter,
+    PushChannelAdapter,
+  ],
   exports: [NotificationsService],
 })
 export class NotificationsModule {}

@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev, 'phase-*']
+  pull_request:
+    branches: [main, dev]
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint-build-unit:
+    name: Lint, build, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: caresaath
+          POSTGRES_PASSWORD: caresaath
+          POSTGRES_DB: caresaath
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - '9000:9000'
+          - '9001:9001'
+    env:
+      DATABASE_URL: postgresql://caresaath:caresaath@localhost:5432/caresaath
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_REFRESH_SECRET: ci-refresh-secret
+      JWT_ACCESS_TTL_SECONDS: '900'
+      JWT_REFRESH_TTL_SECONDS: '604800'
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: '9000'
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: caresaath
+      OTP_TTL_SECONDS: '300'
+      CHECKIN_OTP_TTL_SECONDS: '600'
+      BOOKING_RESPOND_WINDOW_MINUTES: '60'
+      PAYOUT_ENCRYPTION_KEY: ci-payout-key
+      CNIC_ENCRYPTION_KEY: ci-cnic-key
+      MEDICAL_ENCRYPTION_KEY: ci-medical-key
+      RETENTION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+      - name: Build
+        run: npm run build
+      - name: Seed reference data
+        run: npm run seed
+      - name: End-to-end tests
+        run: npm run test:e2e

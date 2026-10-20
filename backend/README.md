@@ -133,6 +133,9 @@ prisma/
 | `common/decorators/roles.decorator.ts` | `@Roles('CUSTOMER' \| 'CAREGIVER' \| 'ADMIN')` |
 | `common/dto/pagination.ts` | `PaginationDto`, `Paginated<T>`, `paginate()` |
 | `common/filters/http-exception.filter.ts` | Consistent JSON error envelope |
+| `common/crypto/field-encryption.ts` | AES-256-GCM `encryptField`/`decryptMaybe`/`maskValue` for CNIC, medical context, payout accounts |
+| `config/platform-config.module.ts` | `ConfigService` (DB + Redis-cached, env fallback) and `/admin/config` |
+| `common/retention/retention.module.ts` | `RetentionService` scheduled purge of expired/consumed OTPs and old notifications |
 
 Global guards are registered in `app.module.ts` via `APP_GUARD`:
 `JwtAuthGuard` then `RolesGuard`. Every route is authenticated unless marked
@@ -165,6 +168,10 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 | promos | `/admin/promos` | Promo codes + discount calculation (FR-A8) |
 | disputes | `/disputes`, `/admin/disputes` | Raise + admin mediation (FR-A7) |
 | admin | `/admin/analytics`, `/admin/reports/export`, `/admin/safety-incidents` | Analytics (FR-A5), CSV reports (FR-A9), incident triage (FR-A6) |
+| config | `/admin/config` | Operator-tunable settings (response window, OTP TTLs, retention, cache TTL) |
+
+Platform config is seeded with defaults and can be overridden at runtime; values
+resolve as Redis cache → `PlatformConfig` row → env fallback.
 
 ### Route groups at a glance
 
@@ -183,6 +190,7 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 /admin/payouts               GET + approve/mark-paid/reject
 /admin/disputes              GET + resolve
 /admin/safety-incidents      GET + PATCH
+/admin/config                GET + PUT (operator-tunable settings)
 /admin/analytics             platform metrics
 /admin/reports/export        CSV reports
 /payments/webhook/:provider  public gateway callback
@@ -230,7 +238,16 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 - **Audit**: call `AuditService.log({ actorId, action, entityType, entityId, metadata })`
   for state-changing actions.
 - **Notifications**: `NotificationsService.notify(...)` never throws into the
-  request path — safe to call after the business write.
+  request path — safe to call after the business write. It dispatches over each
+  enabled `NotificationChannelAdapter` (`channels.ts`): push is always on, SMS
+  when a phone is supplied, WhatsApp only when `WHATSAPP_ENABLED=true`. Adapter
+  failures mark that row `FAILED` without affecting others.
+- **Config**: read tunable values through `ConfigService.getNumber('<key>')`
+  (e.g. respond window, OTP TTLs); never read those env vars directly. Change at
+  runtime via `PUT /admin/config/:key`.
+- **Retention**: `RetentionService` runs on a `setInterval` (unless
+  `RETENTION_ENABLED=false`), purging expired/consumed OTPs and delivered
+  notifications older than `retention.notificationDays`.
 - **ESM imports** use the `.js` extension (e.g. `./foo.module.js`) because the
   project is ESM with `isolatedModules`.
 - **Prisma JSON filters**: use snake_case operators, e.g.
@@ -245,16 +262,20 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 
 - **Unit** (`*.spec.ts`, beside the module): services constructed directly with
   mocks from `test/test-helpers.ts` (`createPrismaMock`, `createAuditMock`,
-  `createNotificationsMock`, `createStorageMock`, `wireTransaction`). When a
-  service gains a new Prisma model, add it to `createPrismaMock`.
+  `createNotificationsMock`, `createStorageMock`, `createConfigMock`,
+  `wireTransaction`). When a service gains a new Prisma model, add it to
+  `createPrismaMock`.
 - **E2E** (`test/*.e2e-spec.ts`): boot the full app via `createTestApp()` against
   the real Docker Postgres/Redis/MinIO, sign tokens with `signAccessToken`, and
   clean up created rows in `afterAll` (watch FK order: incidents → payments →
   visits → bookings → profiles → users).
+- **CI**: `.github/workflows/ci.yml` runs lint/build/unit and an e2e job backed by
+  Postgres, Redis and MinIO service containers.
 
 Suites currently cover: health, auth, caregiver onboarding/verification,
 booking → visit lifecycle, payments & payouts, admin promos/disputes/analytics/
-reports/safety, and customer/caregiver self-service.
+reports/safety, customer/caregiver self-service, phase-9 gap-fills, and
+phase-10 hardening (platform config + cached search).
 
 ---
 
@@ -265,8 +286,8 @@ reports/safety, and customer/caregiver self-service.
 - Migrations: `prisma/migrations/`.
 - Change workflow: edit schema → `npx prisma migrate dev --name <change>` →
   regenerate client → update seeds/tests.
-- Seed (`npm run seed`): an admin user (`ADMIN_PHONE`) and commission rates for
-  every `Specialty` (default 20%).
+- Seed (`npm run seed`): an admin user (`ADMIN_PHONE`), commission rates for
+  every `Specialty` (default 20%), and default `PlatformConfig` values.
 
 ---
 

@@ -27,6 +27,8 @@ import { PromosModule } from './promos/promos.module.js';
 import { DisputesModule } from './disputes/disputes.module.js';
 import { AdminAnalyticsModule } from './admin/analytics.module.js';
 import { AdminSafetyModule } from './admin/safety.module.js';
+import { PlatformConfigModule } from './config/platform-config.module.js';
+import { RetentionModule } from './common/retention/retention.module.js';
 
 @Module({
   imports: [
@@ -53,6 +55,8 @@ import { AdminSafetyModule } from './admin/safety.module.js';
     DisputesModule,
     AdminAnalyticsModule,
     AdminSafetyModule,
+    PlatformConfigModule,
+    RetentionModule,
   ],
   controllers: [AppController],
   providers: [

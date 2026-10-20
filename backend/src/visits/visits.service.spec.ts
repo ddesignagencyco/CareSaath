@@ -47,6 +47,7 @@ describe('VisitsService transitions', () => {
       notifications as never,
       redis as never,
       sms as never,
+      { getNumber: () => Promise.resolve(600) } as never,
     );
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
   });
