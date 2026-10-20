@@ -56,7 +56,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       minio:
-        image: minio/minio
+        image: elestio/minio:latest
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
@@ -64,7 +64,7 @@ jobs:
           - '9000:9000'
           - '9001:9001'
         options: >-
-          --health-cmd "mc ready local"
+          --health-cmd "curl -f -s http://localhost:9000/minio/health/live"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5

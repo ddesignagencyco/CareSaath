@@ -97,6 +97,8 @@ describe('Phase 10 hardening (e2e)', () => {
   });
 
   it('persists an override and invalidates the cache', async () => {
+    await redis.client.set(`config:${CONFIG_KEY}`, '999', 'EX', 60);
+
     await request(app.getHttpServer())
       .put(`/api/v1/admin/config/${CONFIG_KEY}`)
       .set(bearer(adminToken))
@@ -105,7 +107,8 @@ describe('Phase 10 hardening (e2e)', () => {
 
     const row = await prisma.platformConfig.findUnique({ where: { key: CONFIG_KEY } });
     expect(row?.value).toBe(7);
-    expect(await redis.client.get(`config:${CONFIG_KEY}`)).toBeNull();
+    const cached = await redis.client.get(`config:${CONFIG_KEY}`);
+    expect(cached === null || cached === '7').toBe(true);
 
     const res = await request(app.getHttpServer())
       .get('/api/v1/admin/config')

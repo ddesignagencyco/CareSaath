@@ -11,7 +11,7 @@ services:
     image: redis:7
     ports: ["6379:6379"]
   minio:
-    image: minio/minio
+    image: elestio/minio:latest
     command: server /data --console-address ":9001"
     ports: ["9000:9000", "9001:9001"]
     environment:
