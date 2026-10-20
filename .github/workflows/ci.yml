@@ -56,13 +56,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       minio:
-        image: bitnami/minio:latest
+        image: minio/minio
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
         ports:
           - '9000:9000'
           - '9001:9001'
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          server /data --console-address ":9001"
     env:
       DATABASE_URL: postgresql://caresaath:caresaath@localhost:5432/caresaath
       REDIS_URL: redis://localhost:6379
