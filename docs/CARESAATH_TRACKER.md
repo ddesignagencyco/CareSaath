@@ -54,11 +54,11 @@
 |**ID**|**Module**|**Task**|
 | :-: | :-: | :-: |
 |BE-001|Setup|Initialise NestJS + TypeScript project, npm scripts, lint/format|
-|BE-002|Setup|Docker Compose: postgres, redis, minio, mailhog, backend|
+|BE-002|Setup|Docker Compose: postgres, redis, mailhog, backend|
 |BE-003|Setup|Prisma setup, initial schema from ERD, migrations, seed script|
 |BE-004|Setup|Config module + .env validation; tunable-values table|
 |BE-005|Setup|Global validation, exception filter, logging, pagination, Swagger|
-|BE-006|Setup|MinIO service wrapper (upload, pre-signed URL, bucket policy)|
+|BE-006|Setup|Storage service wrapper (Cloudinary upload, signed URL, in-memory fallback)|
 |BE-007|Setup|CI pipeline (install, lint, type-check, test, build)|
 |BE-008|Auth|OTP request endpoint (generate, hash, store in Redis, send SMS)|
 |BE-009|Auth|OTP verify endpoint, issue JWT access + refresh|
@@ -70,7 +70,7 @@
 |BE-015|Patients|Patient profile CRUD (self / family member, medical context)|
 |BE-016|Addresses|Address CRUD with lat/lng|
 |BE-017|Caregiver|Caregiver registration (name, CNIC, license no.)|
-|BE-018|Caregiver|Certificate/license document upload to MinIO|
+|BE-018|Caregiver|Certificate/license document upload to Cloudinary|
 |BE-019|Caregiver|Profile: specialty, service area, rate per visit|
 |BE-020|Caregiver|Public caregiver profile endpoint (quals, license no., experience, ratings, rate)|
 |BE-021|Verification|Admin queue + approve/reject endpoints, block unapproved from search|
@@ -118,7 +118,7 @@
 |BE-059|Admin|CSV/Excel export of financial and operational reports|
 |BE-060|Audit|Audit log service (credential approvals, check-in/out, incidents)|
 |BE-061|Security|Field-level encryption (CNIC, medical context, payout accounts)|
-|BE-062|Security|TLS + at-rest encryption config for Postgres/MinIO|
+|BE-062|Security|TLS + at-rest encryption config for Postgres/Cloudinary|
 |BE-063|Quality|Unit tests: state machine, commission, availability, OTP|
 |BE-064|Quality|E2E tests: login, booking→completion, webhooks, doc access control|
 |BE-065|Quality|Search performance test under throttled 3G|

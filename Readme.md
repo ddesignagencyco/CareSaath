@@ -30,7 +30,7 @@ _Update this table as each phase progresses._
 | ORM | Prisma 7 |
 | Database | PostgreSQL |
 | Cache / OTP store | Redis |
-| Object storage | MinIO (S3-compatible) |
+| Object storage | Cloudinary (in-memory fallback when unconfigured) |
 | Dev email | MailHog |
 | Containers | Docker Compose |
 | Package manager | npm |
@@ -53,7 +53,7 @@ Prerequisites: Node.js 24+, npm, Docker.
 # 1. Environment
 cp .env.example .env
 
-# 2. Start PostgreSQL, Redis, MinIO, MailHog
+# 2. Start PostgreSQL, Redis, MailHog
 docker compose -f docker/docker-compose.yml up -d
 
 # 3. Install and run the backend
@@ -68,7 +68,6 @@ Local service ports:
 |---|---|
 | PostgreSQL | 5432 |
 | Redis | 6379 |
-| MinIO API / console | 9000 / 9001 |
 | MailHog SMTP / web UI | 11025 / 18025 |
 
 Credentials in `.env.example` are for local development only. Never commit `.env`.

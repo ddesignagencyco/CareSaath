@@ -55,20 +55,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      minio:
-        image: elestio/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - '9000:9000'
-          - '9001:9001'
-        options: >-
-          --health-cmd "curl -f -s http://localhost:9000/minio/health/live"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          server /data --console-address ":9001"
     env:
       DATABASE_URL: postgresql://caresaath:caresaath@localhost:5432/caresaath
       REDIS_URL: redis://localhost:6379
@@ -76,11 +62,6 @@ jobs:
       JWT_REFRESH_SECRET: ci-refresh-secret
       JWT_ACCESS_TTL_SECONDS: '900'
       JWT_REFRESH_TTL_SECONDS: '604800'
-      MINIO_ENDPOINT: localhost
-      MINIO_PORT: '9000'
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: caresaath
       OTP_TTL_SECONDS: '300'
       CHECKIN_OTP_TTL_SECONDS: '600'
       BOOKING_RESPOND_WINDOW_MINUTES: '60'

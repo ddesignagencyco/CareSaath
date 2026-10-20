@@ -19,7 +19,7 @@ physiotherapists, post-surgery and elderly-care attendants). Core flows:
 
 1. **Identity** — phone + OTP login, JWT access/refresh, role guards
    (CUSTOMER, CAREGIVER, ADMIN).
-2. **Onboarding** — caregivers register, upload credentials to MinIO, and are
+2. **Onboarding** — caregivers register, upload credentials to Cloudinary, and are
    approved by an admin before appearing in search.
 3. **Booking → visit** — customers book single/recurring visits; caregivers
    accept/decline; each visit walks a state machine
@@ -47,7 +47,7 @@ analytics/reports). Remaining hardening is tracked in the root README and TRD.
 | ORM | Prisma 7 (driver adapter `@prisma/adapter-pg`), client generated into `src/generated/prisma` |
 | Database | PostgreSQL |
 | Cache / OTP store | Redis (ioredis) |
-| Object storage | MinIO (S3-compatible) |
+| Object storage | Cloudinary (in-memory fallback when credentials unset) |
 | API docs | Swagger at `/docs`, OpenAPI JSON at `/docs-json` |
 | Validation | `class-validator` + `class-transformer` |
 | Lint / format | oxlint (`--type-aware`) + Prettier |
@@ -57,8 +57,10 @@ analytics/reports). Remaining hardening is tracked in the root README and TRD.
 
 ## Getting started
 
-Prerequisites: Node.js 24+, npm, Docker. Services (Postgres, Redis, MinIO,
-MailHog) are defined in [`../docker/docker-compose.yml`](../docker/docker-compose.yml).
+Prerequisites: Node.js 24+, npm, Docker. Services (Postgres, Redis, MailHog)
+are defined in [`../docker/docker-compose.yml`](../docker/docker-compose.yml).
+File storage uses Cloudinary; without credentials the app falls back to an
+in-memory driver so local development and tests need no external service.
 
 ```bash
 # from the repository root
@@ -124,7 +126,7 @@ prisma/
 |---|---|
 | `common/prisma/prisma.service.ts` | `PrismaService` (global) |
 | `common/redis/redis.module.ts` | `RedisService` (global) |
-| `common/storage/storage.module.ts` | `StorageService.put/presignedGet/validateUpload` (global, MinIO) |
+| `common/storage/storage.module.ts` | `StorageService.put/presignedGet/validateUpload` (global, Cloudinary) |
 | `common/audit/audit.module.ts` | `AuditService.log(...)` append-only audit (global); never throws into request path |
 | `common/guards/jwt-auth.guard.ts` | Global JWT guard; bypassed by `@Public()` |
 | `common/guards/roles.guard.ts` | Global role guard driven by `@Roles(...)` |
@@ -266,11 +268,12 @@ resolve as Redis cache → `PlatformConfig` row → env fallback.
   `wireTransaction`). When a service gains a new Prisma model, add it to
   `createPrismaMock`.
 - **E2E** (`test/*.e2e-spec.ts`): boot the full app via `createTestApp()` against
-  the real Docker Postgres/Redis/MinIO, sign tokens with `signAccessToken`, and
+  the real Docker Postgres/Redis (Cloudinary storage falls back to in-memory,
+  so no storage service is required), sign tokens with `signAccessToken`, and
   clean up created rows in `afterAll` (watch FK order: incidents → payments →
   visits → bookings → profiles → users).
 - **CI**: `.github/workflows/ci.yml` runs lint/build/unit and an e2e job backed by
-  Postgres, Redis and MinIO service containers.
+  Postgres and Redis service containers.
 
 Suites currently cover: health, auth, caregiver onboarding/verification,
 booking → visit lifecycle, payments & payouts, admin promos/disputes/analytics/

@@ -8,8 +8,9 @@ import { RedisService } from '../src/common/redis/redis.module.js';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter.js';
 
 /**
- * Boots the full application (real Postgres/Redis/MinIO from docker-compose).
- * E2E tests require the Docker services to be running and the schema migrated.
+ * Boots the full application (real Postgres/Redis; Cloudinary storage falls back
+ * to an in-memory driver when credentials are unset). E2E tests require the
+ * Docker services to be running and the schema migrated.
  */
 export async function createTestApp(): Promise<{
   app: INestApplication<App>;

@@ -25,7 +25,7 @@ Three user surfaces (SRS §2.1): customer app, caregiver panel, admin panel. One
 | Database | PostgreSQL | System of record (see ERD) |
 | Auth | JWT | Access/refresh tokens after OTP login |
 | Cache / ephemeral store | Redis | OTP storage and rate limits, caching, session/token deny-list |
-| Object storage | MinIO (S3-compatible) | Prescriptions, licenses, certificates, photos |
+| Object storage | Cloudinary | Prescriptions, licenses, certificates, photos |
 | Email (dev) | MailHog | Capture outgoing email locally |
 | Email (optional) | Google SMTP | Real email if the project decides it needs email |
 | Containers | Docker (Docker Compose for local) | Reproducible environments |
@@ -52,7 +52,7 @@ flowchart LR
     AD[Admin Panel - Next.js] --> API
     API[NestJS REST API] --> PG[(PostgreSQL)]
     API --> RD[(Redis)]
-    API --> MN[(MinIO)]
+    API --> MN[(Cloudinary)]
     API --> SMS[SMS gateway]
     API --> WA[WhatsApp Business API]
     API --> PAY[JazzCash / Easypaisa / Raast / Card]
@@ -104,7 +104,7 @@ Monorepo vs separate repos: **TBD**.
 | search | Caregiver search by specialty, location, availability | FR-C3 |
 | bookings | Single/recurring booking, accept/decline, cancel/reschedule | FR-C6, C7, C13, CG5 |
 | visits | Lifecycle state machine, check-in/out, notes | FR-C9, CG7, CG8, C11, §8.2 |
-| documents | Prescription / certificate upload and secured access (MinIO) | FR-C5, CG6, CG1 |
+| documents | Prescription / certificate upload and secured access (Cloudinary) | FR-C5, CG6, CG1 |
 | payments | Payment records, gateway integration, cash handling | FR-C8, §7.2 |
 | payouts | Earnings, payout requests, payout accounts | FR-CG9 |
 | commissions | Per-category commission config and calculation | FR-A4 |
@@ -193,7 +193,7 @@ Common: pagination (`page`, `limit`), consistent error shape, OpenAPI/Swagger ge
 Request OTP → generate code, store hash in Redis with expiry → send via SMS gateway → verify → issue JWT access + refresh tokens. Rate limits per phone and per IP (limits **TBD**). OTP expiry and max attempts **TBD**.
 
 ### 6.2 Caregiver onboarding (FR-CG1, CG2, A1)
-Register with name, CNIC, license number, certificates → files to MinIO → profile `PENDING` → admin reviews documents and cross-checks PNC/PMDC register manually or semi-automatically (SRS §7.5; automation level **TBD**) → approve or reject → only `APPROVED` profiles appear in search. Reverification due date stored (FR-A2, interval **TBD**, SRS example is annual).
+Register with name, CNIC, license number, certificates → files to Cloudinary → profile `PENDING` → admin reviews documents and cross-checks PNC/PMDC register manually or semi-automatically (SRS §7.5; automation level **TBD**) → approve or reject → only `APPROVED` profiles appear in search. Reverification due date stored (FR-A2, interval **TBD**, SRS example is annual).
 
 ### 6.3 Booking and visit lifecycle (SRS §8.2)
 
@@ -243,9 +243,9 @@ Status-change events → notifications module → SMS / WhatsApp / push per user
 
 | Requirement | Approach |
 |---|---|
-| Encryption in transit | HTTPS/TLS for all traffic; TLS to MinIO, PostgreSQL, Redis outside local dev |
-| Encryption at rest | Disk/volume encryption for PostgreSQL and MinIO; MinIO server-side encryption; field-level encryption for CNIC, medical context, payout account numbers (design). Key management **TBD** |
-| Access to medical documents | Only assigned caregiver and admin (plus the owning customer); enforced in the API, files served by short-lived pre-signed MinIO URLs or streamed through the API (design) |
+| Encryption in transit | HTTPS/TLS for all traffic; TLS to PostgreSQL and Redis outside local dev; Cloudinary served over HTTPS |
+| Encryption at rest | Disk/volume encryption for PostgreSQL; Cloudinary-managed at-rest encryption; field-level encryption for CNIC, medical context, payout account numbers (design). Key management **TBD** |
+| Access to medical documents | Only assigned caregiver and admin (plus the owning customer); enforced in the API, files served by short-lived signed Cloudinary URLs or streamed through the API (design) |
 | Authentication | OTP login, short-lived JWT access tokens, rotating refresh tokens. Token lifetimes **TBD** |
 | Authorization | Role-based guards (CUSTOMER / CAREGIVER / ADMIN) plus ownership checks on every resource |
 | Abuse protection | Rate limiting on OTP and login endpoints, input validation, upload type/size checks |
@@ -293,14 +293,14 @@ Note: the SRS says health-data privacy must comply with "relevant Pakistani data
 | frontend | Next.js app | |
 | postgres | PostgreSQL | volume for data |
 | redis | Redis | |
-| minio | MinIO | console for inspecting buckets |
+| cloudinary | Cloudinary (SaaS) | file storage; in-memory fallback when unconfigured |
 | mailhog | MailHog | SMTP sink + web UI |
 
 Ports, versions, and credentials go in `.env` (never committed). Version pins **TBD**.
 
 ### 10.2 Environment variables (names are proposals)
 
-`DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMS_API_KEY`, `WHATSAPP_API_TOKEN`, `JAZZCASH_*`, `EASYPAISA_*`, `CARD_GATEWAY_*`, `MAPS_API_KEY`, `OTP_TTL_SECONDS`.
+`DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMS_API_KEY`, `WHATSAPP_API_TOKEN`, `JAZZCASH_*`, `EASYPAISA_*`, `CARD_GATEWAY_*`, `MAPS_API_KEY`, `OTP_TTL_SECONDS`.
 
 ### 10.3 Environments
 Local, staging, production (design). Hosting for staging/production: **TBD** (SRS says only "cloud infrastructure with encrypted storage").
@@ -315,7 +315,7 @@ CI pipeline: install (npm ci), lint, type-check, test, build, Prisma migrate che
 | Level | Scope |
 |---|---|
 | Unit | Services: state machine, commission calculation, availability conflict checks, OTP logic |
-| Integration / e2e | API flows against test Postgres/Redis/MinIO: login, booking → visit → completion, payment webhooks, access control on documents |
+| Integration / e2e | API flows against test Postgres/Redis (Cloudinary in-memory fallback): login, booking → visit → completion, payment webhooks, access control on documents |
 | Security | Role/ownership authorization tests, upload validation |
 | Performance | Search under throttled 3G profile (SRS §6) |
 | UAT | Pilot-city caregivers and customers; elderly-assisting-user usability test |

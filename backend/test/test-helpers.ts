@@ -92,7 +92,7 @@ export function createStorageMock() {
   return {
     validateUpload: vi.fn(),
     put: vi.fn(),
-    presignedGet: vi.fn().mockResolvedValue('https://minio.local/signed'),
+    presignedGet: vi.fn().mockResolvedValue('https://storage.local/signed'),
   };
 }
 

@@ -11,7 +11,7 @@
 - Primary keys: `id` (UUID) on every table (design).
 - Timestamps: `createdAt`, `updatedAt` on every table (design); extra timestamps listed per table.
 - Soft delete / deactivation uses a `status` field, not row deletion (needed for the audit requirement in SRS §6).
-- Files (prescriptions, licenses, certificates, photos) are stored in MinIO. The database stores only the object key, never the file.
+- Files (prescriptions, licenses, certificates, photos) are stored in Cloudinary. The database stores only the public id (`fileKey`), never the file.
 - Money: stored as integer minor units. **Currency PKR assumed; confirm (TBD).**
 - Enums are listed in section 4.
 
@@ -158,7 +158,7 @@ Rule: a caregiver is returned by search only when `verificationStatus = APPROVED
 | id | UUID PK | |
 | caregiverId | FK → CaregiverProfile | |
 | type | Enum `DocType` | LICENSE, CERTIFICATE, CNIC_COPY?, OTHER. CNIC copy upload **TBD** (SRS lists CNIC number only) |
-| fileKey | String | MinIO object key |
+| fileKey | String | Cloudinary public id |
 | mimeType, sizeBytes | String, Int | |
 
 #### CredentialReview  — FR-A1, FR-A2, SRS §6 Auditability
@@ -243,7 +243,7 @@ SRS FR-C6 allows "a single visit or a recurring schedule (e.g., daily for 2 week
 | id | UUID PK | |
 | bookingId | FK → Booking | |
 | uploadedById | FK → User | |
-| fileKey | String | MinIO key; access limited to assigned caregiver and admin (SRS §6) |
+| fileKey | String | Cloudinary public id; access limited to assigned caregiver and admin (SRS §6) |
 | mimeType, sizeBytes | String, Int | Allowed types/size **TBD** |
 
 #### VisitNote  — FR-CG8, FR-C11

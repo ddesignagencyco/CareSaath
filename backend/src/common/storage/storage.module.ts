@@ -6,7 +6,7 @@ import {
   Module,
   OnModuleInit,
 } from '@nestjs/common';
-import { Client } from 'minio';
+import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 
 export interface StoredFile {
   fileKey: string;
@@ -14,33 +14,53 @@ export interface StoredFile {
   sizeBytes: number;
 }
 
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * File storage backed by Cloudinary (TRD §7). Documents and photos are uploaded
+ * as raw/auto resources and referenced by their Cloudinary public_id (`fileKey`).
+ * `presignedGet` returns a time-limited signed delivery URL.
+ *
+ * When Cloudinary credentials are absent (local dev without a Cloudinary account,
+ * unit/e2e tests) the service falls back to an in-memory driver so uploads still
+ * succeed without any external dependency.
+ */
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
-  private readonly client: Client;
-  private readonly bucket: string;
+  private readonly configured: boolean;
+  private readonly folder: string;
+  private readonly fallback = new Map<string, { buffer: Buffer; mimeType: string }>();
 
   constructor() {
-    this.bucket = process.env['MINIO_BUCKET'] ?? 'caresaath';
-    this.client = new Client({
-      endPoint: process.env['MINIO_ENDPOINT'] ?? 'localhost',
-      port: Number(process.env['MINIO_PORT'] ?? 9000),
-      useSSL: process.env['MINIO_USE_SSL'] === 'true',
-      accessKey: process.env['MINIO_ACCESS_KEY'] ?? 'minioadmin',
-      secretKey: process.env['MINIO_SECRET_KEY'] ?? 'minioadmin',
-    });
+    const cloudName = process.env['CLOUDINARY_CLOUD_NAME'];
+    const apiKey = process.env['CLOUDINARY_API_KEY'];
+    const apiSecret = process.env['CLOUDINARY_API_SECRET'];
+    this.folder = process.env['CLOUDINARY_FOLDER'] ?? 'caresaath';
+    this.configured = Boolean(cloudName && apiKey && apiSecret);
+
+    if (this.configured) {
+      cloudinary.config({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret,
+        secure: true,
+      });
+    }
   }
 
-  async onModuleInit() {
-    try {
-      const exists = await this.client.bucketExists(this.bucket);
-      if (!exists) {
-        await this.client.makeBucket(this.bucket);
-        this.logger.log(`Created bucket ${this.bucket}`);
-      }
-    } catch (err) {
-      this.logger.error(`MinIO unavailable: ${(err as Error).message}`);
-    }
+  onModuleInit(): void {
+    this.logger.log(
+      this.configured
+        ? `Storage: Cloudinary (${process.env['CLOUDINARY_CLOUD_NAME']})`
+        : 'Storage: in-memory fallback (set CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET to enable Cloudinary)',
+    );
   }
 
   async put(
@@ -49,28 +69,56 @@ export class StorageService implements OnModuleInit {
     buffer: Buffer,
     mimeType: string,
   ): Promise<StoredFile> {
-    const fileKey = `${prefix}/${Date.now()}-${filename.replace(/[^\w.-]/g, '_')}`;
-    await this.client.putObject(this.bucket, fileKey, buffer, buffer.length, {
-      'Content-Type': mimeType,
+    this.validateUpload(mimeType, buffer.length);
+    const publicId = `${prefix}/${Date.now()}-${filename.replace(/[^\w.-]/g, '_')}`;
+
+    if (!this.configured) {
+      this.fallback.set(publicId, { buffer, mimeType });
+      return { fileKey: publicId, mimeType, sizeBytes: buffer.length };
+    }
+
+    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          public_id: publicId,
+          resource_type: 'auto',
+          folder: this.folder,
+          overwrite: false,
+        },
+        (error, uploaded) => {
+          if (error || !uploaded) {
+            reject(error ?? new Error('Cloudinary upload failed'));
+            return;
+          }
+          resolve(uploaded);
+        },
+      );
+      stream.end(buffer);
     });
-    return { fileKey, mimeType, sizeBytes: buffer.length };
+
+    return {
+      fileKey: result.public_id,
+      mimeType,
+      sizeBytes: result.bytes ?? buffer.length,
+    };
   }
 
   async presignedGet(fileKey: string, ttlSeconds = 300): Promise<string> {
-    return this.client.presignedGetObject(this.bucket, fileKey, ttlSeconds);
+    if (!this.configured) {
+      return `https://storage.local/${fileKey}?expires=${ttlSeconds}`;
+    }
+    const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+    return cloudinary.utils.private_download_url(fileKey, 'auto', {
+      resource_type: 'auto',
+      expires_at: expiresAt,
+    });
   }
 
   validateUpload(mimetype: string, size: number): void {
-    const allowed = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowed.includes(mimetype)) {
+    if (!ALLOWED_MIME_TYPES.includes(mimetype)) {
       throw new BadRequestException('Only JPEG, PNG, WEBP or PDF files are allowed');
     }
-    if (size > 10 * 1024 * 1024) {
+    if (size > MAX_UPLOAD_BYTES) {
       throw new BadRequestException('File must be 10MB or smaller');
     }
   }
