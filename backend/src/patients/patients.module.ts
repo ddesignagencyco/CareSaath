@@ -11,7 +11,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import {
   IsDateString,
   IsEnum,
@@ -42,60 +42,67 @@ function present<T extends { medicalContext: string | null }>(profile: T): T {
   };
 }
 
-class CreatePatientDto {
+export class CreatePatientDto {
+  @ApiProperty({ example: 'Rukhsana Khan', description: 'Patient full legal name' })
   @IsString()
   @MinLength(1)
   @MaxLength(120)
   name!: string;
 
-  @ApiPropertyOptional({ enum: PatientRelation })
+  @ApiPropertyOptional({ enum: PatientRelation, example: PatientRelation.FAMILY_MEMBER, description: 'Relationship to account holder (SELF or FAMILY_MEMBER)' })
   @IsOptional()
   @IsEnum(PatientRelation)
   relationship?: PatientRelation;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '1958-11-02', description: 'Date of birth (YYYY-MM-DD)' })
   @IsOptional()
   @IsDateString()
   dateOfBirth?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'female', description: 'Gender' })
   @IsOptional()
   @IsString()
   @MaxLength(40)
   gender?: string;
 
-  @ApiPropertyOptional({ description: 'Basic medical context (FR-C2). Sensitive.' })
+  @ApiPropertyOptional({
+    example: 'Type-2 diabetes, mild hypertension. Requires assistance with daily mobility.',
+    description: 'Basic medical context (FR-C2). Stored encrypted with AES-256-GCM.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(4000)
   medicalContext?: string;
 }
 
-class UpdatePatientDto {
-  @ApiPropertyOptional()
+export class UpdatePatientDto {
+  @ApiPropertyOptional({ example: 'Rukhsana Khan' })
   @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(120)
   name?: string;
 
-  @ApiPropertyOptional({ enum: PatientRelation })
+  @ApiPropertyOptional({ enum: PatientRelation, example: PatientRelation.FAMILY_MEMBER })
   @IsOptional()
   @IsEnum(PatientRelation)
   relationship?: PatientRelation;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '1958-11-02' })
   @IsOptional()
   @IsDateString()
   dateOfBirth?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'female' })
   @IsOptional()
   @IsString()
   @MaxLength(40)
   gender?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Post-operative knee recovery; limited stairs.',
+    description: 'Updated medical context (stored encrypted).',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(4000)
@@ -109,13 +116,12 @@ export class PatientsService {
     private readonly audit: AuditService,
   ) {}
 
-  list(user: AuthUser) {
-    return this.prisma.patientProfile
-      .findMany({
-        where: { ownerUserId: user.sub },
-        orderBy: { createdAt: 'desc' },
-      })
-      .then((rows) => rows.map(present));
+  async list(user: AuthUser) {
+    const list = await this.prisma.patientProfile.findMany({
+      where: { ownerUserId: user.sub },
+      orderBy: { createdAt: 'desc' },
+    });
+    return list.map(present);
   }
 
   async get(user: AuthUser, id: string) {
@@ -129,38 +135,44 @@ export class PatientsService {
   }
 
   async create(user: AuthUser, dto: CreatePatientDto) {
-    const profile = await this.prisma.patientProfile.create({
+    const created = await this.prisma.patientProfile.create({
       data: {
         ownerUserId: user.sub,
         name: dto.name,
         relationship: dto.relationship ?? PatientRelation.SELF,
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null,
         gender: dto.gender ?? null,
-        medicalContext: dto.medicalContext ? encryptField(dto.medicalContext, MEDICAL_KEY) : null,
+        medicalContext: dto.medicalContext
+          ? encryptField(dto.medicalContext, MEDICAL_KEY)
+          : null,
       },
     });
     await this.audit.log({
       actorId: user.sub,
       action: 'patient.created',
       entityType: 'PatientProfile',
-      entityId: profile.id,
+      entityId: created.id,
     });
-    return present(profile);
+    return present(created);
   }
 
   async update(user: AuthUser, id: string, dto: UpdatePatientDto) {
     await this.get(user, id);
-    const profile = await this.prisma.patientProfile.update({
+    const updated = await this.prisma.patientProfile.update({
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.relationship !== undefined ? { relationship: dto.relationship } : {}),
         ...(dto.dateOfBirth !== undefined
-          ? { dateOfBirth: new Date(dto.dateOfBirth) }
+          ? { dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null }
           : {}),
         ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
         ...(dto.medicalContext !== undefined
-          ? { medicalContext: encryptField(dto.medicalContext, MEDICAL_KEY) }
+          ? {
+              medicalContext: dto.medicalContext
+                ? encryptField(dto.medicalContext, MEDICAL_KEY)
+                : null,
+            }
           : {}),
       },
     });
@@ -170,13 +182,13 @@ export class PatientsService {
       entityType: 'PatientProfile',
       entityId: id,
     });
-    return present(profile);
+    return present(updated);
   }
 
   async remove(user: AuthUser, id: string) {
     await this.get(user, id);
-    const bookings = await this.prisma.booking.count({ where: { patientId: id } });
-    if (bookings > 0) {
+    const bookingCount = await this.prisma.booking.count({ where: { patientId: id } });
+    if (bookingCount > 0) {
       // Keep history: refuse hard delete when referenced (design).
       throw new NotFoundException(
         'Patient has bookings; medical records must be retained for audit',
@@ -193,28 +205,44 @@ export class PatientsService {
   }
 }
 
-@ApiTags('patients')
+@ApiTags('Customer - Patients')
 @ApiBearerAuth()
 @Controller('customer/patients')
 export class PatientsController {
   constructor(private readonly patients: PatientsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List customer patient profiles',
+    description: 'Retrieves all patient profiles registered under the authenticated customer.',
+  })
   list(@CurrentUser() user: AuthUser) {
     return this.patients.list(user);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get patient profile by ID',
+    description: 'Retrieves patient details with medical context decrypted for the owner.',
+  })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.patients.get(user, id);
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create a patient profile',
+    description: 'Registers a new patient profile (self or family member). Medical context is encrypted with AES-256-GCM before saving.',
+  })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreatePatientDto) {
     return this.patients.create(user, dto);
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update patient profile',
+    description: 'Updates demographic and medical details of a patient profile.',
+  })
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -224,6 +252,10 @@ export class PatientsController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete patient profile',
+    description: 'Removes a patient profile provided they have no historical bookings.',
+  })
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.patients.remove(user, id);
   }

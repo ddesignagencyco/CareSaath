@@ -5,7 +5,12 @@ import {
   Module,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import {
@@ -125,13 +130,17 @@ export class NotificationsService {
   }
 }
 
-@ApiTags('notifications')
+@ApiTags('System & Notifications')
 @ApiBearerAuth()
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List user notifications',
+    description: 'Retrieves notification history (SMS, Push, WhatsApp) sent to the authenticated user.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListNotificationsQueryDto) {
     return this.notifications.listForUser(user, query);
   }

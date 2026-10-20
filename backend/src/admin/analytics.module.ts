@@ -7,7 +7,12 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { IsEnum, IsOptional } from 'class-validator';
 import {
@@ -230,7 +235,7 @@ export class AnalyticsService {
   }
 }
 
-@ApiTags('admin-analytics')
+@ApiTags('Admin - Analytics & Reports')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin')
@@ -238,11 +243,19 @@ export class AdminAnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('analytics')
+  @ApiOperation({
+    summary: 'Platform KPIs & business analytics',
+    description: 'Retrieves booking metrics, revenue, active caregivers count, and cancellation rate over a selected time range.',
+  })
   overview(@Query() query: AnalyticsRangeDto) {
     return this.analytics.overview(query.range);
   }
 
   @Get('reports/export')
+  @ApiOperation({
+    summary: 'Export operational data to CSV',
+    description: 'Generates and downloads CSV reports for payments, payouts, bookings, or caregiver directories.',
+  })
   @Header('Content-Type', 'text/csv')
   async export(@Query() query: ReportExportDto, @Res() res: Response) {
     const csv = await this.analytics.export(query.type);

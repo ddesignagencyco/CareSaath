@@ -12,7 +12,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { DisputeStatus, Prisma, UserRole } from '../generated/prisma/client.js';
@@ -197,7 +203,7 @@ export class DisputesService {
   }
 }
 
-@ApiTags('disputes')
+@ApiTags('Disputes')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER, UserRole.CAREGIVER)
 @Controller('disputes')
@@ -205,17 +211,25 @@ export class DisputesController {
   constructor(private readonly disputes: DisputesService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Raise a dispute on a visit',
+    description: 'Customer or caregiver raises a dispute regarding a completed or cancelled visit.',
+  })
   raise(@CurrentUser() user: AuthUser, @Body() dto: RaiseDisputeDto) {
     return this.disputes.raise(user, dto);
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'List my disputes',
+    description: 'Retrieves disputes raised by or involving the authenticated user.',
+  })
   listMine(@CurrentUser() user: AuthUser) {
     return this.disputes.listMine(user);
   }
 }
 
-@ApiTags('admin-disputes')
+@ApiTags('Admin - Safety & Disputes')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/disputes')
@@ -223,11 +237,19 @@ export class AdminDisputesController {
   constructor(private readonly disputes: DisputesService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List platform disputes queue',
+    description: 'Admin overview of disputes with status filtering and pagination.',
+  })
   list(@Query() query: ListDisputesQueryDto) {
     return this.disputes.listAll(query);
   }
 
   @Patch(':id/resolve')
+  @ApiOperation({
+    summary: 'Resolve dispute',
+    description: 'Admin resolves a dispute with a documented mediation decision note.',
+  })
   resolve(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

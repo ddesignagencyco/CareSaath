@@ -11,7 +11,12 @@ import {
   Patch,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
@@ -156,7 +161,7 @@ export class AdminSafetyService {
   }
 }
 
-@ApiTags('admin-safety')
+@ApiTags('Admin - Safety & Disputes')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/safety-incidents')
@@ -164,11 +169,19 @@ export class AdminSafetyController {
   constructor(private readonly safety: AdminSafetyService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List safety incidents & SOS alerts',
+    description: 'Admin triage queue of reported incidents and SOS triggers filtered by priority and status.',
+  })
   list(@Query() query: ListIncidentsQueryDto) {
     return this.safety.list(query);
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update incident status and priority',
+    description: 'Admin updates incident status (IN_REVIEW, RESOLVED) with escalation notes.',
+  })
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

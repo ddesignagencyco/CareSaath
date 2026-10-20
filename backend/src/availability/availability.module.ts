@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOperation,
   ApiProperty,
   ApiPropertyOptional,
   ApiTags,
@@ -34,42 +35,50 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
-class AvailabilityRuleDto {
-  @ApiProperty({ minimum: 0, maximum: 6 })
+export class AvailabilityRuleDto {
+  @ApiProperty({
+    example: 1,
+    minimum: 0,
+    maximum: 6,
+    description: 'Day of week: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday',
+  })
   @IsInt()
   @Min(0)
   @Max(6)
   dayOfWeek!: number;
 
-  @ApiProperty({ example: '09:00' })
+  @ApiProperty({ example: '09:00', description: 'Start time in 24h format (HH:mm)' })
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
   startTime!: string;
 
-  @ApiProperty({ example: '17:00' })
+  @ApiProperty({ example: '17:00', description: 'End time in 24h format (HH:mm)' })
   @IsString()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
   endTime!: string;
 }
 
-class SetAvailabilityDto {
-  @ApiProperty({ type: [AvailabilityRuleDto] })
+export class SetAvailabilityDto {
+  @ApiProperty({
+    type: [AvailabilityRuleDto],
+    description: 'Weekly recurring availability schedule rules',
+  })
   @IsArray()
   @ArrayMinSize(0)
   @ArrayMaxSize(7 * 4)
   rules!: AvailabilityRuleDto[];
 }
 
-class BlockDto {
-  @ApiProperty()
+export class BlockDto {
+  @ApiProperty({ example: '2026-11-01', description: 'Block start date (YYYY-MM-DD)' })
   @IsDateString()
   startDate!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: '2026-11-03', description: 'Block end date (YYYY-MM-DD)' })
   @IsDateString()
   endDate!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Family wedding / out of town', description: 'Optional reason for block' })
   @IsOptional()
   @IsString()
   reason?: string;
@@ -171,28 +180,44 @@ export class AvailabilityService {
   }
 }
 
-@ApiTags('availability')
+@ApiTags('Caregiver - Availability')
 @ApiBearerAuth()
 @Controller('caregiver/availability')
 export class AvailabilityController {
   constructor(private readonly availability: AvailabilityService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'Get caregiver schedule rules and blocked dates',
+    description: 'Returns the recurring weekly schedule and any specific blackout dates for the caregiver.',
+  })
   get(@CurrentUser() user: AuthUser) {
     return this.availability.get(user);
   }
 
   @Put()
+  @ApiOperation({
+    summary: 'Set weekly availability rules',
+    description: 'Overwrites existing recurring availability rules for days of the week and working hours.',
+  })
   set(@CurrentUser() user: AuthUser, @Body() dto: SetAvailabilityDto) {
     return this.availability.setRules(user, dto);
   }
 
   @Post('blocks')
+  @ApiOperation({
+    summary: 'Add an unavailable calendar block',
+    description: 'Blacks out a date range so no visits can be booked during that time.',
+  })
   addBlock(@CurrentUser() user: AuthUser, @Body() dto: BlockDto) {
     return this.availability.addBlock(user, dto);
   }
 
   @Delete('blocks/:id')
+  @ApiOperation({
+    summary: 'Remove an unavailable calendar block',
+    description: 'Deletes a blackout date range by ID.',
+  })
   removeBlock(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.availability.removeBlock(user, id);
   }

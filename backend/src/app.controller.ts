@@ -1,10 +1,10 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from './common/decorators/public.decorator.js';
 import { PrismaService } from './common/prisma/prisma.service.js';
 import { RedisService } from './common/redis/redis.module.js';
 
-@ApiTags('health')
+@ApiTags('System & Health')
 @Controller()
 export class AppController {
   constructor(
@@ -14,6 +14,17 @@ export class AppController {
 
   @Public()
   @Get('health')
+  @ApiOperation({
+    summary: 'Platform health status',
+    description: 'Checks connectivity to PostgreSQL database and Redis caching store.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Services are healthy and operational.',
+    schema: {
+      example: { status: 'ok', postgres: true, redis: true },
+    },
+  })
   async health() {
     try {
       await this.prisma.$queryRaw`SELECT 1`;

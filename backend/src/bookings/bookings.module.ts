@@ -15,7 +15,15 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -55,43 +63,65 @@ function toDateOnly(value: string): Date {
 }
 
 export class CreateBookingDto {
-  @ApiProperty()
+  @ApiProperty({
+    format: 'uuid',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'Patient profile UUID (registered under customer)',
+  })
   @IsUUID()
   patientId!: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    format: 'uuid',
+    example: 'c1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'Caregiver profile UUID (must be an APPROVED caregiver)',
+  })
   @IsUUID()
   caregiverId!: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    format: 'uuid',
+    example: 'd1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'Saved address UUID for the home visit location',
+  })
   @IsUUID()
   addressId!: string;
 
-  @ApiPropertyOptional({ enum: BookingType })
+  @ApiPropertyOptional({
+    enum: BookingType,
+    example: BookingType.SINGLE,
+    description: 'Booking schedule type: SINGLE (default) or RECURRING',
+  })
   @IsOptional()
   @IsEnum(BookingType)
   type?: BookingType;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: '2026-10-25',
+    description: 'Start date of the booking (YYYY-MM-DD)',
+  })
   @IsDateString()
   startDate!: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: '2026-10-25',
+    description: 'End date of the booking (YYYY-MM-DD). Same as startDate for SINGLE.',
+  })
   @IsDateString()
   endDate!: string;
 
-  @ApiProperty({ example: '09:00' })
+  @ApiProperty({ example: '09:00', description: 'Daily arrival time window start (HH:mm)' })
   @IsString()
   @Matches(TIME_RE)
   timeWindowStart!: string;
 
-  @ApiProperty({ example: '11:00' })
+  @ApiProperty({ example: '11:00', description: 'Daily arrival time window end (HH:mm)' })
   @IsString()
   @Matches(TIME_RE)
   timeWindowEnd!: string;
 
   @ApiPropertyOptional({
-    description: 'Recurring days-of-week (1=Mon..7=Sun). Required for RECURRING.',
+    description: 'Recurring days-of-week (1=Mon..7=Sun). Required for RECURRING bookings.',
     example: [1, 3, 5],
   })
   @IsOptional()
@@ -102,7 +132,10 @@ export class CreateBookingDto {
   @Max(7, { each: true })
   weekdays?: number[];
 
-  @ApiPropertyOptional({ description: 'Optional promo code to apply (FR-A8).' })
+  @ApiPropertyOptional({
+    description: 'Optional discount promo code (e.g. WELCOME10)',
+    example: 'WELCOME10',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(24)
@@ -110,7 +143,10 @@ export class CreateBookingDto {
 }
 
 export class CancelBookingDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Travel plans changed; will rebook next week.',
+    description: 'Customer cancellation reason',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -119,21 +155,26 @@ export class CancelBookingDto {
 
 export class RescheduleVisitDto {
   @ApiProperty({
-    description: 'Visit id to reschedule',
+    format: 'uuid',
+    example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    description: 'Visit UUID to reschedule',
   })
   @IsUUID()
   visitId!: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: '2026-10-28',
+    description: 'New date for the visit (YYYY-MM-DD)',
+  })
   @IsDateString()
   newDate!: string;
 
-  @ApiProperty({ example: '09:00' })
+  @ApiProperty({ example: '10:00', description: 'New time window start (HH:mm)' })
   @IsString()
   @Matches(TIME_RE)
   timeWindowStart!: string;
 
-  @ApiProperty({ example: '11:00' })
+  @ApiProperty({ example: '12:00', description: 'New time window end (HH:mm)' })
   @IsString()
   @Matches(TIME_RE)
   timeWindowEnd!: string;
@@ -142,19 +183,19 @@ export class RescheduleVisitDto {
 export class RejectBookingDto extends CancelBookingDto {}
 
 export class ListBookingsQueryDto {
-  @ApiPropertyOptional({ enum: BookingStatus })
+  @ApiPropertyOptional({ enum: BookingStatus, description: 'Filter by booking status' })
   @IsOptional()
   @IsEnum(BookingStatus)
   status?: BookingStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 20, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -163,7 +204,6 @@ export class ListBookingsQueryDto {
   limit = 20;
 }
 
-/** Generate the concrete occurrence dates for a booking from its rule. */
 export function expandOccurrences(
   startDate: Date,
   endDate: Date,
@@ -689,7 +729,7 @@ export class BookingsService {
     await this.notifications.notify({ userId: customerId, event, payload });
   }}
 
-@ApiTags('customer-bookings')
+@ApiTags('Customer - Bookings')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER, UserRole.ADMIN)
 @Controller('customer/bookings')
@@ -697,21 +737,37 @@ export class CustomerBookingsController {
   constructor(private readonly bookings: BookingsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List customer bookings',
+    description: 'Retrieves all bookings made by the customer with status filtering and pagination.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListBookingsQueryDto) {
     return this.bookings.listCustomer(user, query);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get booking details by ID',
+    description: 'Returns full booking info including scheduled visits, patient profile, and address details.',
+  })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.bookings.getCustomerBooking(user, id);
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create single or recurring booking',
+    description: 'Initiates a booking request for an approved caregiver. For recurring bookings, generates scheduled visits across selected weekdays.',
+  })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {
     return this.bookings.createCustomerBooking(user, dto);
   }
 
   @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Cancel booking',
+    description: 'Cancels an active booking and its future visits within the permitted cancellation notice window.',
+  })
   cancel(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -722,6 +778,19 @@ export class CustomerBookingsController {
 
   @Post(':id/prescriptions')
   @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload doctor prescription or care plan',
+    description: 'Attaches a prescription image or PDF to the booking for the assigned caregiver.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'Prescription document (PDF, PNG, JPG, max 10MB)' },
+      },
+    },
+  })
   @UseInterceptors(FileInterceptor('file'))
   uploadPrescription(
     @CurrentUser() user: AuthUser,
@@ -732,6 +801,10 @@ export class CustomerBookingsController {
   }
 
   @Get(':id/prescriptions/:documentId')
+  @ApiOperation({
+    summary: 'Get presigned URL for prescription',
+    description: 'Generates a secure temporary URL for the customer to view the prescription.',
+  })
   prescriptionUrl(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -741,6 +814,10 @@ export class CustomerBookingsController {
   }
 
   @Patch(':id/reschedule')
+  @ApiOperation({
+    summary: 'Reschedule booking visit',
+    description: 'Moves a visit to a new date and time window if permitted by notice rules.',
+  })
   reschedule(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -750,7 +827,7 @@ export class CustomerBookingsController {
   }
 }
 
-@ApiTags('caregiver-bookings')
+@ApiTags('Caregiver - Bookings')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver/bookings')
@@ -758,16 +835,28 @@ export class CaregiverBookingsController {
   constructor(private readonly bookings: BookingsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List incoming booking requests',
+    description: 'Retrieves booking requests assigned to the caregiver with status filtering.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListBookingsQueryDto) {
     return this.bookings.listCaregiver(user, query);
   }
 
   @Post(':id/accept')
+  @ApiOperation({
+    summary: 'Accept booking request',
+    description: 'Caregiver accepts an incoming booking request within the response window.',
+  })
   accept(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.bookings.accept(user, id);
   }
 
   @Post(':id/decline')
+  @ApiOperation({
+    summary: 'Decline booking request',
+    description: 'Caregiver declines a booking request with a reason.',
+  })
   decline(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -777,6 +866,10 @@ export class CaregiverBookingsController {
   }
 
   @Get(':id/prescriptions/:documentId')
+  @ApiOperation({
+    summary: 'Caregiver view booking prescription',
+    description: 'Generates a secure presigned URL for the caregiver to inspect the patient prescription.',
+  })
   prescriptionUrl(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

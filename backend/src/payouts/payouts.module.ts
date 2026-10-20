@@ -13,7 +13,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import {
@@ -56,23 +62,23 @@ export function maskAccountNumber(accountNumber: string): string {
 }
 
 export class CreatePayoutAccountDto {
-  @ApiProperty({ enum: PayoutAccountType })
+  @ApiProperty({ enum: PayoutAccountType, example: PayoutAccountType.MOBILE_WALLET, description: 'Account type (BANK_ACCOUNT or MOBILE_WALLET)' })
   @IsEnum(PayoutAccountType)
   type!: PayoutAccountType;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'JazzCash', description: 'Provider name (e.g. JazzCash, Easypaisa, Meezan Bank, HBL)' })
   @IsString()
   @MinLength(2)
   @MaxLength(80)
   provider!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Fatima Noor', description: 'Account title / legal account holder name' })
   @IsString()
   @MinLength(2)
   @MaxLength(120)
   accountTitle!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: '03001110011', description: 'Account number or IBAN (stored encrypted at rest)' })
   @IsString()
   @MinLength(4)
   @MaxLength(40)
@@ -85,21 +91,21 @@ export class UpdatePayoutAccountDto {
   @IsEnum(PayoutAccountType)
   type?: PayoutAccountType;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Easypaisa' })
   @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(80)
   provider?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Fatima Noor' })
   @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(120)
   accountTitle?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '03001110011' })
   @IsOptional()
   @IsString()
   @MinLength(4)
@@ -108,44 +114,28 @@ export class UpdatePayoutAccountDto {
 }
 
 export class CreatePayoutRequestDto {
-  @ApiProperty()
+  @ApiProperty({ format: 'uuid', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Saved payout account UUID' })
   @IsString()
   payoutAccountId!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 48000, description: 'Withdrawal amount in paisa (e.g. 48000 = PKR 480)' })
   @IsInt()
   @Min(1)
   amount!: number;
 }
 
-export class ListPayoutRequestsQueryDto {
-  @ApiPropertyOptional({ enum: PayoutStatus })
-  @IsOptional()
-  @IsEnum(PayoutStatus)
-  status?: PayoutStatus;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page = 1;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit = 20;
-}
-
 export class ResolvePayoutDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Approved by admin', description: 'Rejection or settlement reason' })
   @IsOptional()
   @IsString()
   @MaxLength(500)
   reason?: string;
+
+  @ApiPropertyOptional({ example: 'Transferred via 1Link banking portal ref #TXN123456.', description: 'Settlement remarks / notes' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 const PAYOUT_ACCOUNT_SELECT = {
@@ -161,6 +151,28 @@ const PAYOUT_ACCOUNT_SELECT = {
 
 function presentAccount<T extends { accountNumber: string }>(account: T) {
   return { ...account, accountNumber: maskAccountNumber(decryptAccountNumber(account.accountNumber)) };
+}
+
+export class ListPayoutRequestsQueryDto {
+  @ApiPropertyOptional({ enum: PayoutStatus, description: 'Filter by payout status' })
+  @IsOptional()
+  @IsEnum(PayoutStatus)
+  status?: PayoutStatus;
+
+  @ApiPropertyOptional({ example: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ example: 20, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 20;
 }
 
 @Injectable()
@@ -501,7 +513,7 @@ export class PayoutsService {
   }
 }
 
-@ApiTags('caregiver-payouts')
+@ApiTags('Caregiver - Payments & Payouts')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver/payout-accounts')
@@ -509,16 +521,28 @@ export class PayoutAccountsController {
   constructor(private readonly payouts: PayoutsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List caregiver withdrawal accounts',
+    description: 'Retrieves saved bank accounts and mobile wallets with masked account numbers.',
+  })
   list(@CurrentUser() user: AuthUser) {
     return this.payouts.listAccounts(user);
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Register withdrawal account',
+    description: 'Adds a bank account or mobile wallet for payouts. Account number is encrypted at rest.',
+  })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreatePayoutAccountDto) {
     return this.payouts.createAccount(user, dto);
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update withdrawal account',
+    description: 'Updates provider or account title for a withdrawal account.',
+  })
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -528,12 +552,16 @@ export class PayoutAccountsController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete withdrawal account',
+    description: 'Removes a withdrawal account if not referenced by active pending payouts.',
+  })
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.payouts.deleteAccount(user, id);
   }
 }
 
-@ApiTags('caregiver-payouts')
+@ApiTags('Caregiver - Payments & Payouts')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver')
@@ -541,22 +569,34 @@ export class CaregiverPayoutsController {
   constructor(private readonly payouts: PayoutsService) {}
 
   @Get('earnings')
+  @ApiOperation({
+    summary: 'Caregiver earnings summary',
+    description: 'Returns available balance, settled earnings, pending payouts, and lifetime earnings.',
+  })
   earnings(@CurrentUser() user: AuthUser) {
     return this.payouts.earnings(user);
   }
 
   @Get('payouts')
+  @ApiOperation({
+    summary: 'List caregiver withdrawal requests',
+    description: 'Lists withdrawal requests submitted by the caregiver with status.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListPayoutRequestsQueryDto) {
     return this.payouts.listPayoutRequests(user, query);
   }
 
   @Post('payouts')
+  @ApiOperation({
+    summary: 'Request earnings payout',
+    description: 'Submits a withdrawal request against available balance to a registered payout account.',
+  })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreatePayoutRequestDto) {
     return this.payouts.createPayoutRequest(user, dto);
   }
 }
 
-@ApiTags('admin-payouts')
+@ApiTags('Admin - Finance & Payouts')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/payouts')
@@ -564,11 +604,19 @@ export class AdminPayoutsController {
   constructor(private readonly payouts: PayoutsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List all caregiver payout requests',
+    description: 'Admin view of withdrawal requests across all caregivers with status filtering.',
+  })
   list(@Query() query: ListPayoutRequestsQueryDto) {
     return this.payouts.listAll(query);
   }
 
   @Post(':id/approve')
+  @ApiOperation({
+    summary: 'Approve payout request',
+    description: 'Admin approves a caregiver payout request for processing.',
+  })
   approve(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -578,6 +626,10 @@ export class AdminPayoutsController {
   }
 
   @Post(':id/mark-paid')
+  @ApiOperation({
+    summary: 'Mark payout as settled / paid',
+    description: 'Admin records that funds have been transferred to the caregiver account.',
+  })
   markPaid(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -587,6 +639,10 @@ export class AdminPayoutsController {
   }
 
   @Post(':id/reject')
+  @ApiOperation({
+    summary: 'Reject payout request',
+    description: 'Admin rejects a payout request with a reason and refunds the available balance.',
+  })
   reject(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

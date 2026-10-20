@@ -7,7 +7,12 @@ import {
   Param,
   Put,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiTags,
+} from '@nestjs/swagger';
 import { IsNumber, Min } from 'class-validator';
 import { Prisma, UserRole } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
@@ -159,7 +164,7 @@ export class ConfigService {
   }
 }
 
-@ApiTags('admin-config')
+@ApiTags('Admin - Promos & Config')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/config')
@@ -167,11 +172,19 @@ export class AdminConfigController {
   constructor(private readonly config: ConfigService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List platform runtime parameters',
+    description: 'Retrieves tunable operational parameters (booking response windows, OTP TTLs, retention days).',
+  })
   list() {
     return this.config.resolved();
   }
 
   @Put(':key')
+  @ApiOperation({
+    summary: 'Update platform parameter',
+    description: 'Admin tunes an operational setting at runtime without requiring application restart.',
+  })
   update(
     @CurrentUser() admin: AuthUser,
     @Param('key') key: string,

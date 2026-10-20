@@ -10,7 +10,13 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   IsEnum,
   IsInt,
@@ -36,13 +42,13 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 export class CreateReviewDto {
-  @ApiProperty({ minimum: 1, maximum: 5 })
+  @ApiProperty({ example: 5, minimum: 1, maximum: 5, description: 'Rating from 1 to 5 stars' })
   @IsInt()
   @Min(1)
   @Max(5)
   rating!: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Very caring, professional, and punctual nurse.', description: 'Feedback review comment' })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
@@ -50,28 +56,42 @@ export class CreateReviewDto {
 }
 
 export class ReportIncidentDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'Caregiver arrived 40 minutes late with no prior notification.', description: 'Detailed incident report' })
   @IsString()
   @MinLength(3)
   @MaxLength(4000)
   description!: string;
 
-  @ApiPropertyOptional({ enum: IncidentPriority, default: IncidentPriority.MEDIUM })
+  @ApiPropertyOptional({ enum: IncidentPriority, default: IncidentPriority.MEDIUM, example: IncidentPriority.MEDIUM })
   @IsOptional()
   @IsEnum(IncidentPriority)
   priority?: IncidentPriority;
 }
 
+export class CaregiverReportIncidentDto extends ReportIncidentDto {
+  @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Visit UUID' })
+  @IsString()
+  visitId!: string;
+}
+
 export class SosDto {
-  @ApiProperty({ description: 'Visit the SOS is raised during.' })
+  @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Active visit UUID' })
   @IsString()
   visitId!: string;
 
-  @ApiPropertyOptional({ description: 'Optional note about the emergency.' })
+  @ApiPropertyOptional({ example: 'Medical emergency: patient difficulty breathing.', description: 'Optional emergency situation note' })
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(2000)
   note?: string;
+
+  @ApiPropertyOptional({ example: 31.516300, description: 'Device latitude' })
+  @IsOptional()
+  latitude?: string;
+
+  @ApiPropertyOptional({ example: 74.345200, description: 'Device longitude' })
+  @IsOptional()
+  longitude?: string;
 }
 
 @Injectable()
@@ -302,7 +322,7 @@ export class FeedbackService {
   }
 }
 
-@ApiTags('reviews')
+@ApiTags('Customer - Feedback & Safety')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER)
 @Controller('customer/visits')
@@ -310,6 +330,10 @@ export class ReviewController {
   constructor(private readonly feedback: FeedbackService) {}
 
   @Post(':id/review')
+  @ApiOperation({
+    summary: 'Submit review for completed visit',
+    description: 'Allows customer to rate (1-5 stars) and review the caregiver once a visit is COMPLETED.',
+  })
   review(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -319,7 +343,7 @@ export class ReviewController {
   }
 }
 
-@ApiTags('customer-visits')
+@ApiTags('Customer - Feedback & Safety')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER)
 @Controller('customer/visits')
@@ -327,6 +351,10 @@ export class CustomerIncidentController {
   constructor(private readonly feedback: FeedbackService) {}
 
   @Post(':id/safety-reports')
+  @ApiOperation({
+    summary: 'Report safety incident or customer complaint',
+    description: 'Raises a safety incident tied to a visit, escalated directly to platform admin for review.',
+  })
   report(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -336,7 +364,7 @@ export class CustomerIncidentController {
   }
 }
 
-@ApiTags('caregiver-safety')
+@ApiTags('Caregiver - Safety')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver/safety-reports')
@@ -344,20 +372,28 @@ export class CaregiverIncidentController {
   constructor(private readonly feedback: FeedbackService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Report safety or access incident',
+    description: 'Caregiver reports safety issues or access blockers encountered at a patient residence.',
+  })
   report(
     @CurrentUser() user: AuthUser,
-    @Body() dto: ReportIncidentDto & { visitId: string },
+    @Body() dto: CaregiverReportIncidentDto,
   ) {
     return this.feedback.reportCaregiverIncident(user, dto.visitId, dto);
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'List caregiver reported incidents',
+    description: 'Retrieves safety incidents reported by the caregiver.',
+  })
   list(@CurrentUser() user: AuthUser) {
     return this.feedback.listMine(user);
   }
 }
 
-@ApiTags('sos')
+@ApiTags('Customer - Feedback & Safety')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER, UserRole.CAREGIVER)
 @Controller('sos')
@@ -365,6 +401,10 @@ export class SosController {
   constructor(private readonly feedback: FeedbackService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Trigger emergency SOS alert',
+    description: 'Emergency panic button during an active visit. Immediately creates highest-priority safety incident and alerts admin and emergency contacts.',
+  })
   raise(@CurrentUser() user: AuthUser, @Body() dto: SosDto) {
     return this.feedback.raiseSos(user, dto);
   }

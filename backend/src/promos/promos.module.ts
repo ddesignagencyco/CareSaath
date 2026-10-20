@@ -11,7 +11,13 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -210,7 +216,7 @@ export class PromosService {
   }
 }
 
-@ApiTags('admin-promos')
+@ApiTags('Admin - Promos & Config')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/promos')
@@ -218,16 +224,28 @@ export class PromosController {
   constructor(private readonly promos: PromosService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List promo codes',
+    description: 'Retrieves all promo discount codes with valid date windows and usage statistics.',
+  })
   list() {
     return this.promos.list();
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create promo discount code',
+    description: 'Creates a percentage or fixed-amount discount promo code.',
+  })
   create(@CurrentUser() user: AuthUser, @Body() dto: CreatePromoDto) {
     return this.promos.create(user, dto);
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update promo code',
+    description: 'Modifies valid dates, active status, or max uses for a promo code.',
+  })
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

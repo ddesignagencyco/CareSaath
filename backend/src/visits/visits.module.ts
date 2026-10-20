@@ -12,10 +12,17 @@ import {
   Query,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { createHash, randomInt } from 'node:crypto';
 import {
+  IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
@@ -89,24 +96,26 @@ export function canTransition(from: VisitStatus, to: VisitStatus): boolean {
 }
 
 export class CheckInDto {
-  @ApiPropertyOptional({ enum: CheckMethod, default: CheckMethod.GPS })
+  @ApiPropertyOptional({ enum: CheckMethod, default: CheckMethod.GPS, example: CheckMethod.GPS })
   @IsOptional()
   @IsEnum(CheckMethod)
   method?: CheckMethod;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 31.516300, description: 'Latitude coordinate (required when method is GPS)' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   lat?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 74.345200, description: 'Longitude coordinate (required when method is GPS)' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   lng?: number;
 
-  @ApiPropertyOptional({ description: 'OTP code the customer received (OTP method only).' })
+  @ApiPropertyOptional({ example: '123456', description: '6-digit OTP code received from customer (required when method is OTP)' })
+  @IsOptional()
+  @ApiPropertyOptional({ example: '123456', description: '6-digit OTP code received from customer (required when method is OTP)' })
   @IsOptional()
   @IsString()
   @MinLength(4)
@@ -115,34 +124,35 @@ export class CheckInDto {
 }
 
 export class VisitNoteDto {
-  @ApiProperty()
+  @ApiProperty({
+    example: 'Vitals normal (BP 120/80, pulse 72). Wound dressing replaced with sterile gauze. Patient reported no pain.',
+    description: 'Clinical visit summary note',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(4000)
   summary!: string;
 }
 
-export class RequestCheckInOtpDto {
-  @ApiPropertyOptional({ enum: CheckMethod, default: CheckMethod.OTP })
-  @IsOptional()
-  @IsEnum(CheckMethod)
-  method?: CheckMethod;
-}
-
 export class ListVisitsQueryDto {
-  @ApiPropertyOptional({ enum: VisitStatus })
+  @ApiPropertyOptional({ enum: VisitStatus, description: 'Filter by visit lifecycle status' })
   @IsOptional()
   @IsEnum(VisitStatus)
   status?: VisitStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '2026-10-25', description: 'Filter by scheduled date (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  date?: string;
+
+  @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 20, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -437,7 +447,7 @@ export class VisitsService {
   }
 }
 
-@ApiTags('caregiver-visits')
+@ApiTags('Caregiver - Visits')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver/visits')
@@ -445,21 +455,37 @@ export class CaregiverVisitsController {
   constructor(private readonly visits: VisitsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List caregiver visits',
+    description: 'Lists all visits scheduled for the authenticated caregiver with status and date filtering.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListVisitsQueryDto) {
     return this.visits.listCaregiver(user, query);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get visit details',
+    description: 'Retrieves visit details including decrypted patient medical context, address, and status history.',
+  })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.visits.getCaregiver(user, id);
   }
 
   @Post(':id/en-route')
+  @ApiOperation({
+    summary: 'Mark caregiver en route',
+    description: 'Notifies customer that the caregiver is on the way to the visit address.',
+  })
   enRoute(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.visits.enRoute(user, id);
   }
 
   @Post(':id/check-in-otp')
+  @ApiOperation({
+    summary: 'Request OTP check-in code',
+    description: 'Generates and sends a 6-digit arrival verification OTP to the customer.',
+  })
   requestCheckInOtp(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -468,6 +494,10 @@ export class CaregiverVisitsController {
   }
 
   @Post(':id/check-in')
+  @ApiOperation({
+    summary: 'Caregiver check-in',
+    description: 'Verifies caregiver arrival using GPS coordinates or customer-provided OTP.',
+  })
   checkIn(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -477,6 +507,10 @@ export class CaregiverVisitsController {
   }
 
   @Post(':id/check-out')
+  @ApiOperation({
+    summary: 'Caregiver check-out',
+    description: 'Records departure time and coordinates from the patient location.',
+  })
   checkOut(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -486,6 +520,10 @@ export class CaregiverVisitsController {
   }
 
   @Post(':id/note')
+  @ApiOperation({
+    summary: 'Submit clinical visit note',
+    description: 'Submits visit notes and moves visit status to COMPLETED.',
+  })
   note(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -495,7 +533,7 @@ export class CaregiverVisitsController {
   }
 }
 
-@ApiTags('customer-visits')
+@ApiTags('Customer - Visits')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER, UserRole.ADMIN)
 @Controller('customer/visits')
@@ -503,6 +541,10 @@ export class CustomerVisitsController {
   constructor(private readonly visits: VisitsService) {}
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Track visit progress',
+    description: 'Customer tracks real-time visit status (Requested -> Confirmed -> EnRoute -> CheckedIn -> Completed).',
+  })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.visits.getCustomer(user, id);
   }

@@ -16,7 +16,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConsumes,
+  ApiOperation,
   ApiProperty,
   ApiPropertyOptional,
   ApiTags,
@@ -58,75 +60,98 @@ import { PlatformConfigModule, ConfigService } from '../config/platform-config.m
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
 
 export class RegisterCaregiverDto {
-  @ApiProperty()
+  @ApiProperty({
+    example: '35201-1111111-1',
+    description: '13-digit Pakistani CNIC with dashes (15 characters total)',
+  })
   @IsString()
   @MinLength(15)
   @MaxLength(15)
-  cnic!: string; // 13 digits, stored as string
+  cnic!: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: 'PNC-100001',
+    description: 'Official license or registration number (e.g. PNC or PMDC)',
+  })
   @IsString()
   @MinLength(3)
   @MaxLength(40)
   licenseNumber!: string;
 
-  @ApiProperty({ enum: LicenseBody })
+  @ApiProperty({
+    enum: LicenseBody,
+    example: LicenseBody.PNC,
+    description: 'Licensing medical authority (PNC or PMDC)',
+  })
   @IsEnum(LicenseBody)
   licenseBody!: LicenseBody;
 
-  @ApiProperty({ enum: Specialty })
+  @ApiProperty({
+    enum: Specialty,
+    example: Specialty.NURSING,
+    description: 'Primary clinical specialization',
+  })
   @IsEnum(Specialty)
   specialty!: Specialty;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 8, description: 'Years of clinical experience' })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(60)
   experienceYears?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Registered nurse with 8 years of hospital and intensive home-care experience.',
+    description: 'Professional summary / bio',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   bio?: string;
 
-  @ApiProperty({ description: 'e.g. { "cities": ["Lahore"] }' })
+  @ApiProperty({
+    example: ['Lahore'],
+    description: 'List of cities where the caregiver provides home visits',
+  })
   @IsArray()
   @IsString({ each: true })
   serviceCities!: string[];
 
-  @ApiProperty({ description: 'Rate per visit in paisa (minor units)' })
+  @ApiProperty({
+    example: 60000,
+    description: 'Rate per visit in paisa / minor units (e.g. 60000 paisa = PKR 600)',
+  })
   @IsInt()
   @Min(1000)
   ratePerVisit!: number;
 }
 
 export class UpdateCaregiverProfileDto {
-  @ApiPropertyOptional({ enum: Specialty })
+  @ApiPropertyOptional({ enum: Specialty, example: Specialty.NURSING })
   @IsOptional()
   @IsEnum(Specialty)
   specialty?: Specialty;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 65000, description: 'New rate per visit in paisa' })
   @IsOptional()
   @IsInt()
   @Min(1000)
   ratePerVisit?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: ['Lahore', 'Kasur'] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   serviceCities?: string[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Updated bio highlighting stroke rehabilitation expertise.' })
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   bio?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 9 })
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -135,23 +160,23 @@ export class UpdateCaregiverProfileDto {
 }
 
 export class SearchQueryDto {
-  @ApiPropertyOptional({ enum: Specialty })
+  @ApiPropertyOptional({ enum: Specialty, example: Specialty.NURSING, description: 'Filter by specialty' })
   @IsOptional()
   @IsEnum(Specialty)
   specialty?: Specialty;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Lahore', description: 'Filter by pilot city' })
   @IsOptional()
   @IsString()
   city?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 1, default: 1, description: 'Page number' })
   @IsOptional()
   @IsInt()
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 20, default: 20, description: 'Items per page' })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -440,29 +465,63 @@ export class CaregiversService {
   }
 }
 
-@ApiTags('caregiver')
+@ApiTags('Caregiver - Profile')
 @ApiBearerAuth()
 @Controller('caregiver')
 export class CaregiverController {
   constructor(private readonly caregivers: CaregiversService) {}
 
   @Post('register')
+  @ApiOperation({
+    summary: 'Caregiver onboarding registration',
+    description:
+      'Registers caregiver profile with license, specialty, CNIC, and service cities. Initial status is PENDING admin verification.',
+  })
   register(@CurrentUser() user: AuthUser, @Body() dto: RegisterCaregiverDto) {
     return this.caregivers.register(user, dto);
   }
 
   @Get('profile')
+  @ApiOperation({
+    summary: 'Get my caregiver profile',
+    description:
+      'Returns the authenticated caregiver profile, verification status, uploaded documents, reviews, and masked CNIC.',
+  })
   me(@CurrentUser() user: AuthUser) {
     return this.caregivers.getMine(user);
   }
 
   @Patch('profile')
+  @ApiOperation({
+    summary: 'Update caregiver profile',
+    description: 'Updates bio, visit rates, service cities, and experience.',
+  })
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateCaregiverProfileDto) {
     return this.caregivers.updateProfile(user, dto);
   }
 
   @Post('documents')
   @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload credential documents',
+    description:
+      'Uploads license certificates, degrees, or CNIC copies for admin verification review.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'type'],
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'Document file (PDF, PNG, JPG, max 10MB)' },
+        type: {
+          type: 'string',
+          enum: ['LICENSE', 'CERTIFICATE', 'CNIC_COPY', 'OTHER'],
+          example: 'LICENSE',
+          description: 'Document category',
+        },
+      },
+    },
+  })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
@@ -477,6 +536,10 @@ export class CaregiverController {
   }
 
   @Get('documents/:id/url')
+  @ApiOperation({
+    summary: 'Get presigned URL for document',
+    description: 'Generates a short-lived secure URL to view or download an uploaded document.',
+  })
   documentUrl(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -486,6 +549,19 @@ export class CaregiverController {
 
   @Post('photo')
   @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload profile photo',
+    description: 'Uploads caregiver professional portrait photo (PNG/JPEG).',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'Profile photo file' },
+      },
+    },
+  })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
@@ -497,23 +573,37 @@ export class CaregiverController {
   }
 
   @Get('photo/url')
+  @ApiOperation({
+    summary: 'Get presigned URL for profile photo',
+    description: 'Generates a secure presigned URL to view the caregiver photo.',
+  })
   photoUrl(@CurrentUser() user: AuthUser) {
     return this.caregivers.photoUrl(user);
   }
 }
 
-@ApiTags('caregivers')
+@ApiTags('Customer - Discovery')
 @Public()
 @Controller('caregivers')
 export class PublicCaregiverController {
   constructor(private readonly caregivers: CaregiversService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'Search verified caregivers',
+    description:
+      'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks.',
+  })
   search(@Query() query: SearchQueryDto) {
     return this.caregivers.search(query);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get public caregiver profile',
+    description:
+      'Public details for a verified caregiver: qualifications, ratings, rate per visit, bio, and weekly availability rules.',
+  })
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.caregivers.getPublic(id);
   }

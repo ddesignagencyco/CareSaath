@@ -12,7 +12,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiHeader,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
@@ -60,15 +67,15 @@ export function splitCommission(
 }
 
 export class InitiatePaymentDto {
-  @ApiProperty()
+  @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Visit UUID to pay for' })
   @IsString()
   visitId!: string;
 
-  @ApiProperty({ enum: PaymentMethod })
+  @ApiProperty({ enum: PaymentMethod, example: PaymentMethod.JAZZCASH, description: 'Selected payment method (CASH, JAZZCASH, EASYPAISA, CARD)' })
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 60000, description: 'Amount in paisa (defaults to visit rate)' })
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -76,7 +83,7 @@ export class InitiatePaymentDto {
 }
 
 export class CashConfirmationDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Received PKR 600 in cash from customer.', description: 'Receipt note' })
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -84,34 +91,34 @@ export class CashConfirmationDto {
 }
 
 export class GatewayWebhookDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'JC-TRX-987654321', description: 'Gateway transaction reference' })
   @IsString()
   gatewayRef!: string;
 
-  @ApiProperty({ enum: ['PAID', 'FAILED'] })
+  @ApiProperty({ enum: ['PAID', 'FAILED'], example: 'PAID', description: 'Payment settlement outcome' })
   @IsEnum(PaymentStatus)
   status!: PaymentStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'sig_a98b7c6d5e4f', description: 'HMAC gateway signature' })
   @IsOptional()
   @IsString()
   signature?: string;
 }
 
 export class ListPaymentsQueryDto {
-  @ApiPropertyOptional({ enum: PaymentStatus })
+  @ApiPropertyOptional({ enum: PaymentStatus, description: 'Filter by payment status' })
   @IsOptional()
   @IsEnum(PaymentStatus)
   status?: PaymentStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 20, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -343,7 +350,7 @@ export class PaymentsService {
   }
 }
 
-@ApiTags('payments')
+@ApiTags('Customer - Payments')
 @ApiBearerAuth()
 @Roles(UserRole.CUSTOMER)
 @Controller('customer/payments')
@@ -351,22 +358,34 @@ export class CustomerPaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Initiate visit payment',
+    description: 'Creates a payment transaction for a visit via cash or digital mobile gateway.',
+  })
   initiate(@CurrentUser() user: AuthUser, @Body() dto: InitiatePaymentDto) {
     return this.payments.initiate(user, dto);
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'List customer payment receipts',
+    description: 'Retrieves history of customer payment records with status and pagination.',
+  })
   list(@CurrentUser() user: AuthUser, @Query() query: ListPaymentsQueryDto) {
     return this.payments.listForCustomer(user, query);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get payment receipt details',
+    description: 'Retrieves payment amount, commission share, gateway reference, and status.',
+  })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.payments.getForCustomer(user, id);
   }
 }
 
-@ApiTags('payments')
+@ApiTags('Caregiver - Payments')
 @ApiBearerAuth()
 @Roles(UserRole.CAREGIVER)
 @Controller('caregiver/payments')
@@ -374,24 +393,27 @@ export class CaregiverPaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Post(':id/confirm-cash')
+  @ApiOperation({
+    summary: 'Confirm cash collection on-site',
+    description: 'Caregiver confirms receipt of cash-on-visit from the customer, transitioning payment to PAID.',
+  })
   confirmCash(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.payments.confirmCash(user, id);
   }
 }
 
-/**
- * Gateway callbacks (FR-C8 / TRD §6.5). Public; signature verification depends
- * on merchant credentials that are still TBD, so the raw body is accepted and
- * settlement is idempotent.
- */
-@ApiTags('payments')
+@ApiTags('System & Webhooks')
 @Controller('payments')
 export class PaymentWebhookController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Public()
-  @ApiHeader({ name: 'x-gateway-signature', required: false })
+  @ApiHeader({ name: 'x-gateway-signature', required: false, description: 'Optional gateway webhook signature' })
   @Post('webhook/:provider')
+  @ApiOperation({
+    summary: 'Payment gateway webhook callback',
+    description: 'Receives asynchronous payment notifications from JazzCash, Easypaisa, or Card processors. Idempotent settlement.',
+  })
   webhook(@Body() dto: GatewayWebhookDto) {
     return this.payments.handleGatewayWebhook(dto);
   }

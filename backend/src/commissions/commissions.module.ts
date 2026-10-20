@@ -8,7 +8,12 @@ import {
   ParseEnumPipe,
   Put,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiTags,
+} from '@nestjs/swagger';
 import { IsNumber, Max, Min } from 'class-validator';
 import { Specialty, UserRole } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
@@ -58,7 +63,7 @@ export class CommissionsService {
   }
 }
 
-@ApiTags('admin-commissions')
+@ApiTags('Admin - Finance & Payouts')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/commissions')
@@ -66,11 +71,19 @@ export class CommissionsController {
   constructor(private readonly commissions: CommissionsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List platform commission rates',
+    description: 'Retrieves commission percentage retained by the platform for each specialty category.',
+  })
   list() {
     return this.commissions.list();
   }
 
   @Put(':category')
+  @ApiOperation({
+    summary: 'Update category commission rate',
+    description: 'Sets the platform commission percentage (0-100) for a specialty category.',
+  })
   upsert(
     @CurrentUser() user: AuthUser,
     @Param('category', new ParseEnumPipe(Specialty)) category: Specialty,

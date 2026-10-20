@@ -11,7 +11,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
@@ -37,22 +42,22 @@ function presentCnic<T extends { cnic: string }>(profile: T): T {
   return { ...profile, cnic: decryptMaybe(profile.cnic, CNIC_KEY) ?? profile.cnic };
 }
 
-class DecisionDto {
-  @ApiPropertyOptional()
+export class DecisionDto {
+  @ApiPropertyOptional({ example: 'PNC registry record validated and active.', description: 'Admin verification notes' })
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   reason?: string;
 }
 
-class ReverifyDto {
-  @ApiPropertyOptional({ description: 'Days until next re-verification (default 365)' })
+export class ReverifyDto {
+  @ApiPropertyOptional({ example: '365', description: 'Days until next credential re-verification (default 365)' })
   @IsOptional()
   @IsString()
   reverifyInDays?: string;
 }
 
-class ListCaregiversQueryDto {
+export class ListCaregiversQueryDto {
   @ApiPropertyOptional({ enum: VerificationStatus })
   @IsOptional()
   @IsEnum(VerificationStatus)
@@ -274,7 +279,7 @@ export class VerificationService {
   }
 }
 
-@ApiTags('admin-caregivers')
+@ApiTags('Admin - Caregivers')
 @ApiBearerAuth()
 @Controller('admin/caregivers')
 @Roles('ADMIN')
@@ -282,11 +287,19 @@ export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List caregivers verification queue',
+    description: 'Admin queue of caregiver registrations filtered by status (PENDING, APPROVED, REJECTED, SUSPENDED).',
+  })
   list(@Query() query: ListCaregiversQueryDto) {
     return this.verification.list(query);
   }
 
   @Post(':id/approve')
+  @ApiOperation({
+    summary: 'Approve caregiver credentials',
+    description: 'Approves caregiver profile after license verification; makes caregiver discoverable in search.',
+  })
   approve(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -296,6 +309,10 @@ export class VerificationController {
   }
 
   @Post(':id/reject')
+  @ApiOperation({
+    summary: 'Reject caregiver registration',
+    description: 'Rejects caregiver credentials with an audit note.',
+  })
   reject(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -305,6 +322,10 @@ export class VerificationController {
   }
 
   @Post(':id/reverify')
+  @ApiOperation({
+    summary: 'Record periodic re-verification',
+    description: 'Records annual credential reverification and sets the next reverification date.',
+  })
   reverify(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -314,6 +335,10 @@ export class VerificationController {
   }
 
   @Post(':id/suspend')
+  @ApiOperation({
+    summary: 'Suspend caregiver',
+    description: 'Suspends caregiver profile due to unresolved dispute or policy violation; hides from search.',
+  })
   suspend(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -322,21 +347,23 @@ export class VerificationController {
     return this.verification.suspend(admin, id, dto);
   }
 
-  @Post(':id/deactivate')
-  deactivate(
+  @Post(':id/reactivate')
+  @ApiOperation({
+    summary: 'Reactivate suspended caregiver',
+    description: 'Restores caregiver to active approved status.',
+  })
+  reactivate(
     @CurrentUser() admin: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: DecisionDto,
   ) {
-    return this.verification.deactivate(admin, id, dto);
-  }
-
-  @Post(':id/reactivate')
-  reactivate(@CurrentUser() admin: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.verification.reactivate(admin, id);
   }
 
-  @Get(':id/documents/:documentId')
+  @Get(':id/documents/:documentId/url')
+  @ApiOperation({
+    summary: 'Admin view caregiver credential document',
+    description: 'Generates secure presigned URL for admin to view degree, PNC license, or CNIC copy.',
+  })
   documentUrl(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('documentId', ParseUUIDPipe) documentId: string,
