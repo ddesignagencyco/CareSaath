@@ -8,10 +8,14 @@ import { PrismaModule } from './common/prisma/prisma.module.js';
 import { RedisModule } from './common/redis/redis.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
+import { StorageModule } from './common/storage/storage.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { PatientsModule } from './patients/patients.module.js';
 import { AddressesModule } from './addresses/addresses.module.js';
+import { CaregiversModule } from './caregivers/caregivers.module.js';
+import { AvailabilityModule } from './availability/availability.module.js';
+import { VerificationModule } from './verification/verification.module.js';
 
 @Module({
   imports: [
@@ -19,10 +23,14 @@ import { AddressesModule } from './addresses/addresses.module.js';
     PrismaModule,
     RedisModule,
     AuditModule,
+    StorageModule,
     AuthModule,
     UsersModule,
     PatientsModule,
     AddressesModule,
+    CaregiversModule,
+    AvailabilityModule,
+    VerificationModule,
   ],
   controllers: [AppController],
   providers: [

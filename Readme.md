@@ -10,7 +10,9 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 1 | Project setup: NestJS, Prisma, Docker services | Done |
 | 2 | Database schema and migrations (from ERD) | Done |
 | 3 | Auth: phone + OTP, JWT, role guards | Done |
-| 4+ | Remaining modules per the TRD and tracker | Not started |
+| 4 | Users, patients, addresses, emergency contacts | Done |
+| 5 | Caregiver onboarding, profile/edit/search, availability, document storage, admin verification | Done |
+| 6+ | Remaining modules per the TRD and tracker | Not started |
 
 _Update this table as each phase progresses._
 
