@@ -16,6 +16,10 @@ import { AddressesModule } from './addresses/addresses.module.js';
 import { CaregiversModule } from './caregivers/caregivers.module.js';
 import { AvailabilityModule } from './availability/availability.module.js';
 import { VerificationModule } from './verification/verification.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
+import { VisitsModule } from './visits/visits.module.js';
+import { FeedbackModule } from './feedback/feedback.module.js';
 
 @Module({
   imports: [
@@ -31,6 +35,10 @@ import { VerificationModule } from './verification/verification.module.js';
     CaregiversModule,
     AvailabilityModule,
     VerificationModule,
+    NotificationsModule,
+    BookingsModule,
+    VisitsModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [

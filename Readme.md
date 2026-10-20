@@ -12,7 +12,8 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 3 | Auth: phone + OTP, JWT, role guards | Done |
 | 4 | Users, patients, addresses, emergency contacts | Done |
 | 5 | Caregiver onboarding, profile/edit/search, availability, document storage, admin verification | Done |
-| 6+ | Remaining modules per the TRD and tracker | Not started |
+| 6 | Bookings + visit lifecycle, notifications, reviews, safety reports | Done |
+| 7+ | Payments/payouts, admin analytics, promos, disputes, reports | Not started |
 
 _Update this table as each phase progresses._
 
