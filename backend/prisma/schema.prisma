@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -194,6 +194,7 @@ model User {
   notifications        Notification[]
   auditLogs            AuditLog[]
   emergencyContacts    EmergencyContact[]
+  bookings              Booking[]
   uploadedPrescriptions PrescriptionDocument[] @relation("PrescriptionUploader")
   reportedIncidents    SafetyIncident[]        @relation("IncidentReporter")
   assignedIncidents    SafetyIncident[]        @relation("IncidentAssignee")

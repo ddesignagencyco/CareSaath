@@ -8,8 +8,8 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 |---|---|---|
 | 0 | Requirements and design docs (SRS, ERD, TRD, tracker) | Done |
 | 1 | Project setup: NestJS, Prisma, Docker services | Done |
-| 2 | Database schema and migrations (from ERD) | Not started |
-| 3 | Auth: phone + OTP, JWT, role guards | Not started |
+| 2 | Database schema and migrations (from ERD) | Done |
+| 3 | Auth: phone + OTP, JWT, role guards | Done |
 | 4+ | Remaining modules per the TRD and tracker | Not started |
 
 _Update this table as each phase progresses._
@@ -62,7 +62,7 @@ Local service ports:
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 | MinIO API / console | 9000 / 9001 |
-| MailHog SMTP / web UI | 1025 / 8025 |
+| MailHog SMTP / web UI | 11025 / 18025 |
 
 Credentials in `.env.example` are for local development only. Never commit `.env`.
 
