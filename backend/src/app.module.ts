@@ -20,6 +20,9 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
 import { VisitsModule } from './visits/visits.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
+import { PayoutsModule } from './payouts/payouts.module.js';
+import { CommissionsModule } from './commissions/commissions.module.js';
 
 @Module({
   imports: [
@@ -39,6 +42,9 @@ import { FeedbackModule } from './feedback/feedback.module.js';
     BookingsModule,
     VisitsModule,
     FeedbackModule,
+    PaymentsModule,
+    PayoutsModule,
+    CommissionsModule,
   ],
   controllers: [AppController],
   providers: [

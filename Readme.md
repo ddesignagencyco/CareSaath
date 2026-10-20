@@ -13,7 +13,8 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 4 | Users, patients, addresses, emergency contacts | Done |
 | 5 | Caregiver onboarding, profile/edit/search, availability, document storage, admin verification | Done |
 | 6 | Bookings + visit lifecycle, notifications, reviews, safety reports | Done |
-| 7+ | Payments/payouts, admin analytics, promos, disputes, reports | Not started |
+| 7 | Payments (cash + gateway webhook), payouts, commission config | Done |
+| 8+ | Admin analytics, promos, disputes, reports | Not started |
 
 _Update this table as each phase progresses._
 

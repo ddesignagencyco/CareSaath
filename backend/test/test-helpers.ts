@@ -13,6 +13,7 @@ export function createPrismaMock() {
     createMany: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
+    upsert: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     count: vi.fn(),
@@ -39,6 +40,9 @@ export function createPrismaMock() {
     safetyIncident: model(),
     notification: model(),
     auditLog: model(),
+    payment: model(),
+    payoutAccount: model(),
+    payoutRequest: model(),
     // $transaction supports both array form and callback form.
     $transaction: vi.fn(),
   };
