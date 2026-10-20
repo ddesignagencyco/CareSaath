@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,669 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums (ERD §4)
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  CUSTOMER
+  CAREGIVER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum Language {
+  EN
+  UR
+}
+
+enum Specialty {
+  NURSING
+  PHYSIOTHERAPY
+  POST_SURGERY_CARE
+  ELDERLY_CARE
+}
+
+enum LicenseBody {
+  PNC
+  PMDC
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum PatientRelation {
+  SELF
+  FAMILY_MEMBER
+}
+
+enum BookingType {
+  SINGLE
+  RECURRING
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+enum VisitStatus {
+  REQUESTED
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  EN_ROUTE
+  CHECKED_IN
+  IN_PROGRESS
+  CHECKED_OUT
+  COMPLETED
+}
+
+enum CheckMethod {
+  GPS
+  OTP
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  JAZZCASH
+  EASYPAISA
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NotificationChannel {
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum OtpPurpose {
+  LOGIN
+  VISIT_CHECKIN
+}
+
+enum DocType {
+  LICENSE
+  CERTIFICATE
+  CNIC_COPY
+  OTHER
+}
+
+enum CredentialReviewKind {
+  INITIAL
+  PERIODIC
+}
+
+enum CredentialDecision {
+  APPROVED
+  REJECTED
+}
+
+enum PayoutAccountType {
+  BANK
+  MOBILE_WALLET
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum PromoDiscountType {
+  PERCENT
+  FIXED
+}
+
+enum IncidentSource {
+  CUSTOMER_COMPLAINT
+  CAREGIVER_REPORT
+  SOS
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+// ---------------------------------------------------------------------------
+// Identity and access (ERD §3.1)
+// ---------------------------------------------------------------------------
+
+model User {
+  id                String       @id @default(uuid())
+  phone             String       @unique
+  role              UserRole     @default(CUSTOMER)
+  fullName          String       @default("")
+  preferredLanguage Language     @default(EN)
+  status            UserStatus   @default(ACTIVE)
+  lastLoginAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  otpCodes             OtpCode[]
+  patientProfiles      PatientProfile[]
+  addresses            Address[]
+  caregiverProfile     CaregiverProfile?
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  emergencyContacts    EmergencyContact[]
+  uploadedPrescriptions PrescriptionDocument[] @relation("PrescriptionUploader")
+  reportedIncidents    SafetyIncident[]        @relation("IncidentReporter")
+  assignedIncidents    SafetyIncident[]        @relation("IncidentAssignee")
+  incidentEvents       IncidentEvent[]
+  raisedDisputes       Dispute[]               @relation("DisputeRaisedBy")
+  againstDisputes      Dispute[]               @relation("DisputeAgainst")
+  resolvedDisputes     Dispute[]               @relation("DisputeResolvedBy")
+  credentialReviews    CredentialReview[]      @relation("CredentialReviewer")
+}
+
+model OtpCode {
+  id         String     @id @default(uuid())
+  userId     String?
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  visitId    String?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id])
+  visit Visit? @relation(fields: [visitId], references: [id])
+
+  @@index([phone, purpose])
+}
+
+model EmergencyContact {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Customer side (ERD §3.2)
+// ---------------------------------------------------------------------------
+
+model PatientProfile {
+  id             String          @id @default(uuid())
+  ownerUserId    String
+  name           String
+  relationship   PatientRelation @default(SELF)
+  dateOfBirth    DateTime?
+  gender         String?
+  medicalContext String? // sensitive: encrypted at rest (SRS §6)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  user     User      @relation(fields: [ownerUserId], references: [id])
+  bookings Booking[]
+
+  @@index([ownerUserId])
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  userId    String
+  label     String?
+  addressLine String
+  city      String
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  bookings Booking[]
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Caregiver side (ERD §3.3)
+// ---------------------------------------------------------------------------
+
+model CaregiverProfile {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  cnic               String // sensitive: encrypted
+  licenseNumber      String
+  licenseBody        LicenseBody
+  specialty          Specialty
+  experienceYears    Int?
+  bio                String?
+  photoKey           String?
+  serviceArea        Json // pilot representation: { "cities": string[] } (TBD)
+  ratePerVisit       Int // minor units (paisa)
+  commissionRateId   String
+  verificationStatus VerificationStatus @default(PENDING)
+  approvedAt         DateTime?
+  reverifyDueAt      DateTime?
+  ratingAverage      Decimal            @default(0) @db.Decimal(3, 2)
+  ratingCount        Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user             User                @relation(fields: [userId], references: [id])
+  commissionRate   CommissionRate      @relation(fields: [commissionRateId], references: [id])
+  documents        CaregiverDocument[]
+  credentialReviews CredentialReview[]
+  availabilityRules AvailabilityRule[]
+  availabilityBlocks AvailabilityBlock[]
+  payoutAccounts   PayoutAccount[]
+  payoutRequests   PayoutRequest[]
+  bookings         Booking[]
+  reviews          Review[]
+  visitNotes       VisitNote[]
+
+  @@index([verificationStatus, specialty])
+}
+
+model CaregiverDocument {
+  id          String   @id @default(uuid())
+  caregiverId String
+  type        DocType
+  fileKey     String
+  mimeType    String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@index([caregiverId])
+}
+
+model CredentialReview {
+  id          String             @id @default(uuid())
+  caregiverId String
+  reviewerId  String
+  kind        CredentialReviewKind
+  decision    CredentialDecision
+  reason      String?
+  decidedAt   DateTime           @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  reviewer  User             @relation("CredentialReviewer", fields: [reviewerId], references: [id])
+
+  @@index([caregiverId])
+}
+
+model AvailabilityRule {
+  id          String   @id @default(uuid())
+  caregiverId String
+  dayOfWeek   Int // 0–6
+  startTime   String // HH:mm
+  endTime     String // HH:mm
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@unique([caregiverId, dayOfWeek, startTime])
+  @@index([caregiverId])
+}
+
+model AvailabilityBlock {
+  id          String    @id @default(uuid())
+  caregiverId String
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  reason      String?
+  createdAt   DateTime  @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@index([caregiverId, startDate])
+}
+
+// ---------------------------------------------------------------------------
+// Booking and visit (ERD §3.4)
+// ---------------------------------------------------------------------------
+
+model Booking {
+  id               String        @id @default(uuid())
+  customerId       String
+  patientId        String
+  caregiverId      String
+  addressId        String
+  type             BookingType   @default(SINGLE)
+  recurrenceRule   Json?
+  startDate        DateTime      @db.Date
+  endDate          DateTime      @db.Date
+  timeWindowStart  String // HH:mm
+  timeWindowEnd    String // HH:mm
+  serviceType      Specialty
+  rateSnapshot     Int
+  promoCodeId      String?
+  discountAmount   Int           @default(0)
+  status           BookingStatus @default(REQUESTED)
+  respondBy        DateTime
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancelReason     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  customer   User            @relation(fields: [customerId], references: [id])
+  patient    PatientProfile  @relation(fields: [patientId], references: [id])
+  caregiver  CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  address    Address         @relation(fields: [addressId], references: [id])
+  promoCode  PromoCode?      @relation(fields: [promoCodeId], references: [id])
+  visits     Visit[]
+  prescriptions PrescriptionDocument[]
+
+  @@index([caregiverId, startDate])
+  @@index([customerId])
+}
+
+model Visit {
+  id                 String       @id @default(uuid())
+  bookingId          String
+  scheduledDate      DateTime     @db.Date
+  timeWindowStart    String
+  timeWindowEnd      String
+  status             VisitStatus  @default(REQUESTED)
+  enRouteAt          DateTime?
+  checkInAt          DateTime?
+  checkOutAt         DateTime?
+  checkInMethod      CheckMethod?
+  checkOutMethod     CheckMethod?
+  checkInLat         Decimal?     @db.Decimal(9, 6)
+  checkInLng         Decimal?     @db.Decimal(9, 6)
+  checkOutLat        Decimal?     @db.Decimal(9, 6)
+  checkOutLng        Decimal?     @db.Decimal(9, 6)
+  rescheduledFromId  String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  booking          Booking           @relation(fields: [bookingId], references: [id])
+  rescheduledFrom  Visit?            @relation("VisitReschedule", fields: [rescheduledFromId], references: [id])
+  rescheduledTo    Visit[]           @relation("VisitReschedule")
+  statusHistory    VisitStatusHistory[]
+  note             VisitNote?
+  review           Review?
+  payments         Payment[]
+  safetyIncidents  SafetyIncident[]
+  disputes         Dispute[]
+  otpCodes         OtpCode[]
+
+  @@index([bookingId])
+  @@index([scheduledDate, status])
+}
+
+model VisitStatusHistory {
+  id         String      @id @default(uuid())
+  visitId    String
+  fromStatus VisitStatus?
+  toStatus   VisitStatus
+  actorId    String?
+  at         DateTime    @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@index([visitId])
+}
+
+model PrescriptionDocument {
+  id           String   @id @default(uuid())
+  bookingId    String
+  uploadedById String
+  fileKey      String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  booking    Booking @relation(fields: [bookingId], references: [id])
+  uploadedBy User    @relation("PrescriptionUploader", fields: [uploadedById], references: [id])
+
+  @@index([bookingId])
+}
+
+model VisitNote {
+  id          String   @id @default(uuid())
+  visitId     String   @unique
+  caregiverId String
+  summary     String
+  submittedAt DateTime @default(now())
+
+  visit     Visit             @relation(fields: [visitId], references: [id])
+  caregiver CaregiverProfile  @relation(fields: [caregiverId], references: [id])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  visitId     String   @unique
+  customerId  String
+  caregiverId String
+  rating      Int // 1–5
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  visit     Visit            @relation(fields: [visitId], references: [id])
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@index([caregiverId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments and payouts (ERD §3.5)
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id               String        @id @default(uuid())
+  visitId          String
+  method           PaymentMethod
+  status           PaymentStatus @default(PENDING)
+  amount           Int
+  commissionAmount Int           @default(0)
+  caregiverAmount  Int           @default(0)
+  gatewayRef       String?
+  paidAt           DateTime?
+  payoutRequestId  String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  visit          Visit          @relation(fields: [visitId], references: [id])
+  payoutRequest  PayoutRequest? @relation(fields: [payoutRequestId], references: [id])
+
+  @@index([visitId])
+  @@index([status])
+}
+
+model PayoutAccount {
+  id            String            @id @default(uuid())
+  caregiverId   String
+  type          PayoutAccountType
+  provider      String
+  accountTitle  String
+  accountNumber String // sensitive: encrypted
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  caregiver      CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  payoutRequests PayoutRequest[]
+
+  @@index([caregiverId])
+}
+
+model PayoutRequest {
+  id              String       @id @default(uuid())
+  caregiverId     String
+  payoutAccountId String
+  amount          Int
+  status          PayoutStatus @default(REQUESTED)
+  requestedAt     DateTime     @default(now())
+  processedAt     DateTime?
+
+  caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  payoutAccount   PayoutAccount    @relation(fields: [payoutAccountId], references: [id])
+  payments        Payment[]
+
+  @@index([caregiverId])
+}
+
+model CommissionRate {
+  id            String     @id @default(uuid())
+  category      Specialty @unique
+  percentage    Decimal    @db.Decimal(5, 2)
+  effectiveFrom DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  caregivers CaregiverProfile[]
+}
+
+model PromoCode {
+  id           String            @id @default(uuid())
+  code         String            @unique
+  discountType PromoDiscountType
+  discountValue Int
+  validFrom    DateTime
+  validTo      DateTime
+  maxUses      Int?
+  usesCount    Int               @default(0)
+  active       Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  bookings Booking[]
+}
+
+// ---------------------------------------------------------------------------
+// Safety, disputes, notifications, audit (ERD §3.6)
+// ---------------------------------------------------------------------------
+
+model SafetyIncident {
+  id              String           @id @default(uuid())
+  visitId         String?
+  reportedById    String
+  source          IncidentSource
+  description     String
+  priority        IncidentPriority @default(MEDIUM)
+  status          IncidentStatus   @default(OPEN)
+  assignedAdminId String?
+  resolvedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  visit         Visit? @relation(fields: [visitId], references: [id])
+  reportedBy    User   @relation("IncidentReporter", fields: [reportedById], references: [id])
+  assignedAdmin User?  @relation("IncidentAssignee", fields: [assignedAdminId], references: [id])
+  events        IncidentEvent[]
+
+  @@index([status])
+  @@index([visitId])
+}
+
+model IncidentEvent {
+  id         String   @id @default(uuid())
+  incidentId String
+  actorId    String
+  action     String
+  note       String?
+  at         DateTime @default(now())
+
+  incident SafetyIncident @relation(fields: [incidentId], references: [id])
+  actor    User           @relation(fields: [actorId], references: [id])
+
+  @@index([incidentId])
+}
+
+model Dispute {
+  id             String        @id @default(uuid())
+  visitId        String
+  raisedById     String
+  againstUserId  String
+  description    String
+  status         DisputeStatus @default(OPEN)
+  resolutionNote String?
+  resolvedById   String?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  visit       Visit @relation(fields: [visitId], references: [id])
+  raisedBy    User  @relation("DisputeRaisedBy", fields: [raisedById], references: [id])
+  againstUser User  @relation("DisputeAgainst", fields: [againstUserId], references: [id])
+  resolvedBy  User? @relation("DisputeResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([status])
+}
+
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String
+  channel   NotificationChannel
+  event     String
+  payload   Json
+  status    NotificationStatus @default(QUEUED)
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  at         DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId, at])
 }
