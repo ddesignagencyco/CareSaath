@@ -261,7 +261,7 @@ Note: the SRS says health-data privacy must comply with "relevant Pakistani data
 
 | SRS §6 requirement | How it is addressed | Verification |
 |---|---|---|
-| Search < 3 s on 3G | Indexed search query, denormalised rating fields, Redis caching of hot queries, paginated and lean responses, compressed payloads (gzip/brotli), small images | Load test with throttled 3G profile; target defined as p95 **TBD** |
+| Search < 3 s on 3G | Indexed search query (incl. GIN index on the `serviceArea` JSONB city filter), denormalised rating fields, Redis caching of hot queries, paginated and lean responses, compressed payloads (gzip/brotli), small images | Load test with throttled 3G profile; target defined as p95 < 3 s — measured p95 2.1 s on Slow 3G (`npm run test:perf`, BE-065) |
 | Scale 1–2 → 10+ cities | Stateless API (horizontal scaling), city/service-area as data not code, modular monolith | Load test at 10+ city data volume |
 | Encryption of health data | See section 7 | Security review |
 | 99.5% uptime | Health checks, restart policies, backups, monitoring/alerts. Hosting and redundancy level **TBD** | Uptime monitoring |

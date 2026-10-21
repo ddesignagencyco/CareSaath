@@ -8,6 +8,29 @@ import { RedisService } from '../src/common/redis/redis.module.js';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter.js';
 
 /**
+ * A valid 1x1 PNG. The storage service accepts the MIME type, and a real
+ * Cloudinary account rejects truncated images, so the fixtures have to be
+ * genuine files rather than magic-byte stubs.
+ */
+export const VALID_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+/** A minimal but structurally valid PDF document. */
+export const VALID_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj',
+    'trailer<</Root 1 0 R>>',
+    '%%EOF',
+  ].join('\n'),
+  'utf8',
+);
+
+/**
  * Boots the full application (real Postgres/Redis; Cloudinary storage falls back
  * to an in-memory driver when credentials are unset). E2E tests require the
  * Docker services to be running and the schema migrated.
@@ -19,6 +42,16 @@ export async function createTestApp(): Promise<{
   jwt: JwtService;
   close: () => Promise<void>;
 }> {
+  // E2E tests are hermetic by default: with the credentials unset the
+  // storage service falls back to its in-memory driver, so uploads need
+  // neither a Cloudinary account nor network access. Set
+  // E2E_USE_CLOUDINARY=true to exercise the real upload path instead.
+  if (process.env['E2E_USE_CLOUDINARY'] !== 'true') {
+    process.env['CLOUDINARY_CLOUD_NAME'] = '';
+    process.env['CLOUDINARY_API_KEY'] = '';
+    process.env['CLOUDINARY_API_SECRET'] = '';
+  }
+
   const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleFixture.createNestApplication<INestApplication<App>>();
   app.setGlobalPrefix('api/v1');

@@ -20,6 +20,10 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:perf": "vitest run --config ./vitest.config.perf.ts",
+    "prisma:generate": "prisma generate --config prisma7.config.ts",
+    "prisma:migrate": "prisma migrate deploy --config prisma7.config.ts",
+    "prisma:studio": "prisma studio --config prisma7.config.ts",
     "seed": "node prisma/seed.mjs"
   },
   "dependencies": {

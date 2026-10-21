@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { bearer, createTestApp, signAccessToken, uniquePhone } from './e2e-helpers.js';
+import { bearer, createTestApp, signAccessToken, uniquePhone, VALID_PDF } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { JwtService } from '@nestjs/jwt';
 
@@ -129,7 +129,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
       .post('/api/v1/caregiver/documents')
       .set(bearer(caregiverToken))
       .field('type', 'LICENSE')
-      .attach('file', Buffer.from('%PDF-1.4 e2e'), 'license.pdf');
+      .attach('file', VALID_PDF, 'license.pdf');
     expect(res.status).toBe(201);
     expect(res.body.type).toBe('LICENSE');
   });

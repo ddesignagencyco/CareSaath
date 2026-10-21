@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { bearer, createTestApp, flushOtpKeys, signAccessToken, uniquePhone } from './e2e-helpers.js';
+import { bearer, createTestApp, flushOtpKeys, signAccessToken, uniquePhone, VALID_PDF } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { RedisService } from '../src/common/redis/redis.module.js';
 import { SmsService } from '../src/auth/sms.service.js';
@@ -198,7 +198,7 @@ describe('Phase 9 completions (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/customer/bookings/${bookingId}/prescriptions`)
       .set(bearer(customerToken))
-      .attach('file', Buffer.from('%PDF-1.4 e2e'), 'prescription.pdf');
+      .attach('file', VALID_PDF, 'prescription.pdf');
     expect(res.status).toBe(201);
     expect(res.body.bookingId).toBe(bookingId);
 

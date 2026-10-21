@@ -312,6 +312,9 @@ model CaregiverProfile {
   visitNotes       VisitNote[]
 
   @@index([verificationStatus, specialty])
+  // GIN index for the city filter: the search matches `serviceArea @> {"cities":[...]}`
+  // (jsonb_path_ops) and needs an index for it to scale past a single pilot city.
+  @@index([serviceArea(ops: JsonbPathOps)], type: Gin)
 }
 
 model CaregiverDocument {

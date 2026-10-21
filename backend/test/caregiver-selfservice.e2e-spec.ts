@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { bearer, createTestApp, signAccessToken, uniquePhone } from './e2e-helpers.js';
+import { bearer, createTestApp, signAccessToken, uniquePhone, VALID_PNG } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { JwtService } from '@nestjs/jwt';
 
@@ -103,7 +103,7 @@ describe('Caregiver availability & profile (e2e)', () => {
     const upload = await request(app.getHttpServer())
       .post('/api/v1/caregiver/photo')
       .set(bearer(token))
-      .attach('file', Buffer.from('89504e470d0a1a0a', 'hex'), 'avatar.png');
+      .attach('file', VALID_PNG, 'avatar.png');
     expect(upload.status).toBe(201);
     expect(upload.body.photoKey).toBeDefined();
 

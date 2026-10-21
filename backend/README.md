@@ -271,14 +271,26 @@ resolve as Redis cache → `PlatformConfig` row → env fallback.
   the real Docker Postgres/Redis (Cloudinary storage falls back to in-memory,
   so no storage service is required), sign tokens with `signAccessToken`, and
   clean up created rows in `afterAll` (watch FK order: incidents → payments →
-  visits → bookings → profiles → users).
+  visits → bookings → profiles → users). Set `E2E_USE_CLOUDINARY=true` to run
+  the upload tests against the configured Cloudinary account instead.
+- **Performance (BE-065)** (`test/performance/*.perf-spec.ts`): `npm run test:perf`
+  boots the app, seeds 720 synthetic caregivers across 12 cities, and measures
+  the public search end to end through a local proxy that emulates a throttled
+  mobile link (`test/performance/throttled-proxy.ts`, Chrome DevTools profiles
+  in `test/performance/network-profile.ts`). It asserts the SRS §6 budget
+  (p95 < 3 s on Slow 3G), compares cold (PostgreSQL) vs warm (Redis) paths,
+  covers the largest allowed page with 2000-character bios, verifies gzip/Brotli
+  negotiation, and checks the query plan uses the `serviceArea` GIN index. The
+  run prints a latency/payload report; it needs the Docker services and a
+  seeded database (`npm run seed`).
 - **CI**: `.github/workflows/ci.yml` runs lint/build/unit and an e2e job backed by
   Postgres and Redis service containers.
 
 Suites currently cover: health, auth, caregiver onboarding/verification,
 booking → visit lifecycle, payments & payouts, admin promos/disputes/analytics/
-reports/safety, customer/caregiver self-service, phase-9 gap-fills, and
-phase-10 hardening (platform config + cached search).
+reports/safety, customer/caregiver self-service, phase-9 gap-fills,
+phase-10 hardening (platform config + cached search), and BE-065 search
+performance under a throttled 3G profile.
 
 ---
 

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuditModule } from './common/audit/audit.module.js';
+import { compressionMiddleware } from './common/middleware/compression.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { RedisModule } from './common/redis/redis.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
@@ -65,4 +67,8 @@ import { RetentionModule } from './common/retention/retention.module.js';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(compressionMiddleware()).forRoutes('*');
+  }
+}

@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Type } from 'class-transformer';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -172,12 +173,14 @@ export class SearchQueryDto {
 
   @ApiPropertyOptional({ example: 1, default: 1, description: 'Page number' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
   @ApiPropertyOptional({ example: 20, default: 20, description: 'Items per page' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)

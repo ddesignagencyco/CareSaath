@@ -31,13 +31,13 @@
 | - | - | - | - |
 |||||
 |**Status**|**Backend**|**Frontend**|**Total**|
-|Not Started|4|48|52|
+|Not Started|3|48|51|
 |In Progress|0|0|0|
 |In Review|0|0|0|
 |Blocked|0|0|0|
-|Done|63|0|63|
+|Done|64|0|64|
 |**Total tasks**|**67**|**48**|**115**|
-|**% Done**|**94.0%**|**0.0%**|**54.8%**|
+|**% Done**|**95.5%**|**0.0%**|**55.7%**|
 |||||
 |**Tasks by phase**||||
 |**Phase**|**Total**|**Done**|**% Done**|
@@ -46,7 +46,7 @@
 |P2 Booking & Visits|31|17|54\.8%|
 |P3 Payments|15|10|66\.7%|
 |P4 Safety & Admin|20|10|50\.0%|
-|P5 Hardening|13|4|30\.8%|
+|P5 Hardening|13|5|38.5%|
 |||||
 |||||
 |**Open questions still unresolved**|**31**|||
@@ -196,7 +196,7 @@
 |SRS §6|P5 Hardening|High||Not Started||
 |TRD §11|P5 Hardening|High||Done||
 |TRD §11|P5 Hardening|High||Done||
-|SRS §6|P5 Hardening|Medium||Not Started||
+|SRS §6|P5 Hardening|Medium||Done||
 |SRS §6|P5 Hardening|High||Done||
 |SRS §6|P5 Hardening|Medium||Not Started||
 
@@ -271,7 +271,7 @@
 ||Hosting TBD|
 |||
 |||
-|||
+||p95 2.1 s on Slow 3G (budget 3 s)|
 ||No data loss on drop|
 ||Hosting TBD|
 
