@@ -10,10 +10,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import {
   ApiBearerAuth,
@@ -59,6 +61,16 @@ import { PlatformConfigModule, ConfigService } from '../config/platform-config.m
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
+
+/**
+ * Result of a public search: the page itself plus where it came from. The
+ * cache state is exposed as the `X-Cache` response header so the load tests
+ * can measure the Redis hit ratio.
+ */
+export interface SearchResult {
+  result: Paginated<unknown>;
+  cache: 'HIT' | 'MISS';
+}
 
 export class RegisterCaregiverDto {
   @ApiProperty({
@@ -354,13 +366,13 @@ export class CaregiversService {
   }
 
   /** Public search (FR-C3, FR-C4): only APPROVED caregivers of ACTIVE users. */
-  async search(query: SearchQueryDto): Promise<Paginated<unknown>> {
+  async search(query: SearchQueryDto): Promise<SearchResult> {
     const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${query.page}:${query.limit}`;
     const ttlSeconds = await this.config.getNumber('search.cacheTtlSeconds');
     if (ttlSeconds > 0) {
       const cached = await this.redis.client.get(cacheKey);
       if (cached) {
-        return JSON.parse(cached) as Paginated<unknown>;
+        return { result: JSON.parse(cached) as Paginated<unknown>, cache: 'HIT' };
       }
     }
 
@@ -396,7 +408,7 @@ export class CaregiversService {
     if (ttlSeconds > 0) {
       await this.redis.client.set(cacheKey, JSON.stringify(result), 'EX', ttlSeconds);
     }
-    return result;
+    return { result, cache: 'MISS' };
   }
 
   /** Public caregiver profile (FR-C4). */
@@ -595,10 +607,12 @@ export class PublicCaregiverController {
   @ApiOperation({
     summary: 'Search verified caregivers',
     description:
-      'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks.',
+      'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks. The X-Cache header reports whether the page came from Redis (HIT) or PostgreSQL (MISS).',
   })
-  search(@Query() query: SearchQueryDto) {
-    return this.caregivers.search(query);
+  async search(@Query() query: SearchQueryDto, @Res({ passthrough: true }) res: Response) {
+    const { result, cache } = await this.caregivers.search(query);
+    res.setHeader('x-cache', cache);
+    return result;
   }
 
   @Get(':id')
