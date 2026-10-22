@@ -1,0 +1,179 @@
+{
+  "login": {
+    "product": "Caregiver",
+    "headline": "Care for families. We handle the rest.",
+    "features": {
+      "visits": { "title": "Your visits, organised", "text": "Requests, today's schedule and patient notes in one place" },
+      "checkIn": { "title": "Check in on arrival", "text": "Confirm visits by location or the family's code" },
+      "paid": { "title": "Get paid on time", "text": "Track earnings and withdraw to bank or JazzCash" }
+    },
+    "heroFooter": "© CareSaath · For verified nurses and physiotherapists",
+    "phoneTitle": "Sign in or join",
+    "phoneDescription": "Enter your mobile number. New to CareSaath? You'll set up your caregiver profile next.",
+    "footerNote": "Your number is only shared with families you visit.",
+    "mockCode": "Mock mode: code <b>{code}</b>",
+    "mockNumbers": "{approved} = approved nurse · {pending} = pending · any other number = new sign-up",
+    "adminError": "Admin accounts can't use the caregiver app.",
+    "devOtp": "Development server: the sign-in code is printed in the backend console.",
+    "devNumbers": "Demo caregivers: {approved} = approved · {pending} = pending review · any other number = new sign-up"
+  },
+  "nav": {
+    "today": "Today",
+    "requests": "Requests",
+    "visits": "Visits",
+    "earnings": "Earnings",
+    "availability": "Availability",
+    "profile": "Profile & documents",
+    "notifications": "Notifications",
+    "reports": "Reports & disputes",
+    "more": "More",
+    "withCount": "{label} ({count})",
+    "groups": {
+      "work": "Work",
+      "money": "Money",
+      "myProfile": "My profile",
+      "updates": "Updates"
+    }
+  },
+  "shell": {
+    "subtitle": "Caregiver",
+    "role": "Caregiver",
+    "defaultName": "Caregiver"
+  },
+  "today": {
+    "greeting": {
+      "welcome": "Welcome",
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "greetingName": "{greeting}, {name}",
+    "continue": "Continue",
+    "nextVisit": "Next visit",
+    "directions": "Directions",
+    "openVisit": "Open visit",
+    "noUpcoming": "No upcoming visits",
+    "noUpcomingHint": "Accepted bookings will show up here.",
+    "requestsWaiting": "{count, plural, one {Booking request waiting} other {Booking requests waiting}}",
+    "availableToWithdraw": "Available to withdraw",
+    "schedule": "Today's schedule",
+    "allVisits": "All visits",
+    "noVisitsToday": "No visits scheduled for today."
+  },
+  "requests": {
+    "title": "Requests",
+    "description": "Families waiting for you to accept. Respond quickly so they can plan care.",
+    "tabs": {
+      "waiting": "Waiting",
+      "responded": "Responded"
+    },
+    "caughtUp": "You're all caught up",
+    "caughtUpHint": "New booking requests will appear here. Keep your availability up to date to get more.",
+    "noResponses": "No responses yet",
+    "decline": {
+      "title": "Decline this request?",
+      "description": "{name} · {count, plural, one {# visit} other {# visits}}",
+      "keep": "Keep request",
+      "confirm": "Decline",
+      "success": "Request declined. The family will be told to choose another caregiver.",
+      "reasonLabel": "Reason for the family",
+      "reasonHint": "{count}/500 · optional",
+      "reasons": {
+        "notAvailable": "Not available at that time",
+        "tooFar": "Too far from my area",
+        "outsideSpecialty": "Outside my specialty",
+        "fullyBooked": "Fully booked this week"
+      }
+    },
+    "card": {
+      "accepted": "{count, plural, one {Accepted. The visit is now on your schedule.} other {Accepted. # visits are now on your schedule.}}",
+      "requested": "Requested {time}",
+      "bookedByPatient": "Booked by patient",
+      "bookedByFamily": "Booked by family",
+      "perVisit": "per visit",
+      "visitCount": "{count} visits",
+      "recurringCare": "Recurring care",
+      "promo": "Family used a {amount} promo",
+      "youEarn": "You earn {amount}/visit after {pct}% commission",
+      "decline": "Decline",
+      "accept": "Accept"
+    },
+    "history": {
+      "line": "{count, plural, one {# visit} other {# visits}} · from {day}",
+      "reason": " · \"{reason}\""
+    }
+  },
+  "visits": {
+    "title": "Visits",
+    "description": "Your schedule of home visits.",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "noUpcoming": "No upcoming visits",
+    "noPast": "No past visits yet"
+  },
+  "visitRow": {
+    "to": "to {time}",
+    "recurring": "Recurring",
+    "notStarted": "Not started"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "newDate": "a new date",
+    "events": {
+      "bookingRequested": {
+        "title": "New booking request",
+        "body": "{count, plural, one {1 visit} other {# visits}}. Respond before the request expires.",
+        "bodyNoCount": "Respond before the request expires."
+      },
+      "bookingCancelled": {
+        "title": "Booking cancelled",
+        "body": "The customer cancelled a booking. It has been removed from your schedule."
+      },
+      "prescriptionUploaded": {
+        "title": "Prescription added",
+        "body": "The customer attached a prescription to a booking."
+      },
+      "visitRescheduled": {
+        "title": "Visit rescheduled",
+        "body": "Moved to {date}."
+      },
+      "disputeRaised": {
+        "title": "Dispute raised",
+        "body": "A customer raised a dispute about a visit. CareSaath will contact you."
+      },
+      "disputeResolved": {
+        "title": "Dispute resolved",
+        "body": "Your dispute has been resolved by CareSaath."
+      },
+      "payoutProcessing": {
+        "title": "Payout approved",
+        "body": "{amount} is being transferred to your account."
+      },
+      "payoutPaid": {
+        "title": "Payout sent",
+        "body": "{amount} has been paid to your account."
+      },
+      "payoutRejected": {
+        "title": "Payout rejected",
+        "body": "Your {amount} request was rejected. The balance is available again."
+      },
+      "safetyUpdated": {
+        "title": "Safety report updated",
+        "body": "Status: {status}."
+      }
+    }
+  },
+  "reports": {
+    "title": "Reports & disputes",
+    "description": "Safety reports you've sent and disputes about your visits. To report something new, open the visit.",
+    "safetyReports": "Safety reports",
+    "noReports": "No reports",
+    "noReportsHint": "Use SOS or “Report an issue” on a visit if something goes wrong.",
+    "viewVisit": "View visit",
+    "disputes": "Disputes",
+    "noDisputes": "No disputes",
+    "raisedByYou": "Raised by you",
+    "raisedByFamily": "Raised by the family"
+  }
+}

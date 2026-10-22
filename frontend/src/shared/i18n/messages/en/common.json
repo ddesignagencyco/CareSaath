@@ -1,0 +1,55 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saveChanges": "Save changes",
+    "close": "Close",
+    "closePanel": "Close panel",
+    "tryAgain": "Try again",
+    "back": "Back",
+    "continue": "Continue",
+    "add": "Add",
+    "edit": "Edit",
+    "remove": "Remove",
+    "view": "View",
+    "done": "Done",
+    "signOut": "Sign out",
+    "resetDemo": "Reset demo data"
+  },
+  "states": {
+    "loading": "Loading",
+    "couldntLoad": "Couldn't load this data",
+    "unexpectedError": "Unexpected error",
+    "somethingWentWrong": "Something went wrong",
+    "noOptions": "No options",
+    "select": "Select…",
+    "optional": "optional",
+    "demoReset": "Demo data reset",
+    "mockBadge": "Mock data · API not connected"
+  },
+  "pagination": {
+    "range": "{from}–{to} of {total}",
+    "previous": "Previous page",
+    "next": "Next page"
+  },
+  "toast": {
+    "dismiss": "Dismiss"
+  },
+  "language": {
+    "label": "Language",
+    "appLanguage": "App language",
+    "hint": "Screens, messages and notifications use this language.",
+    "en": "English",
+    "ur": "اردو",
+    "switchTo": "Switch language to {language}",
+    "toggle": "اردو"
+  },
+  "nav": {
+    "main": "Main",
+    "notifications": "Notifications",
+    "notificationsNew": "Notifications, {count} new",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "home": "CareSaath home"
+  }
+}

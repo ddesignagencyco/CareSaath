@@ -1,0 +1,55 @@
+{
+  "actions": {
+    "cancel": "منسوخ کریں",
+    "save": "محفوظ کریں",
+    "saveChanges": "تبدیلیاں محفوظ کریں",
+    "close": "بند کریں",
+    "closePanel": "پینل بند کریں",
+    "tryAgain": "دوبارہ کوشش کریں",
+    "back": "واپس",
+    "continue": "جاری رکھیں",
+    "add": "شامل کریں",
+    "edit": "ترمیم کریں",
+    "remove": "ہٹائیں",
+    "view": "دیکھیں",
+    "done": "ٹھیک ہے",
+    "signOut": "سائن آؤٹ",
+    "resetDemo": "ڈیمو ڈیٹا دوبارہ سیٹ کریں"
+  },
+  "states": {
+    "loading": "لوڈ ہو رہا ہے",
+    "couldntLoad": "یہ معلومات لوڈ نہیں ہو سکیں",
+    "unexpectedError": "غیر متوقع خرابی",
+    "somethingWentWrong": "کچھ غلط ہو گیا",
+    "noOptions": "کوئی آپشن نہیں",
+    "select": "منتخب کریں…",
+    "optional": "اختیاری",
+    "demoReset": "ڈیمو ڈیٹا دوبارہ سیٹ ہو گیا",
+    "mockBadge": "فرضی ڈیٹا · API منسلک نہیں"
+  },
+  "pagination": {
+    "range": "{total} میں سے {from}–{to}",
+    "previous": "پچھلا صفحہ",
+    "next": "اگلا صفحہ"
+  },
+  "toast": {
+    "dismiss": "بند کریں"
+  },
+  "language": {
+    "label": "زبان",
+    "appLanguage": "ایپ کی زبان",
+    "hint": "اسکرینز، پیغامات اور اطلاعات اسی زبان میں ہوں گی۔",
+    "en": "English",
+    "ur": "اردو",
+    "switchTo": "زبان {language} میں تبدیل کریں",
+    "toggle": "English"
+  },
+  "nav": {
+    "main": "مین مینو",
+    "notifications": "اطلاعات",
+    "notificationsNew": "اطلاعات، {count} نئی",
+    "expandSidebar": "سائیڈ بار کھولیں",
+    "collapseSidebar": "سائیڈ بار بند کریں",
+    "home": "کیئر ساتھ ہوم"
+  }
+}

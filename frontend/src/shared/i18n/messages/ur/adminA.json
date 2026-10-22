@@ -1,0 +1,287 @@
+{
+  "login": {
+    "product": "ایڈمن کنسول",
+    "headline": "ہر کیئرگیور کی تصدیق، گھر جانے سے پہلے۔",
+    "features": {
+      "credentials": {
+        "title": "اسناد کی تصدیق",
+        "text": "لائسنس PNC اور PMDC رجسٹر سے چیک کیے جاتے ہیں"
+      },
+      "safety": {
+        "title": "حفاظت سب سے پہلے",
+        "text": "SOS الرٹس اور شکایات ترجیح کے مطابق نمٹائی جاتی ہیں"
+      },
+      "audit": {
+        "title": "مکمل آڈٹ ریکارڈ",
+        "text": "ہر فیصلہ وقت اور کرنے والے کے نام کے ساتھ محفوظ"
+      }
+    },
+    "heroFooter": "© CareSaath · صرف مجاز عملے کے لیے",
+    "phoneTitle": "دوبارہ خوش آمدید",
+    "phoneDescription": "اپنے رجسٹرڈ ایڈمن موبائل نمبر سے سائن اِن کریں۔ ہم آپ کو 6 ہندسوں کا کوڈ SMS کریں گے۔",
+    "footerNote": "صرف CareSaath کے مجاز عملے کے لیے۔ ہر سائن اِن ریکارڈ کیا جاتا ہے۔",
+    "mockCode": "موک موڈ: کوڈ <b>{code}</b> استعمال کریں",
+    "notAdmin": "یہ نمبر CareSaath ایڈمن کے طور پر رجسٹرڈ نہیں ہے۔",
+    "devOtpHint": "ڈیولپمنٹ: 6 ہندسوں کا کوڈ بیک اینڈ کنسول میں پرنٹ ہوتا ہے۔",
+    "devDemoNumbers": "ڈیمو ایڈمن نمبر: {phone}"
+  },
+  "shell": {
+    "logoSubtitle": "ایڈمن",
+    "openMenu": "مینو کھولیں",
+    "closeMenu": "مینو بند کریں",
+    "adminName": "پلیٹ فارم ایڈمن",
+    "role": "ایڈمنسٹریٹر",
+    "platformSettings": "پلیٹ فارم ترتیبات",
+    "health": {
+      "checking": "API چیک ہو رہی ہے…",
+      "healthy": "API منسلک ہے",
+      "degraded": "API جزوی طور پر متاثر",
+      "unreachable": "API سے رابطہ نہیں",
+      "detailHealthy": "API، ڈیٹا بیس اور کیش سب چل رہے ہیں۔",
+      "detailDegraded": "بند: {services}",
+      "detailUnreachable": "{url} پر API سے رابطہ نہیں ہو سکا",
+      "postgres": "ڈیٹا بیس (PostgreSQL)",
+      "redis": "کیش (Redis)"
+    }
+  },
+  "nav": {
+    "overview": "جائزہ",
+    "verification": "تصدیق",
+    "reverification": "دوبارہ تصدیق",
+    "safety": "حفاظتی واقعات",
+    "disputes": "تنازعات",
+    "payouts": "ادائیگیاں",
+    "commissions": "کمیشن",
+    "promos": "پرومو کوڈز",
+    "reports": "رپورٹس",
+    "settings": "ترتیبات",
+    "withCount": "{label} ({count})",
+    "groups": {
+      "caregivers": "کیئرگیورز",
+      "trust": "اعتماد اور حفاظت",
+      "finance": "مالیات",
+      "platform": "پلیٹ فارم"
+    }
+  },
+  "dashboard": {
+    "title": "جائزہ",
+    "description": "پورے پلیٹ فارم کی بکنگز، آمدنی اور کیئرگیورز کی دستیابی۔",
+    "ranges": {
+      "7d": "7 دن",
+      "30d": "30 دن",
+      "90d": "90 دن",
+      "all": "اب تک"
+    },
+    "bookingStatus": {
+      "REQUESTED": "درخواست شدہ",
+      "CONFIRMED": "کنفرم",
+      "COMPLETED": "مکمل",
+      "DECLINED": "مسترد",
+      "CANCELLED": "منسوخ"
+    },
+    "barTitle": "{status}: {count} ({share})",
+    "stats": {
+      "grossRevenue": "کل آمدنی",
+      "commissionEarned": "{amount} کمیشن حاصل ہوا",
+      "bookings": "بکنگز",
+      "visitsCompleted": "{count} وزٹ مکمل",
+      "cancellationRate": "منسوخی کی شرح",
+      "bookingsCancelled": "{count} بکنگز منسوخ",
+      "activeCaregivers": "فعال کیئرگیورز",
+      "awaitingVerification": "{count} تصدیق کے منتظر"
+    },
+    "byStatus": {
+      "title": "اسٹیٹس کے لحاظ سے بکنگز",
+      "description": "منتخب مدت میں {count} بکنگز"
+    },
+    "attention": {
+      "title": "توجہ طلب",
+      "description": "ایڈمن کے منتظر کام",
+      "critical": "سنگین SOS / واقعات",
+      "openIncidents": "کھلے حفاظتی واقعات",
+      "toVerify": "تصدیق کے منتظر کیئرگیورز",
+      "disputes": "کھلے تنازعات",
+      "payouts": "ادائیگی کی درخواستیں"
+    },
+    "revenue": {
+      "title": "آمدنی کی تفصیل",
+      "description": "منتخب مدت میں وصول شدہ ادائیگیاں",
+      "barAria": "کل آمدنی میں کمیشن بمقابلہ کیئرگیور کا حصہ",
+      "commission": "کمیشن",
+      "caregiverShare": "کیئرگیور کا حصہ",
+      "gross": "کل وصولی",
+      "grossNote": "{count} ادائیگیاں وصول ہوئیں",
+      "platformCommission": "پلیٹ فارم کمیشن",
+      "takeRate": "{rate} مؤثر کمیشن شرح",
+      "caregiverShareNote": "کیئرگیورز کو واجب الادا",
+      "paidOut": "ادا شدہ",
+      "paidOutNote": "نمٹائی گئی ادائیگی کی درخواستیں"
+    }
+  },
+  "caregivers": {
+    "title": "کیئرگیور کی تصدیق",
+    "description": "لائسنس اور سرٹیفکیٹ کی دستاویزات چیک کریں۔ صرف منظور شدہ کیئرگیورز کسٹمرز کو نظر آتے ہیں۔",
+    "statuses": {
+      "PENDING": "زیرِ غور",
+      "APPROVED": "منظور شدہ",
+      "REJECTED": "مسترد",
+      "SUSPENDED": "معطل"
+    },
+    "emptyPendingTitle": "تصدیق کی قطار خالی ہے",
+    "emptyPendingText": "نئے کیئرگیورز کی رجسٹریشن جائزے کے لیے یہاں نظر آئے گی۔",
+    "emptyTitle": "یہاں کوئی کیئرگیور نہیں",
+    "columns": {
+      "caregiver": "کیئرگیور",
+      "specialty": "شعبہ",
+      "license": "لائسنس",
+      "documents": "دستاویزات",
+      "rate": "ریٹ / وزٹ",
+      "status": "اسٹیٹس"
+    },
+    "unnamed": "نام درج نہیں",
+    "registered": "{cities} · رجسٹریشن {when}",
+    "noneUploaded": "کوئی اپ لوڈ نہیں",
+    "fileCount": "{count, plural, one {# فائل} other {# فائلیں}}"
+  },
+  "drawer": {
+    "unnamed": "نام کے بغیر کیئرگیور",
+    "toast": {
+      "approved": "{name} منظور ہو گئے اور اب سرچ میں نظر آئیں گے",
+      "rejected": "{name} کی رجسٹریشن مسترد کر دی گئی",
+      "suspended": "{name} معطل اور سرچ سے پوشیدہ کر دیے گئے",
+      "reverify": "{name} کی دوبارہ تصدیق کی درخواست بھیج دی گئی",
+      "deactivated": "{name} کا اکاؤنٹ غیر فعال کر دیا گیا",
+      "reactivated": "{name} کو دوبارہ فعال کر دیا گیا"
+    },
+    "actions": {
+      "reject": "مسترد کریں",
+      "approve": "منظور کریں",
+      "requestReverify": "دوبارہ تصدیق کی درخواست",
+      "suspend": "معطل کریں",
+      "reactivate": "دوبارہ فعال کریں",
+      "deactivate": "اکاؤنٹ غیر فعال کریں"
+    },
+    "reviews": "{rating} · {count} ریویوز",
+    "sections": {
+      "credentials": "اسناد جن کی جانچ کرنی ہے",
+      "documents": "دستاویزات",
+      "profile": "پروفائل"
+    },
+    "fields": {
+      "licenseNumber": "لائسنس نمبر",
+      "licensingBody": "لائسنس جاری کرنے والا ادارہ",
+      "cnic": "شناختی کارڈ",
+      "specialty": "شعبہ",
+      "experience": "تجربہ",
+      "experienceYears": "{count} سال",
+      "rate": "فی وزٹ ریٹ",
+      "serviceArea": "سروس کا علاقہ",
+      "registered": "رجسٹریشن",
+      "approved": "منظوری",
+      "reverifyDue": "دوبارہ تصدیق کی تاریخ",
+      "overdue": " ({days} دن تاخیر)",
+      "cnicUnavailable": "دستیاب نہیں (ڈی کرپٹ نہیں ہو سکا)"
+    },
+    "verifyHint": "منظوری سے پہلے لائسنس کو {body, select, OTHER {متعلقہ پیشہ ور ادارے کے} other {{body} کے}} رجسٹر سے ضرور چیک کریں۔",
+    "dialogs": {
+      "approve": {
+        "title": "{name} کو منظور کریں؟",
+        "description": "پروفائل کسٹمر سرچ میں ظاہر ہو جائے گا۔ دوبارہ تصدیق آج سے ایک سال بعد شیڈول ہو گی۔",
+        "label": "تصدیقی نوٹس",
+        "placeholder": "مثلاً PNC رجسٹری ریکارڈ درست اور فعال ہے۔",
+        "confirm": "کیئرگیور منظور کریں",
+        "checked": "میں نے لائسنس {license} کو {body} رجسٹر سے چیک کر لیا ہے۔"
+      },
+      "reject": {
+        "title": "{name} کو مسترد کریں؟",
+        "description": "کیئرگیور کو بتایا جائے گا کہ ان کی دستاویزات کی تصدیق نہیں ہو سکی۔",
+        "placeholder": "مثلاً لائسنس نمبر PNC رجسٹر میں نہیں ملا۔",
+        "confirm": "رجسٹریشن مسترد کریں"
+      },
+      "suspend": {
+        "title": "{name} کو معطل کریں؟",
+        "description": "دوبارہ فعال ہونے تک پروفائل سرچ سے پوشیدہ رہے گا۔ پالیسی کی خلاف ورزی یا حل طلب حفاظتی شکایات کی صورت میں استعمال کریں۔",
+        "placeholder": "مثلاً حفاظتی واقعہ #inc-0004 کی تحقیقات جاری ہیں۔",
+        "confirm": "کیئرگیور معطل کریں"
+      },
+      "deactivate": {
+        "title": "{name} کا اکاؤنٹ غیر فعال کریں؟",
+        "description": "کیئرگیور سائن اِن نہیں کر سکے گا۔ یہ معطلی سے زیادہ سخت اقدام ہے۔",
+        "confirm": "اکاؤنٹ غیر فعال کریں"
+      },
+      "reverify": {
+        "title": "دوبارہ تصدیق کی درخواست",
+        "description": "کیئرگیور دوبارہ زیرِ غور ہو جائے گا اور اسناد کی دوبارہ منظوری تک سرچ سے پوشیدہ رہے گا۔",
+        "confirm": "دوبارہ تصدیق کی درخواست کریں",
+        "daysLabel": "اگلی دوبارہ تصدیق (دنوں میں)",
+        "daysHint": "طے شدہ مدت 365 دن (سالانہ) ہے۔"
+      },
+      "reactivate": {
+        "title": "{name} کو دوبارہ فعال کریں؟",
+        "description": "کیئرگیور کا اکاؤنٹ بحال ہو جائے گا تاکہ وہ سائن اِن کر سکے اور دوبارہ سرچ میں نظر آئے۔",
+        "confirm": "دوبارہ فعال کریں",
+        "suspendedNote": "یہ کیئرگیور معطل ہے۔ API کا ری ایکٹیویٹ عمل ابھی معطلی ختم نہیں کرتا، اس لیے یہ ان کی اسناد کو دوبارہ منظور بھی کرے گا اور دوبارہ تصدیق کی تاریخ 365 دن سے دوبارہ شروع ہو گی۔",
+        "auditReason": "معطلی کے بعد دوبارہ فعال کیا گیا"
+      }
+    }
+  },
+  "documents": {
+    "none": "کوئی دستاویز اپ لوڈ نہیں ہوئی۔ لائسنس یا سرٹیفکیٹ فراہم ہونے تک کیئرگیور کو منظور نہیں کیا جا سکتا۔",
+    "meta": "{type} · {size}",
+    "viewerDescription": "{size} · اپ لوڈ {date}"
+  },
+  "reverification": {
+    "title": "دوبارہ تصدیق",
+    "description": "منظور شدہ کیئرگیورز کی اسناد وقتاً فوقتاً دوبارہ چیک کرنا ضروری ہے (عام طور پر سالانہ)۔",
+    "windows": {
+      "overdue": "تاخیر شدہ",
+      "next30": "اگلے 30 دن",
+      "next90": "اگلے 90 دن",
+      "all": "تمام منظور شدہ"
+    },
+    "empty": "اس مدت میں کچھ واجب نہیں",
+    "columns": {
+      "caregiver": "کیئرگیور",
+      "license": "لائسنس",
+      "approved": "منظوری",
+      "due": "مقررہ تاریخ"
+    },
+    "due": {
+      "overdue": "{days} دن تاخیر",
+      "dueIn": "{days} دن باقی",
+      "inDays": "{days} دن میں"
+    },
+    "noDueDate": "{count, plural, one {# منظور شدہ کیئرگیور} other {# منظور شدہ کیئرگیورز}} کی دوبارہ تصدیق کی تاریخ ابھی مقرر نہیں، اس لیے وہ یہاں نظر نہیں آتے۔",
+    "truncated": "{total} میں سے پہلے {shown} منظور شدہ کیئرگیور دکھائے جا رہے ہیں۔"
+  },
+  "reports": {
+    "title": "رپورٹس",
+    "description": "مالی اور آپریشنل ڈیٹا CSV میں ایکسپورٹ کریں۔ فائلیں Excel اور Google Sheets میں کھلتی ہیں۔",
+    "columnsLabel": "کالم:",
+    "download": "CSV ڈاؤن لوڈ کریں",
+    "downloaded": "{title} رپورٹ ڈاؤن لوڈ ہو گئی",
+    "exportFailed": "ایکسپورٹ ناکام رہا",
+    "items": {
+      "payments": {
+        "title": "ادائیگیاں",
+        "description": "ہر کسٹمر ادائیگی، طریقہ، اسٹیٹس اور کمیشن کی تقسیم کے ساتھ۔",
+        "columns": "method, status, amount, commission, caregiver amount, paid at"
+      },
+      "payouts": {
+        "title": "کیئرگیور ادائیگیاں",
+        "description": "کیئرگیورز کی رقم نکلوانے کی درخواستیں اور ان پر کارروائی کا وقت۔",
+        "columns": "caregiver, account, amount, status, requested, processed"
+      },
+      "bookings": {
+        "title": "بکنگز",
+        "description": "تمام بکنگز، سروس کی قسم، اسٹیٹس، ریٹ اور رعایت کے ساتھ۔",
+        "columns": "customer, caregiver, service, status, rate, discount, dates"
+      },
+      "caregivers": {
+        "title": "کیئرگیورز",
+        "description": "کیئرگیورز کی فہرست، تصدیقی اسٹیٹس، ریٹس اور ریٹنگز کے ساتھ۔",
+        "columns": "name, phone, specialty, verification, rate, rating"
+      }
+    }
+  }
+}
