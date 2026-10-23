@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { createHmac } from 'node:crypto';
 import {
   PaymentsService,
   isGatewayMethod,
   splitCommission,
+  verifyWebhookSignature,
 } from './payments.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
@@ -35,6 +37,44 @@ function payableVisit(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe('verifyWebhookSignature', () => {
+  const sign = (secret: string, ref: string, status: string) =>
+    createHmac('sha256', secret).update(`${ref}:${status}`).digest('hex');
+
+  it('accepts a correctly signed webhook', () => {
+    const env = { PAYMENT_WEBHOOK_SECRET: 's3cret' };
+    expect(() =>
+      verifyWebhookSignature('card', 'gw_1', 'PAID', sign('s3cret', 'gw_1', 'PAID'), env),
+    ).not.toThrow();
+  });
+
+  it('rejects a missing, malformed or tampered signature', () => {
+    const env = { PAYMENT_WEBHOOK_SECRET: 's3cret' };
+    expect(() => verifyWebhookSignature('card', 'gw_1', 'PAID', undefined, env)).toThrow();
+    expect(() => verifyWebhookSignature('card', 'gw_1', 'PAID', 'zz', env)).toThrow();
+    expect(() =>
+      verifyWebhookSignature('card', 'gw_1', 'PAID', sign('s3cret', 'gw_1', 'FAILED'), env),
+    ).toThrow(/Invalid webhook signature/);
+  });
+
+  it('prefers a provider-specific secret over the shared one', () => {
+    const env = { PAYMENT_WEBHOOK_SECRET: 'shared', PAYMENT_WEBHOOK_SECRET_JAZZCASH: 'jc' };
+    expect(() =>
+      verifyWebhookSignature('jazzcash', 'gw_1', 'PAID', sign('jc', 'gw_1', 'PAID'), env),
+    ).not.toThrow();
+    expect(() =>
+      verifyWebhookSignature('jazzcash', 'gw_1', 'PAID', sign('shared', 'gw_1', 'PAID'), env),
+    ).toThrow();
+  });
+
+  it('is open in development without a secret but fails closed in production', () => {
+    expect(() => verifyWebhookSignature('card', 'gw_1', 'PAID', undefined, {})).not.toThrow();
+    expect(() =>
+      verifyWebhookSignature('card', 'gw_1', 'PAID', undefined, { NODE_ENV: 'production' }),
+    ).toThrow(/not configured/);
+  });
+});
 
 describe('splitCommission', () => {
   it('splits an amount using the category percentage', () => {

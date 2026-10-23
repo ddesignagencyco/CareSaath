@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Injectable,
   Logger,
   Module,
@@ -12,6 +13,8 @@ import {
   Patch,
   Post,
   Query,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -21,6 +24,7 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import {
@@ -57,6 +61,36 @@ const GATEWAY_PENDING_TTL_MINUTES = Number(process.env['PAYMENT_PENDING_TTL_MINU
 function checkoutUrlFor(method: PaymentMethod, gatewayRef: string): string {
   const base = process.env['PAYMENT_CHECKOUT_BASE_URL'] ?? 'https://checkout.caresaath.pk';
   return `${base.replace(/\/+$/, '')}/${method.toLowerCase()}/${encodeURIComponent(gatewayRef)}`;
+}
+
+const WEBHOOK_PROVIDERS = ['card', 'jazzcash', 'easypaisa'];
+
+/**
+ * Webhook authenticity (TRD §6.5). The gateway signs `<gatewayRef>:<status>` with
+ * HMAC-SHA256 (hex) using a shared secret: PAYMENT_WEBHOOK_SECRET_<PROVIDER>, or
+ * PAYMENT_WEBHOOK_SECRET for all providers. With no secret configured, webhooks
+ * are accepted in development but refused in production (fail closed).
+ */
+export function verifyWebhookSignature(
+  provider: string,
+  gatewayRef: string,
+  status: string,
+  signature: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const secret =
+    env[`PAYMENT_WEBHOOK_SECRET_${provider.toUpperCase()}`] ?? env['PAYMENT_WEBHOOK_SECRET'];
+  if (!secret) {
+    if (env['NODE_ENV'] === 'production') {
+      throw new ServiceUnavailableException('Payment webhook secret is not configured');
+    }
+    return;
+  }
+  const expected = createHmac('sha256', secret).update(`${gatewayRef}:${status}`).digest();
+  const given = Buffer.from(signature ?? '', 'hex');
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    throw new UnauthorizedException('Invalid webhook signature');
+  }
 }
 
 export function isGatewayMethod(method: PaymentMethod): boolean {
@@ -491,13 +525,25 @@ export class PaymentWebhookController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Public()
-  @ApiHeader({ name: 'x-gateway-signature', required: false, description: 'Optional gateway webhook signature' })
+  @ApiHeader({
+    name: 'x-gateway-signature',
+    required: false,
+    description: 'Hex HMAC-SHA256 of "<gatewayRef>:<status>" using the provider webhook secret. Required whenever a secret is configured (always in production). May also be sent as "signature" in the body.',
+  })
   @Post('webhook/:provider')
   @ApiOperation({
     summary: 'Payment gateway webhook callback',
     description: 'Receives asynchronous payment notifications from JazzCash, Easypaisa, or Card processors. Idempotent settlement.',
   })
-  webhook(@Body() dto: GatewayWebhookDto) {
+  webhook(
+    @Param('provider') provider: string,
+    @Body() dto: GatewayWebhookDto,
+    @Headers('x-gateway-signature') headerSignature?: string,
+  ) {
+    if (!WEBHOOK_PROVIDERS.includes(provider.toLowerCase())) {
+      throw new NotFoundException('Unknown payment provider');
+    }
+    verifyWebhookSignature(provider, dto.gatewayRef, dto.status, headerSignature ?? dto.signature);
     return this.payments.handleGatewayWebhook(dto);
   }
 }
