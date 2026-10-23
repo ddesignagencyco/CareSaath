@@ -1,18 +1,22 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Body,
   Controller,
   Get,
   Headers,
+  HttpCode,
   Injectable,
   Logger,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Req,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -25,6 +29,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
+import type Stripe from 'stripe';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import {
@@ -43,6 +50,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { StripeService } from './stripe.service.js';
 
 /**
  * Digital payment methods all start PENDING and settle via a gateway webhook;
@@ -178,7 +186,13 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly stripe?: StripeService,
   ) {}
+
+  /** Card payments go through Stripe whenever it is configured. */
+  private usesStripe(method: PaymentMethod): boolean {
+    return method === PaymentMethod.CARD && Boolean(this.stripe?.enabled);
+  }
 
   private paymentInclude() {
     return {
@@ -282,6 +296,29 @@ export class PaymentsService {
       entityId: payment.id,
       metadata: { visitId: visit.id, method: dto.method, amount },
     });
+    if (this.usesStripe(dto.method)) {
+      try {
+        const session = await this.stripe!.createCheckoutSession({
+          paymentId: payment.id,
+          visitId: visit.id,
+          amount,
+          description: 'CareSaath home visit',
+        });
+        const withRef = await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { gatewayRef: session.id },
+        });
+        return { payment: withRef, checkoutUrl: session.url };
+      } catch (err) {
+        // Don't leave a PENDING row that would block retrying with another method.
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: PaymentStatus.FAILED },
+        });
+        this.logger.error(`Stripe checkout failed for payment ${payment.id}: ${(err as Error).message}`);
+        throw new BadGatewayException('The card payment could not be started, please try again');
+      }
+    }
     if (isGatewayMethod(dto.method)) {
       // The gateway integration is TBD (TRD §6.5); the ref stands in for the
       // hosted-checkout reference until merchant credentials exist.
@@ -318,6 +355,9 @@ export class PaymentsService {
       where: { id },
       data: { status: PaymentStatus.FAILED },
     });
+    if (this.usesStripe(payment.method) && payment.gatewayRef?.startsWith('cs_')) {
+      await this.stripe!.expireSession(payment.gatewayRef);
+    }
     await this.audit.log({
       actorId: user.sub,
       action: 'payment.cancelled',
@@ -427,6 +467,68 @@ export class PaymentsService {
     throw new BadRequestException('Unsupported webhook status');
   }
 
+  /**
+   * Stripe webhook (signature already verified). Settlement is idempotent, and a
+   * session is only trusted when its amount and currency match the payment.
+   */
+  async handleStripeEvent(event: Stripe.Event) {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object;
+        if (session.payment_status !== 'paid') {
+          return { received: true, settled: false };
+        }
+        const payment = await this.findStripePayment(session);
+        if (!payment) return { received: true, settled: false };
+        if (session.currency !== 'pkr' || session.amount_total !== payment.amount) {
+          this.logger.error(
+            `Stripe session ${session.id} does not match payment ${payment.id} (${session.amount_total} ${session.currency} vs ${payment.amount} pkr); not settling`,
+          );
+          return { received: true, settled: false };
+        }
+        await this.markPaid(payment.id, 'stripe');
+        return { received: true, settled: true };
+      }
+      case 'checkout.session.expired':
+      case 'checkout.session.async_payment_failed': {
+        const payment = await this.findStripePayment(event.data.object);
+        if (payment?.status === PaymentStatus.PENDING) {
+          await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { status: PaymentStatus.FAILED },
+          });
+          await this.audit.log({
+            actorId: null,
+            action: 'payment.failed',
+            entityType: 'Payment',
+            entityId: payment.id,
+            metadata: { gatewayRef: event.data.object.id, source: 'stripe', event: event.type },
+          });
+        }
+        return { received: true, settled: false };
+      }
+      default:
+        return { received: true, settled: false };
+    }
+  }
+
+  private async findStripePayment(session: Stripe.Checkout.Session) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        method: PaymentMethod.CARD,
+        OR: [
+          { gatewayRef: session.id },
+          ...(session.metadata?.['paymentId'] ? [{ id: session.metadata['paymentId'] }] : []),
+        ],
+      },
+    });
+    if (!payment) {
+      this.logger.warn(`Stripe event for unknown session ${session.id}`);
+    }
+    return payment;
+  }
+
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       visit: { booking: { customerId: user.sub } },
@@ -522,7 +624,35 @@ export class CaregiverPaymentsController {
 @ApiTags('System & Webhooks')
 @Controller('payments')
 export class PaymentWebhookController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly stripe: StripeService,
+  ) {}
+
+  @Public()
+  @ApiHeader({ name: 'stripe-signature', required: true, description: 'Stripe webhook signature' })
+  @Post('webhook/stripe')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Stripe webhook callback',
+    description: 'Receives checkout.session.* events from Stripe. The signature is verified against STRIPE_WEBHOOK_SECRET using the raw request body; settlement is idempotent.',
+  })
+  stripeWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('stripe-signature') signature?: string,
+  ) {
+    if (!req.rawBody) {
+      throw new BadRequestException('Missing request body');
+    }
+    let event: Stripe.Event;
+    try {
+      event = this.stripe.constructEvent(req.rawBody, signature);
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) throw err;
+      throw new BadRequestException('Invalid Stripe signature');
+    }
+    return this.payments.handleStripeEvent(event);
+  }
 
   @Public()
   @ApiHeader({
@@ -543,6 +673,10 @@ export class PaymentWebhookController {
     if (!WEBHOOK_PROVIDERS.includes(provider.toLowerCase())) {
       throw new NotFoundException('Unknown payment provider');
     }
+    if (provider.toLowerCase() === 'card' && this.stripe.enabled) {
+      // Card settlement is Stripe-only once Stripe is configured.
+      throw new NotFoundException('Use /payments/webhook/stripe for card payments');
+    }
     verifyWebhookSignature(provider, dto.gatewayRef, dto.status, headerSignature ?? dto.signature);
     return this.payments.handleGatewayWebhook(dto);
   }
@@ -555,7 +689,7 @@ export class PaymentWebhookController {
     CaregiverPaymentsController,
     PaymentWebhookController,
   ],
-  providers: [PaymentsService],
+  providers: [PaymentsService, StripeService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

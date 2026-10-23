@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BadGatewayException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import {
   PaymentsService,
@@ -284,5 +284,141 @@ describe('PaymentsService', () => {
     await expect(service.confirmCash(caregiver, 'pay-5')).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+});
+
+describe('PaymentsService with Stripe', () => {
+  let prisma: ReturnType<typeof createPrismaMock>;
+  let notifications: ReturnType<typeof createNotificationsMock>;
+  let stripe: {
+    enabled: boolean;
+    createCheckoutSession: ReturnType<typeof vi.fn>;
+    expireSession: ReturnType<typeof vi.fn>;
+  };
+  let service: PaymentsService;
+
+  const session = (overrides: Record<string, unknown> = {}) =>
+    ({
+      id: 'cs_test_1',
+      payment_status: 'paid',
+      currency: 'pkr',
+      amount_total: 6000,
+      metadata: { paymentId: 'pay-1' },
+      ...overrides,
+    }) as never;
+  const event = (type: string, object: unknown) => ({ type, data: { object } }) as never;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    wireTransaction(prisma);
+    notifications = createNotificationsMock();
+    stripe = {
+      enabled: true,
+      createCheckoutSession: vi.fn().mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' }),
+      expireSession: vi.fn().mockResolvedValue(undefined),
+    };
+    service = new PaymentsService(
+      prisma as never,
+      createAuditMock() as never,
+      notifications as never,
+      stripe as never,
+    );
+  });
+
+  it('starts a Stripe Checkout session for card payments and stores its id', async () => {
+    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.payment.findFirst.mockResolvedValue(null);
+    prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
+    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+
+    const result = await service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never });
+
+    expect(stripe.createCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentId: 'pay-1', amount: 6000 }),
+    );
+    expect(result).toMatchObject({
+      payment: { gatewayRef: 'cs_test_1' },
+      checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1',
+    });
+  });
+
+  it('does not use Stripe for cash or wallet payments', async () => {
+    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.payment.findFirst.mockResolvedValue(null);
+    prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
+    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+    await service.initiate(customer, { visitId: 'v-1', method: 'JAZZCASH' as never });
+    expect(stripe.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('fails the pending payment when Stripe cannot create the session', async () => {
+    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.payment.findFirst.mockResolvedValue(null);
+    prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
+    prisma.payment.update.mockResolvedValue({});
+    stripe.createCheckoutSession.mockRejectedValue(new Error('stripe down'));
+
+    await expect(
+      service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never }),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: 'pay-1' },
+      data: { status: 'FAILED' },
+    });
+  });
+
+  it('settles a pending card payment on a paid checkout.session.completed', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    prisma.payment.findUnique.mockResolvedValue({
+      id: 'pay-1',
+      status: 'PENDING',
+      amount: 6000,
+      visitId: 'v-1',
+      visit: { booking: { customer: { id: 'u-cust', phone: '+923001234567' } } },
+    });
+    prisma.payment.update.mockResolvedValue({ id: 'pay-1', status: 'PAID' });
+
+    const result = await service.handleStripeEvent(event('checkout.session.completed', session()));
+
+    expect(result).toEqual({ received: true, settled: true });
+    expect(prisma.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'PAID' }) }),
+    );
+  });
+
+  it('does not settle when the amount or currency does not match', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    for (const bad of [{ amount_total: 100 }, { currency: 'usd' }]) {
+      const result = await service.handleStripeEvent(event('checkout.session.completed', session(bad)));
+      expect(result).toEqual({ received: true, settled: false });
+    }
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('does not settle an unpaid session', async () => {
+    const result = await service.handleStripeEvent(
+      event('checkout.session.completed', session({ payment_status: 'unpaid' })),
+    );
+    expect(result).toEqual({ received: true, settled: false });
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('marks a pending payment FAILED when the session expires', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    prisma.payment.update.mockResolvedValue({});
+    await service.handleStripeEvent(event('checkout.session.expired', session({ payment_status: 'unpaid' })));
+    expect(prisma.payment.update).toHaveBeenCalledWith({ where: { id: 'pay-1' }, data: { status: 'FAILED' } });
+  });
+
+  it('expires the Stripe session when the customer cancels a card payment', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', status: 'PENDING', method: 'CARD', gatewayRef: 'cs_test_1' });
+    prisma.payment.update.mockResolvedValue({ id: 'pay-1', status: 'FAILED' });
+    await service.cancel(customer, 'pay-1');
+    expect(stripe.expireSession).toHaveBeenCalledWith('cs_test_1');
+  });
+
+  it('ignores unrelated Stripe events', async () => {
+    const result = await service.handleStripeEvent(event('charge.refunded', {}));
+    expect(result).toEqual({ received: true, settled: false });
   });
 });

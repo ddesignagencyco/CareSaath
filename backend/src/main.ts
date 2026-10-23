@@ -6,7 +6,7 @@ import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
     new ValidationPipe({
