@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -50,6 +51,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
+import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -209,7 +211,23 @@ export class VisitsService {
     private readonly redis: RedisService,
     private readonly sms: SmsService,
     private readonly config: ConfigService,
+    @Optional() private readonly storage?: StorageService,
   ) {}
+
+  /** Prescriptions on the booking get a viewable `url` (the storage key stays internal). */
+  private async withPrescriptionUrls<
+    T extends { booking: { prescriptions: Array<{ fileKey: string }> } },
+  >(visit: T) {
+    const storage = this.storage;
+    if (!storage) return visit;
+    const prescriptions = await Promise.all(
+      visit.booking.prescriptions.map(async ({ fileKey, ...rest }) => {
+        const { url } = await withFileUrl(storage, { fileKey });
+        return { ...rest, url };
+      }),
+    );
+    return { ...visit, booking: { ...visit.booking, prescriptions } };
+  }
 
   private async checkinTtlSeconds(): Promise<number> {
     return this.config.getNumber('otp.checkinTtlSeconds');
@@ -298,7 +316,7 @@ export class VisitsService {
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
-    return presentVisit(visit);
+    return this.withPrescriptionUrls(presentVisit(visit));
   }
 
   private async loadForCustomer(user: AuthUser, id: string) {
@@ -309,7 +327,7 @@ export class VisitsService {
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
-    return presentVisit(visit);
+    return this.withPrescriptionUrls(presentVisit(visit));
   }
 
   async listCaregiver(user: AuthUser, query: ListVisitsQueryDto): Promise<Paginated<unknown>> {

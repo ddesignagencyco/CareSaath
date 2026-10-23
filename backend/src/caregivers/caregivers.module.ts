@@ -58,7 +58,7 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AuthService } from '../auth/auth.service.js';
-import { StorageService } from '../common/storage/storage.module.js';
+import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 
@@ -281,6 +281,7 @@ export class CaregiversService {
     const cnic = decryptMaybe(profile.cnic, CNIC_KEY);
     return {
       ...profile,
+      documents: await Promise.all(profile.documents.map((doc) => withFileUrl(this.storage, doc))),
       cnic: cnic ? maskValue(cnic, 4) : null,
       photoUrl: await this.photoUrlFor(profile.photoKey),
     };
@@ -361,7 +362,7 @@ export class CaregiversService {
       entityId: doc.id,
       metadata: { type: doc.type },
     });
-    return doc;
+    return withFileUrl(this.storage, doc);
   }
 
   async documentUrl(user: AuthUser, documentId: string) {

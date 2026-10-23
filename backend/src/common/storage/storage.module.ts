@@ -14,6 +14,25 @@ export interface StoredFile {
   sizeBytes: number;
 }
 
+/** How long the URLs embedded in list/detail responses stay valid (signed PDF links expire). */
+export const EMBEDDED_URL_TTL_SECONDS = 30 * 60;
+
+/**
+ * Add a ready-to-open `url` to a stored-file record (anything with a `fileKey`),
+ * so clients can show uploads straight from list/detail responses. A failure to
+ * build one yields `url: null` rather than failing the whole response.
+ */
+export async function withFileUrl<T extends { fileKey: string }>(
+  storage: Pick<StorageService, 'presignedGet'>,
+  record: T,
+): Promise<T & { url: string | null }> {
+  try {
+    return { ...record, url: await storage.presignedGet(record.fileKey, EMBEDDED_URL_TTL_SECONDS) };
+  } catch {
+    return { ...record, url: null };
+  }
+}
+
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',

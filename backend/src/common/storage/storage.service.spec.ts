@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
-import { StorageService } from './storage.module.js';
+import { StorageService, withFileUrl } from './storage.module.js';
 
 describe('StorageService (in-memory fallback)', () => {
   const storage = new StorageService();
@@ -26,5 +26,22 @@ describe('StorageService (in-memory fallback)', () => {
   it('accepts only images for photos', () => {
     expect(() => storage.validateImageUpload('image/png', 10)).not.toThrow();
     expect(() => storage.validateImageUpload('application/pdf', 10)).toThrow(BadRequestException);
+  });
+});
+
+describe('withFileUrl', () => {
+  it('adds a viewable url to a stored-file record', async () => {
+    const storage = { presignedGet: async (key: string) => `https://files.test/${key}` };
+    const result = await withFileUrl(storage, { id: 'd-1', fileKey: 'caregivers/cg/docs/1-cnic.pdf' });
+    expect(result).toEqual({
+      id: 'd-1',
+      fileKey: 'caregivers/cg/docs/1-cnic.pdf',
+      url: 'https://files.test/caregivers/cg/docs/1-cnic.pdf',
+    });
+  });
+
+  it('returns url null instead of failing the response when a URL cannot be built', async () => {
+    const storage = { presignedGet: () => Promise.reject(new Error('boom')) };
+    await expect(withFileUrl(storage, { fileKey: 'k' })).resolves.toEqual({ fileKey: 'k', url: null });
   });
 });
