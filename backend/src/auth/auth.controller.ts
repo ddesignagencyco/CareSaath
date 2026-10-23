@@ -51,7 +51,7 @@ export class AuthController {
     },
   })
   verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto.phone, dto.code);
+    return this.auth.verifyOtp(dto.phone, dto.code, dto.audience);
   }
 
   @Public()

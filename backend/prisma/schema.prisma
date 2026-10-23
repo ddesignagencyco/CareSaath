@@ -551,6 +551,8 @@ model PayoutRequest {
   status          PayoutStatus @default(REQUESTED)
   requestedAt     DateTime     @default(now())
   processedAt     DateTime?
+  note            String?
+  rejectionReason String?
 
   caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id])
   payoutAccount   PayoutAccount    @relation(fields: [payoutAccountId], references: [id])
@@ -600,6 +602,8 @@ model SafetyIncident {
   status          IncidentStatus   @default(OPEN)
   assignedAdminId String?
   resolvedAt      DateTime?
+  latitude        Decimal?         @db.Decimal(9, 6)
+  longitude       Decimal?         @db.Decimal(9, 6)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -655,6 +659,7 @@ model Notification {
   payload   Json
   status    NotificationStatus @default(QUEUED)
   sentAt    DateTime?
+  readAt    DateTime?
   createdAt DateTime           @default(now())
 
   user User @relation(fields: [userId], references: [id])

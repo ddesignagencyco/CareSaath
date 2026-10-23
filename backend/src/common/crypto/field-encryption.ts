@@ -39,7 +39,8 @@ export function isEncrypted(value: string): boolean {
 
 /**
  * Transparently decrypt a field that may have been written before encryption
- * was introduced (legacy plaintext rows). Returns the plaintext either way.
+ * was introduced (legacy plaintext rows). Returns null when decryption fails
+ * (wrong key / corrupt value) so ciphertext is never exposed.
  */
 export function decryptMaybe(stored: string | null | undefined, key: Buffer): string | null {
   if (stored === null || stored === undefined) return null;
@@ -47,7 +48,7 @@ export function decryptMaybe(stored: string | null | undefined, key: Buffer): st
   try {
     return decryptField(stored, key);
   } catch {
-    return stored;
+    return null;
   }
 }
 

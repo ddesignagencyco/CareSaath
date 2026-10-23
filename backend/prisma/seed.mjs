@@ -62,8 +62,8 @@ function hoursInto(day, hour) {
 const adminPhone = process.env['ADMIN_PHONE'] ?? '+923000000000';
 const adminUser = await prisma.user.upsert({
   where: { phone: adminPhone },
-  update: { role: UserRole.ADMIN },
-  create: { phone: adminPhone, role: UserRole.ADMIN, fullName: 'Platform Admin' },
+  update: { role: UserRole.ADMIN, lastLoginAt: now },
+  create: { phone: adminPhone, role: UserRole.ADMIN, fullName: 'Platform Admin', lastLoginAt: now },
 });
 console.log(`Seeded admin user ${adminPhone}`);
 
@@ -169,8 +169,9 @@ const customers = [];
 for (const c of CUSTOMERS) {
   const user = await prisma.user.upsert({
     where: { phone: c.phone },
-    update: { fullName: c.fullName, role: UserRole.CUSTOMER, preferredLanguage: c.preferredLanguage },
+    update: { fullName: c.fullName, role: UserRole.CUSTOMER, preferredLanguage: c.preferredLanguage, lastLoginAt: now },
     create: {
+      lastLoginAt: now,
       phone: c.phone,
       role: UserRole.CUSTOMER,
       fullName: c.fullName,
@@ -185,20 +186,22 @@ const caregiverUsers = [];
 for (const c of CAREGIVERS) {
   const user = await prisma.user.upsert({
     where: { phone: c.phone },
-    update: { fullName: c.fullName, role: UserRole.CAREGIVER },
-    create: { phone: c.phone, role: UserRole.CAREGIVER, fullName: c.fullName },
+    update: { fullName: c.fullName, role: UserRole.CAREGIVER, lastLoginAt: now },
+    create: { phone: c.phone, role: UserRole.CAREGIVER, fullName: c.fullName, lastLoginAt: now },
   });
   caregiverUsers.push(user);
   const commission = await prisma.commissionRate.findUniqueOrThrow({
     where: { category: c.specialty },
   });
   const approved = c.verificationStatus === 'APPROVED';
+  const reverifyDueAt = new Date(now.getTime() + 365 * 24 * 3600 * 1000);
   const profile = await prisma.caregiverProfile.upsert({
     where: { userId: user.id },
     update: {
       specialty: c.specialty,
       verificationStatus: c.verificationStatus,
       ratePerVisit: c.ratePerVisit,
+      reverifyDueAt: approved ? reverifyDueAt : null,
     },
     create: {
       userId: user.id,
@@ -213,6 +216,7 @@ for (const c of CAREGIVERS) {
       commissionRateId: commission.id,
       verificationStatus: c.verificationStatus,
       approvedAt: approved ? now : null,
+      reverifyDueAt: approved ? reverifyDueAt : null,
       ratingAverage: c.ratingAverage,
       ratingCount: c.ratingCount,
     },

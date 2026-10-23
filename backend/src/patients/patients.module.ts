@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -29,6 +30,7 @@ import {
 } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 /** ERD §3.2 / TRD §9: patient medical context is stored encrypted at rest. */
@@ -88,25 +90,26 @@ export class UpdatePatientDto {
   @IsEnum(PatientRelation)
   relationship?: PatientRelation;
 
-  @ApiPropertyOptional({ example: '1958-11-02' })
+  @ApiPropertyOptional({ example: '1958-11-02', nullable: true, description: 'null clears the date of birth' })
   @IsOptional()
   @IsDateString()
-  dateOfBirth?: string;
+  dateOfBirth?: string | null;
 
-  @ApiPropertyOptional({ example: 'female' })
+  @ApiPropertyOptional({ example: 'female', nullable: true, description: 'null clears the gender' })
   @IsOptional()
   @IsString()
   @MaxLength(40)
-  gender?: string;
+  gender?: string | null;
 
   @ApiPropertyOptional({
     example: 'Post-operative knee recovery; limited stairs.',
-    description: 'Updated medical context (stored encrypted).',
+    description: 'Updated medical context (stored encrypted). null or empty clears it.',
+    nullable: true,
   })
   @IsOptional()
   @IsString()
   @MaxLength(4000)
-  medicalContext?: string;
+  medicalContext?: string | null;
 }
 
 @Injectable()
@@ -166,7 +169,7 @@ export class PatientsService {
         ...(dto.dateOfBirth !== undefined
           ? { dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : null }
           : {}),
-        ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
+        ...(dto.gender !== undefined ? { gender: dto.gender || null } : {}),
         ...(dto.medicalContext !== undefined
           ? {
               medicalContext: dto.medicalContext
@@ -190,7 +193,7 @@ export class PatientsService {
     const bookingCount = await this.prisma.booking.count({ where: { patientId: id } });
     if (bookingCount > 0) {
       // Keep history: refuse hard delete when referenced (design).
-      throw new NotFoundException(
+      throw new ConflictException(
         'Patient has bookings; medical records must be retained for audit',
       );
     }
@@ -207,6 +210,7 @@ export class PatientsService {
 
 @ApiTags('Customer - Patients')
 @ApiBearerAuth()
+@Roles('CUSTOMER')
 @Controller('customer/patients')
 export class PatientsController {
   constructor(private readonly patients: PatientsService) {}

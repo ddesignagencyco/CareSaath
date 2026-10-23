@@ -121,8 +121,9 @@ export class CreateBookingDto {
   timeWindowEnd!: string;
 
   @ApiPropertyOptional({
-    description: 'Recurring days-of-week (1=Mon..7=Sun). Required for RECURRING bookings.',
+    description: 'Recurring days-of-week as integers (1=Mon..7=Sun). Required for RECURRING bookings.',
     example: [1, 3, 5],
+    type: [Number],
   })
   @IsOptional()
   @IsArray()
@@ -305,7 +306,7 @@ export class BookingsService {
     let promoId: string | null = null;
     let discountAmount = 0;
     if (dto.promoCode) {
-      const quote = await this.promos.quote(dto.promoCode, rateSnapshot, now);
+      const quote = await this.promos.quote(dto.promoCode, rateSnapshot, now, user.sub);
       promoId = quote.promo.id;
       discountAmount = quote.discountAmount;
     }
@@ -370,7 +371,18 @@ export class BookingsService {
       visits: { orderBy: { scheduledDate: 'asc' as const } },
       patient: { select: { id: true, name: true, relationship: true } },
       address: true,
-      caregiver: { select: { id: true, specialty: true, userId: true } },
+      caregiver: {
+        select: {
+          id: true,
+          specialty: true,
+          userId: true,
+          licenseNumber: true,
+          licenseBody: true,
+          ratingAverage: true,
+          ratingCount: true,
+          user: { select: { fullName: true } },
+        },
+      },
       prescriptions: {
         orderBy: { createdAt: 'desc' as const },
         select: {

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Injectable,
@@ -10,6 +11,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -26,11 +28,12 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
-import { PromoDiscountType, UserRole } from '../generated/prisma/client.js';
+import { BookingStatus, PromoDiscountType, UserRole } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -62,12 +65,12 @@ export class CreatePromoDto {
   @IsDateString()
   validTo!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true, description: 'Maximum redemptions; null or omitted means unlimited' })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Type(() => Number)
-  maxUses?: number;
+  maxUses?: number | null;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
@@ -98,17 +101,44 @@ export class UpdatePromoDto {
   @IsOptional()
   validTo?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true, description: 'Maximum redemptions; null clears the limit (unlimited)' })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Type(() => Number)
-  maxUses?: number;
+  maxUses?: number | null;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+}
+
+export class PromoQuoteQueryDto {
+  @ApiProperty({ example: 'WELCOME10' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(24)
+  code!: string;
+
+  @ApiProperty({ format: 'uuid', description: 'Caregiver whose visit rate the discount is applied to' })
+  @IsUUID()
+  caregiverId!: string;
+}
+
+/** A PERCENT promo is capped at 100 and the validity window must be forward in time. */
+function assertPromoRules(rule: {
+  discountType: PromoDiscountType;
+  discountValue: number;
+  validFrom: Date;
+  validTo: Date;
+}) {
+  if (rule.discountType === PromoDiscountType.PERCENT && rule.discountValue > 100) {
+    throw new BadRequestException('A percentage discount cannot exceed 100');
+  }
+  if (rule.validTo <= rule.validFrom) {
+    throw new BadRequestException('validTo must be after validFrom');
+  }
 }
 
 /**
@@ -140,13 +170,20 @@ export class PromosService {
   }
 
   async create(admin: AuthUser, dto: CreatePromoDto) {
-    const existing = await this.prisma.promoCode.findUnique({ where: { code: dto.code } });
+    const code = dto.code.trim().toUpperCase();
+    assertPromoRules({
+      discountType: dto.discountType,
+      discountValue: dto.discountValue,
+      validFrom: new Date(dto.validFrom),
+      validTo: new Date(dto.validTo),
+    });
+    const existing = await this.prisma.promoCode.findUnique({ where: { code } });
     if (existing) {
-      throw new BadRequestException('A promo code with this code already exists');
+      throw new ConflictException('A promo code with this code already exists');
     }
     const promo = await this.prisma.promoCode.create({
       data: {
-        code: dto.code.toUpperCase(),
+        code,
         discountType: dto.discountType,
         discountValue: dto.discountValue,
         validFrom: new Date(dto.validFrom),
@@ -170,6 +207,12 @@ export class PromosService {
     if (!promo) {
       throw new NotFoundException('Promo code not found');
     }
+    assertPromoRules({
+      discountType: dto.discountType ?? promo.discountType,
+      discountValue: dto.discountValue ?? promo.discountValue,
+      validFrom: dto.validFrom ? new Date(dto.validFrom) : promo.validFrom,
+      validTo: dto.validTo ? new Date(dto.validTo) : promo.validTo,
+    });
     const updated = await this.prisma.promoCode.update({
       where: { id },
       data: {
@@ -191,7 +234,29 @@ export class PromosService {
   }
 
   /** Validate a code and return the discount for the given base amount. */
-  async quote(code: string, baseAmount: number, now = new Date()) {
+  /** Customer-facing preview of what a code would take off a caregiver's visit rate. */
+  async previewForCaregiver(customerId: string, query: PromoQuoteQueryDto) {
+    const caregiver = await this.prisma.caregiverProfile.findFirst({
+      where: { id: query.caregiverId, verificationStatus: 'APPROVED', user: { status: 'ACTIVE' } },
+      select: { ratePerVisit: true },
+    });
+    if (!caregiver) {
+      throw new NotFoundException('Caregiver not available');
+    }
+    const { promo, discountAmount } = await this.quote(
+      query.code,
+      caregiver.ratePerVisit,
+      new Date(),
+      customerId,
+    );
+    return {
+      code: promo.code,
+      discountAmount,
+      perVisitAfterDiscount: caregiver.ratePerVisit - discountAmount,
+    };
+  }
+
+  async quote(code: string, baseAmount: number, now = new Date(), customerId?: string) {
     const promo = await this.prisma.promoCode.findUnique({
       where: { code: code.toUpperCase() },
     });
@@ -203,6 +268,18 @@ export class PromosService {
     }
     if (promo.maxUses !== null && promo.usesCount >= promo.maxUses) {
       throw new BadRequestException('Promo code has reached its usage limit');
+    }
+    if (customerId) {
+      const alreadyUsed = await this.prisma.booking.count({
+        where: {
+          customerId,
+          promoCodeId: promo.id,
+          status: { notIn: [BookingStatus.CANCELLED, BookingStatus.DECLINED] },
+        },
+      });
+      if (alreadyUsed > 0) {
+        throw new BadRequestException('You have already used this promo code');
+      }
     }
     return { promo, discountAmount: computeDiscount(baseAmount, promo.discountType, promo.discountValue) };
   }
@@ -255,8 +332,26 @@ export class PromosController {
   }
 }
 
+@ApiTags('Customer - Bookings')
+@ApiBearerAuth()
+@Roles(UserRole.CUSTOMER)
+@Controller('promos')
+export class PromoQuoteController {
+  constructor(private readonly promos: PromosService) {}
+
+  @Get('quote')
+  @ApiOperation({
+    summary: 'Preview a promo code discount',
+    description:
+      'Validates a promo code for the signed-in customer and returns the per-visit discount for the given caregiver, so the review step can show the final price before booking. The discount applies to every visit of the booking; the code is redeemed once per booking.',
+  })
+  quote(@CurrentUser() user: AuthUser, @Query() query: PromoQuoteQueryDto) {
+    return this.promos.previewForCaregiver(user.sub, query);
+  }
+}
+
 @Module({
-  controllers: [PromosController],
+  controllers: [PromosController, PromoQuoteController],
   providers: [PromosService],
   exports: [PromosService],
 })

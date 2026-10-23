@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Injectable,
+  ConflictException,
   Module,
   NotFoundException,
   Param,
@@ -21,7 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import {
   PaymentStatus,
   PayoutAccountType,
@@ -115,7 +116,7 @@ export class UpdatePayoutAccountDto {
 
 export class CreatePayoutRequestDto {
   @ApiProperty({ format: 'uuid', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Saved payout account UUID' })
-  @IsString()
+  @IsUUID()
   payoutAccountId!: string;
 
   @ApiProperty({ example: 48000, description: 'Withdrawal amount in paisa (e.g. 48000 = PKR 480)' })
@@ -150,7 +151,13 @@ const PAYOUT_ACCOUNT_SELECT = {
 } satisfies Prisma.PayoutAccountSelect;
 
 function presentAccount<T extends { accountNumber: string }>(account: T) {
-  return { ...account, accountNumber: maskAccountNumber(decryptAccountNumber(account.accountNumber)) };
+  let masked: string | null = null;
+  try {
+    masked = maskAccountNumber(decryptAccountNumber(account.accountNumber));
+  } catch {
+    // Undecryptable (e.g. written under a different key): never fail the whole list.
+  }
+  return { ...account, accountNumber: masked };
 }
 
 export class ListPayoutRequestsQueryDto {
@@ -271,7 +278,15 @@ export class PayoutsService {
     if (inUse > 0) {
       throw new BadRequestException('Cannot remove an account with an in-progress payout');
     }
-    await this.prisma.payoutAccount.delete({ where: { id } });
+    try {
+      await this.prisma.payoutAccount.delete({ where: { id } });
+    } catch (err) {
+      // P2003: foreign key violation — the account has payout history.
+      if ((err as { code?: string }).code === 'P2003') {
+        throw new ConflictException('This account has payout history and cannot be removed');
+      }
+      throw err;
+    }
     await this.audit.log({
       actorId: user.sub,
       action: 'payout_account.deleted',
@@ -466,12 +481,14 @@ export class PayoutsService {
     if (to === PayoutStatus.REJECTED && !dto.reason) {
       throw new BadRequestException('A reason is required to reject a payout');
     }
-    const updated = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const result = await tx.payoutRequest.update({
         where: { id },
         data: {
           status: to,
           processedAt: to === PayoutStatus.PAID || to === PayoutStatus.REJECTED ? new Date() : null,
+          ...(dto.note !== undefined ? { note: dto.note } : {}),
+          ...(to === PayoutStatus.REJECTED ? { rejectionReason: dto.reason } : {}),
         },
       });
       // Releasing a rejected payout frees its payments for a new request.
@@ -482,6 +499,15 @@ export class PayoutsService {
         });
       }
       return result;
+    });
+    const detailed = await this.prisma.payoutRequest.findUniqueOrThrow({
+      where: { id },
+      include: {
+        caregiver: {
+          select: { id: true, specialty: true, user: { select: { fullName: true, phone: true } } },
+        },
+        payoutAccount: { select: PAYOUT_ACCOUNT_SELECT },
+      },
     });
     await this.audit.log({
       actorId: admin.sub,
@@ -495,9 +521,12 @@ export class PayoutsService {
       phone: payout.caregiver.user.phone,
       event: `payout.${to.toLowerCase()}`,
       payload: { payoutRequestId: id, amount: payout.amount, status: to },
-      message: `Your payout request is now ${to.replace(/_/g, ' ').toLowerCase()}.`,
+      message: `Your payout request is now ${to.replace(/_/g, ' ').toLowerCase()}.${
+        to === PayoutStatus.REJECTED && dto.reason ? ` Reason: ${dto.reason}` : ''
+      }`,
     });
-    return updated;
+    // Same shape as the admin list so clients can swap the row in place.
+    return { ...detailed, payoutAccount: presentAccount(detailed.payoutAccount) };
   }
 
   approve(admin: AuthUser, id: string, dto: ResolvePayoutDto) {

@@ -120,7 +120,7 @@ describe('Admin: promos, disputes, analytics, reports, safety (e2e)', () => {
         validFrom: '2026-01-01T00:00:00.000Z',
         validTo: '2027-01-01T00:00:00.000Z',
       });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
   });
 
   it('applies the promo discount when creating a booking', async () => {
@@ -244,6 +244,6 @@ describe('Admin: promos, disputes, analytics, reports, safety (e2e)', () => {
       .set(bearer(adminToken));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/csv');
-    expect(res.text.split('\n')[0]).toContain('id,customerId,caregiverId');
+    expect(res.text.split('\n')[0]).toContain('id,customerId,customerName,caregiverId');
   });
 });

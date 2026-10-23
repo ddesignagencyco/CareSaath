@@ -20,12 +20,14 @@ const ALLOWED_MIME_TYPES = [
   'image/webp',
   'application/pdf',
 ];
+const IMAGE_MIME_TYPES = ALLOWED_MIME_TYPES.filter((m) => m.startsWith('image/'));
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /**
- * File storage backed by Cloudinary (TRD §7). Documents and photos are uploaded
- * as raw/auto resources and referenced by their Cloudinary public_id (`fileKey`).
- * `presignedGet` returns a time-limited signed delivery URL.
+ * File storage backed by Cloudinary (TRD §7). Images are uploaded as public
+ * `image` resources and PDFs as public `raw` resources (public_id ends in
+ * `.pdf`), referenced by their Cloudinary public_id (`fileKey`). `presignedGet`
+ * returns the secure delivery URL; the resource type is derived from the key.
  *
  * When Cloudinary credentials are absent (local dev without a Cloudinary account,
  * unit/e2e tests) the service falls back to an in-memory driver so uploads still
@@ -70,7 +72,10 @@ export class StorageService implements OnModuleInit {
     mimeType: string,
   ): Promise<StoredFile> {
     this.validateUpload(mimeType, buffer.length);
-    const publicId = `${prefix}/${Date.now()}-${filename.replace(/[^\w.-]/g, '_')}`;
+    const isPdf = mimeType === 'application/pdf';
+    const safeName = filename.replace(/[^\w.-]/g, '_');
+    // Raw resources keep their extension in the public_id, so make sure PDFs have one.
+    const publicId = `${prefix}/${Date.now()}-${isPdf && !safeName.toLowerCase().endsWith('.pdf') ? `${safeName}.pdf` : safeName}`;
 
     if (!this.configured) {
       this.fallback.set(publicId, { buffer, mimeType });
@@ -81,7 +86,7 @@ export class StorageService implements OnModuleInit {
       const stream = cloudinary.uploader.upload_stream(
         {
           public_id: publicId,
-          resource_type: 'auto',
+          resource_type: isPdf ? 'raw' : 'image',
           folder: this.folder,
           overwrite: false,
         },
@@ -103,15 +108,29 @@ export class StorageService implements OnModuleInit {
     };
   }
 
+  /** Resource type a stored key was uploaded as: PDFs are raw, everything else image. */
+  resourceTypeFor(fileKey: string): 'image' | 'raw' {
+    return fileKey.toLowerCase().endsWith('.pdf') ? 'raw' : 'image';
+  }
+
+  /** Delivery URL for a stored file. Uploads are public, so no signature/expiry is needed. */
   async presignedGet(fileKey: string, ttlSeconds = 300): Promise<string> {
     if (!this.configured) {
       return `https://storage.local/${fileKey}?expires=${ttlSeconds}`;
     }
-    const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
-    return cloudinary.utils.private_download_url(fileKey, 'auto', {
-      resource_type: 'auto',
-      expires_at: expiresAt,
+    return cloudinary.url(fileKey, {
+      resource_type: this.resourceTypeFor(fileKey),
+      type: 'upload',
+      secure: true,
     });
+  }
+
+  /** Photos must be images; PDFs are only valid for documents. */
+  validateImageUpload(mimetype: string, size: number): void {
+    if (!IMAGE_MIME_TYPES.includes(mimetype)) {
+      throw new BadRequestException('Only JPEG, PNG or WEBP images are allowed');
+    }
+    this.validateUpload(mimetype, size);
   }
 
   validateUpload(mimetype: string, size: number): void {

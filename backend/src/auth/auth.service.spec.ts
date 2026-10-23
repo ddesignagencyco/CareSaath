@@ -96,7 +96,8 @@ describe('AuthService.verifyOtp', () => {
       status: 'ACTIVE',
     });
     const tokens = await service.verifyOtp('+923001234567', '123456');
-    expect(tokens).toEqual({ accessToken: 'signed-token', refreshToken: 'signed-token' });
+    expect(tokens).toMatchObject({ accessToken: 'signed-token', refreshToken: 'signed-token' });
+    expect(tokens.user).toMatchObject({ id: 'u-1', role: 'CUSTOMER' });
     expect(redis.client.del).toHaveBeenCalled();
   });
 

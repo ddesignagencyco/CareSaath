@@ -4,7 +4,9 @@ import { VerificationService } from './verification.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
   createAuditMock,
+  createNotificationsMock,
   createPrismaMock,
+  createRedisMock,
   createStorageMock,
   wireTransaction,
 } from '../../test/test-helpers.js';
@@ -15,6 +17,8 @@ function pendingProfile(overrides: Record<string, unknown> = {}) {
   return {
     id: 'cg-1',
     userId: 'u-cg',
+    cnic: null,
+    user: { id: 'u-cg', phone: '+923001234569', fullName: 'Cg', status: 'ACTIVE' },
     verificationStatus: 'PENDING',
     documents: [{ id: 'doc-1', fileKey: 'k', mimeType: 'application/pdf' }],
     ...overrides,
@@ -24,13 +28,21 @@ function pendingProfile(overrides: Record<string, unknown> = {}) {
 describe('VerificationService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let storage: ReturnType<typeof createStorageMock>;
+  let redis: ReturnType<typeof createRedisMock>;
   let service: VerificationService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     storage = createStorageMock();
     wireTransaction(prisma);
-    service = new VerificationService(prisma as never, createAuditMock() as never, storage as never);
+    redis = createRedisMock();
+    service = new VerificationService(
+      prisma as never,
+      createAuditMock() as never,
+      storage as never,
+      redis as never,
+      createNotificationsMock() as never,
+    );
   });
 
   it('throws when the caregiver does not exist', async () => {
@@ -61,6 +73,21 @@ describe('VerificationService', () => {
       }),
     );
     expect(prisma.credentialReview.create).toHaveBeenCalled();
+    expect(redis.deleteByPattern).toHaveBeenCalledWith('search:caregivers:*');
+  });
+
+  it('lifts a suspension on reactivate without resetting approval dates', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(
+      pendingProfile({ verificationStatus: 'SUSPENDED', userId: 'u-cg' }),
+    );
+    prisma.user.update.mockResolvedValue({});
+    prisma.caregiverProfile.update.mockResolvedValue({});
+    await service.reactivate(admin, 'cg-1');
+    expect(prisma.caregiverProfile.update).toHaveBeenCalledWith({
+      where: { id: 'cg-1' },
+      data: { verificationStatus: 'APPROVED' },
+    });
+    expect(redis.deleteByPattern).toHaveBeenCalledWith('search:caregivers:*');
   });
 
   it('refuses to reject an approved caregiver (use suspend instead)', async () => {

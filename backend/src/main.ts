@@ -1,3 +1,4 @@
+import './config/load-env.js';
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -15,7 +16,7 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.enableCors();
+  app.enableCors({ exposedHeaders: ['Content-Disposition', 'X-Cache'] });
 
   const swaggerDescription = [
     '## Welcome to CareSaath API Documentation',

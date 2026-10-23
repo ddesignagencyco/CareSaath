@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -21,7 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import {
   BookingStatus,
   PaymentMethod,
@@ -49,6 +50,15 @@ const GATEWAY_METHODS: PaymentMethod[] = [
   PaymentMethod.EASYPAISA,
 ];
 
+/** A gateway payment still PENDING after this long is abandoned (set to FAILED) on the next attempt. */
+const GATEWAY_PENDING_TTL_MINUTES = Number(process.env['PAYMENT_PENDING_TTL_MINUTES'] ?? 30);
+
+/** Hosted-checkout base; the gateway integration is TBD (TRD §6.5) until merchant credentials exist. */
+function checkoutUrlFor(method: PaymentMethod, gatewayRef: string): string {
+  const base = process.env['PAYMENT_CHECKOUT_BASE_URL'] ?? 'https://checkout.caresaath.pk';
+  return `${base.replace(/\/+$/, '')}/${method.toLowerCase()}/${encodeURIComponent(gatewayRef)}`;
+}
+
 export function isGatewayMethod(method: PaymentMethod): boolean {
   return GATEWAY_METHODS.includes(method);
 }
@@ -68,18 +78,12 @@ export function splitCommission(
 
 export class InitiatePaymentDto {
   @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Visit UUID to pay for' })
-  @IsString()
+  @IsUUID()
   visitId!: string;
 
   @ApiProperty({ enum: PaymentMethod, example: PaymentMethod.JAZZCASH, description: 'Selected payment method (CASH, JAZZCASH, EASYPAISA, CARD)' })
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
-
-  @ApiPropertyOptional({ example: 60000, description: 'Amount in paisa (defaults to visit rate)' })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  amount?: number;
 }
 
 export class CashConfirmationDto {
@@ -110,6 +114,11 @@ export class ListPaymentsQueryDto {
   @IsOptional()
   @IsEnum(PaymentStatus)
   status?: PaymentStatus;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only payments for this visit' })
+  @IsOptional()
+  @IsUUID()
+  visitId?: string;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -157,7 +166,18 @@ export class PaymentsService {
   private async loadPayableVisit(user: AuthUser, visitId: string) {
     const visit = await this.prisma.visit.findFirst({
       where: { id: visitId, booking: { customerId: user.sub } },
-      include: { booking: { include: { caregiver: { include: { commissionRate: true } } } } },
+      include: {
+        booking: {
+          include: {
+            caregiver: {
+              include: {
+                commissionRate: true,
+                user: { select: { id: true, phone: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
@@ -171,9 +191,28 @@ export class PaymentsService {
     return visit;
   }
 
-  /** FR-C8, TRD §6.5: start a payment for a visit. */
+  /** Abandon gateway payments left PENDING past the TTL so they stop blocking the visit. */
+  private async expireStaleGatewayPayments(visitId: string) {
+    const cutoff = new Date(Date.now() - GATEWAY_PENDING_TTL_MINUTES * 60 * 1000);
+    await this.prisma.payment.updateMany({
+      where: {
+        visitId,
+        status: PaymentStatus.PENDING,
+        method: { in: GATEWAY_METHODS },
+        createdAt: { lt: cutoff },
+      },
+      data: { status: PaymentStatus.FAILED },
+    });
+  }
+
+  /**
+   * FR-C8, TRD §6.5: start a payment for a visit. The amount is always computed
+   * server-side from the booking's rate snapshot minus its discount. Gateway
+   * methods return `{ payment, checkoutUrl }`; cash returns the payment row.
+   */
   async initiate(user: AuthUser, dto: InitiatePaymentDto) {
     const visit = await this.loadPayableVisit(user, dto.visitId);
+    await this.expireStaleGatewayPayments(visit.id);
     const existing = await this.prisma.payment.findFirst({
       where: { visitId: visit.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID] } },
     });
@@ -184,7 +223,7 @@ export class PaymentsService {
           : 'A payment for this visit is already in progress',
       );
     }
-    const amount = dto.amount ?? visit.booking.rateSnapshot - visit.booking.discountAmount;
+    const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
     if (amount <= 0) {
       throw new BadRequestException('Payment amount must be positive');
     }
@@ -211,14 +250,48 @@ export class PaymentsService {
     });
     if (isGatewayMethod(dto.method)) {
       // The gateway integration is TBD (TRD §6.5); the ref stands in for the
-      // hosted-checkout redirect reference until merchant credentials exist.
+      // hosted-checkout reference until merchant credentials exist.
       const gatewayRef = `gw_${payment.id}`;
-      return this.prisma.payment.update({
+      const withRef = await this.prisma.payment.update({
         where: { id: payment.id },
         data: { gatewayRef },
       });
+      return { payment: withRef, checkoutUrl: checkoutUrlFor(dto.method, gatewayRef) };
     }
+    const caregiverUser = visit.booking.caregiver.user;
+    await this.notifications.notify({
+      userId: caregiverUser.id,
+      phone: caregiverUser.phone,
+      event: 'payment.cash.initiated',
+      payload: { paymentId: payment.id, visitId: visit.id, amount },
+      message: `The customer will pay Rs ${amount / 100} in cash for your visit. Confirm once you have received it.`,
+    });
     return payment;
+  }
+
+  /** The customer abandons a payment that is still PENDING so another method can be tried. */
+  async cancel(user: AuthUser, id: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id, visit: { booking: { customerId: user.sub } } },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status !== PaymentStatus.PENDING) {
+      throw new BadRequestException(`Only a pending payment can be cancelled (this one is ${payment.status})`);
+    }
+    const updated = await this.prisma.payment.update({
+      where: { id },
+      data: { status: PaymentStatus.FAILED },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'payment.cancelled',
+      entityType: 'Payment',
+      entityId: id,
+      metadata: { method: payment.method },
+    });
+    return updated;
   }
 
   private async markPaid(paymentId: string, source: string) {
@@ -323,6 +396,7 @@ export class PaymentsService {
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       visit: { booking: { customerId: user.sub } },
+      ...(query.visitId ? { visitId: query.visitId } : {}),
       ...(query.status ? { status: query.status } : {}),
     };
     const [total, items] = await this.prisma.$transaction([
@@ -360,7 +434,7 @@ export class CustomerPaymentsController {
   @Post()
   @ApiOperation({
     summary: 'Initiate visit payment',
-    description: 'Creates a payment transaction for a visit via cash or digital mobile gateway.',
+    description: 'Creates a payment for a visit. The amount is always the booking rate minus its discount. Cash returns the payment row; CARD / JAZZCASH / EASYPAISA return { payment, checkoutUrl } for the hosted checkout.',
   })
   initiate(@CurrentUser() user: AuthUser, @Body() dto: InitiatePaymentDto) {
     return this.payments.initiate(user, dto);
@@ -373,6 +447,15 @@ export class CustomerPaymentsController {
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListPaymentsQueryDto) {
     return this.payments.listForCustomer(user, query);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Cancel a pending payment',
+    description: 'Abandons a payment that is still PENDING (sets it to FAILED) so another method can be used for the visit. Gateway payments also expire automatically after PAYMENT_PENDING_TTL_MINUTES (default 30).',
+  })
+  cancel(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payments.cancel(user, id);
   }
 
   @Get(':id')

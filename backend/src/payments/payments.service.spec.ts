@@ -26,7 +26,11 @@ function payableVisit(overrides: Record<string, unknown> = {}) {
       customerId: 'u-cust',
       rateSnapshot: 6000,
       discountAmount: 0,
-      caregiver: { id: 'cg-1', commissionRate: { percentage: 20 } },
+      caregiver: {
+        id: 'cg-1',
+        commissionRate: { percentage: 20 },
+        user: { id: 'u-cg', phone: '+923001234568' },
+      },
     },
     ...overrides,
   };
@@ -111,7 +115,35 @@ describe('PaymentsService', () => {
 
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'JAZZCASH' as never });
 
-    expect(result).toMatchObject({ gatewayRef: 'gw_pay-2' });
+    expect(result).toMatchObject({
+      payment: { gatewayRef: 'gw_pay-2' },
+      checkoutUrl: expect.stringContaining('gw_pay-2'),
+    });
+  });
+
+  it('always charges the booking rate minus discount, ignoring any client amount', async () => {
+    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.payment.findFirst.mockResolvedValue(null);
+    prisma.payment.create.mockImplementation(async ({ data }: never) => ({ id: 'pay-1', ...data }));
+
+    const result = await service.initiate(customer, {
+      visitId: 'v-1',
+      method: 'CASH' as never,
+      amount: 1,
+    } as never);
+
+    expect(result).toMatchObject({ amount: 6000 });
+  });
+
+  it('lets a customer abandon a pending payment', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', status: 'PENDING', method: 'CARD' });
+    prisma.payment.update.mockResolvedValue({ id: 'pay-1', status: 'FAILED' });
+    await expect(service.cancel(customer, 'pay-1')).resolves.toMatchObject({ status: 'FAILED' });
+  });
+
+  it('refuses to cancel a payment that is no longer pending', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', status: 'PAID', method: 'CASH' });
+    await expect(service.cancel(customer, 'pay-1')).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects a second payment on the same visit', async () => {

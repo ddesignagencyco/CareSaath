@@ -143,10 +143,19 @@ export class DisputesService {
     return dispute;
   }
 
+  private disputeInclude() {
+    return {
+      raisedBy: { select: { id: true, fullName: true, role: true } },
+      againstUser: { select: { id: true, fullName: true, role: true } },
+      visit: { select: { id: true, bookingId: true, status: true, scheduledDate: true } },
+    } satisfies Prisma.DisputeInclude;
+  }
+
   listMine(user: AuthUser): Promise<unknown[]> {
     return this.prisma.dispute.findMany({
       where: { OR: [{ raisedById: user.sub }, { againstUserId: user.sub }] },
       orderBy: { createdAt: 'desc' },
+      include: { visit: { select: { id: true, bookingId: true, status: true, scheduledDate: true } } },
     });
   }
 
@@ -159,11 +168,7 @@ export class DisputesService {
         orderBy: { createdAt: 'asc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        include: {
-          raisedBy: { select: { id: true, fullName: true, role: true } },
-          againstUser: { select: { id: true, fullName: true, role: true } },
-          visit: { select: { id: true, bookingId: true, status: true } },
-        },
+        include: this.disputeInclude(),
       }),
     ]);
     return paginate(items, query.page, query.limit, total);
@@ -186,6 +191,7 @@ export class DisputesService {
         resolvedById: admin.sub,
         resolvedAt: new Date(),
       },
+      include: this.disputeInclude(),
     });
     await this.audit.log({
       actorId: admin.sub,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PromosService, computeDiscount } from './promos.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { createAuditMock, createPrismaMock } from '../../test/test-helpers.js';
@@ -52,6 +52,41 @@ describe('PromosService', () => {
         discountValue: 10,
         validFrom: '2026-01-01T00:00:00.000Z',
         validTo: '2026-12-31T00:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('checks duplicates case-insensitively', async () => {
+    prisma.promoCode.findUnique.mockResolvedValue({ id: 'p-1', code: 'WELCOME10' });
+    await expect(
+      service.create(admin, {
+        code: 'welcome10',
+        discountType: 'PERCENT' as never,
+        discountValue: 10,
+        validFrom: '2026-01-01T00:00:00.000Z',
+        validTo: '2026-12-31T00:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.promoCode.findUnique).toHaveBeenCalledWith({ where: { code: 'WELCOME10' } });
+  });
+
+  it('rejects a percentage above 100 and an inverted validity window', async () => {
+    await expect(
+      service.create(admin, {
+        code: 'BIG',
+        discountType: 'PERCENT' as never,
+        discountValue: 150,
+        validFrom: '2026-01-01T00:00:00.000Z',
+        validTo: '2026-12-31T00:00:00.000Z',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create(admin, {
+        code: 'BACKWARDS',
+        discountType: 'FIXED' as never,
+        discountValue: 100,
+        validFrom: '2026-12-31T00:00:00.000Z',
+        validTo: '2026-01-01T00:00:00.000Z',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });

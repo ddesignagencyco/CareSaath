@@ -146,6 +146,11 @@ describe('PayoutsService', () => {
       caregiver: { userId: 'u-cg', user: { phone: null } },
     });
     prisma.payoutRequest.update.mockResolvedValue({ id: 'pr-1', status: 'PROCESSING' });
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 'pr-1',
+      status: 'PROCESSING',
+      payoutAccount: { accountNumber: 'not-encrypted' },
+    });
 
     const result = await service.approve(admin, 'pr-1', {});
     expect(result).toMatchObject({ status: 'PROCESSING' });
@@ -172,9 +177,20 @@ describe('PayoutsService', () => {
       caregiver: { userId: 'u-cg', user: { phone: null } },
     });
     prisma.payoutRequest.update.mockResolvedValue({ id: 'pr-1', status: 'REJECTED' });
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 'pr-1',
+      status: 'REJECTED',
+      payoutAccount: { accountNumber: 'not-encrypted' },
+    });
     prisma.payment.updateMany.mockResolvedValue({ count: 2 });
 
     await service.reject(admin, 'pr-1', { reason: 'invalid account' });
+
+    expect(prisma.payoutRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ rejectionReason: 'invalid account' }),
+      }),
+    );
 
     expect(prisma.payment.updateMany).toHaveBeenCalledWith({
       where: { payoutRequestId: 'pr-1' },

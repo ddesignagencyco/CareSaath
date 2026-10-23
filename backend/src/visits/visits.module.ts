@@ -24,6 +24,7 @@ import { createHash, randomInt } from 'node:crypto';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -34,6 +35,7 @@ import {
   MinLength,
 } from 'class-validator';
 import {
+  BookingStatus,
   CheckMethod,
   OtpPurpose,
   Prisma,
@@ -54,7 +56,31 @@ import { PlatformConfigModule, ConfigService } from '../config/platform-config.m
 
 /** FR-CG7 check-in OTP verification limits. */
 const CHECKIN_OTP_MAX_ATTEMPTS = 5;
-const VISIT_CHECKIN_STATUSES: VisitStatus[] = [VisitStatus.CONFIRMED, VisitStatus.EN_ROUTE];
+/** An OTP may be issued before arrival (check-in) or while care is under way (check-out). */
+const VISIT_OTP_STATUSES: VisitStatus[] = [
+  VisitStatus.CONFIRMED,
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+];
+/** A booking is complete once none of its visits is in one of these states. */
+const OPEN_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.REQUESTED,
+  VisitStatus.CONFIRMED,
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+  VisitStatus.CHECKED_OUT,
+];
+
+/** Great-circle distance in metres between two WGS84 points. */
+export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const a =
+    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 /** Must match the key used by PatientsModule to encrypt medical context. */
 const MEDICAL_KEY = deriveKey('MEDICAL_ENCRYPTION_KEY', 'caresaath-dev-medical-key');
@@ -115,8 +141,6 @@ export class CheckInDto {
 
   @ApiPropertyOptional({ example: '123456', description: '6-digit OTP code received from customer (required when method is OTP)' })
   @IsOptional()
-  @ApiPropertyOptional({ example: '123456', description: '6-digit OTP code received from customer (required when method is OTP)' })
-  @IsOptional()
   @IsString()
   @MinLength(4)
   @MaxLength(8)
@@ -144,6 +168,21 @@ export class ListVisitsQueryDto {
   @IsOptional()
   @IsDateString()
   date?: string;
+
+  @ApiPropertyOptional({ example: '2026-10-25', description: 'Only visits scheduled on or after this date (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional({ example: '2026-10-31', description: 'Only visits scheduled on or before this date (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc', description: 'Sort by scheduled date' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sort: 'asc' | 'desc' = 'asc';
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -203,12 +242,51 @@ export class VisitsService {
           address: true,
           prescriptions: true,
           customer: { select: { id: true, phone: true, fullName: true } },
+          caregiver: {
+            select: {
+              id: true,
+              licenseNumber: true,
+              licenseBody: true,
+              specialty: true,
+              ratingAverage: true,
+              ratingCount: true,
+              user: { select: { fullName: true } },
+            },
+          },
         },
       },
       statusHistory: { orderBy: { at: 'asc' as const } },
       note: true,
       review: true,
+      payments: {
+        select: {
+          id: true,
+          method: true,
+          status: true,
+          amount: true,
+          caregiverAmount: true,
+          paidAt: true,
+        },
+        orderBy: { createdAt: 'desc' as const },
+      },
     } satisfies Prisma.VisitInclude;
+  }
+
+  /** Reject GPS fixes that are further from the visit address than the configured radius. */
+  private async assertWithinGeofence(
+    address: { latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string } | null,
+    lat: number,
+    lng: number,
+    action: string,
+  ) {
+    const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
+    if (radius <= 0 || !address) return;
+    const meters = distanceMeters(lat, lng, Number(address.latitude), Number(address.longitude));
+    if (meters > radius) {
+      throw new BadRequestException(
+        `You are about ${Math.round(meters)} m from the visit address; ${action} is allowed within ${radius} m`,
+      );
+    }
   }
 
   private async loadForCaregiver(user: AuthUser, id: string) {
@@ -236,15 +314,23 @@ export class VisitsService {
 
   async listCaregiver(user: AuthUser, query: ListVisitsQueryDto): Promise<Paginated<unknown>> {
     const caregiverId = await this.caregiverProfileId(user);
+    const scheduledDate: Prisma.DateTimeFilter = {};
+    if (query.date) {
+      scheduledDate.equals = new Date(query.date);
+    } else {
+      if (query.from) scheduledDate.gte = new Date(query.from);
+      if (query.to) scheduledDate.lte = new Date(query.to);
+    }
     const where: Prisma.VisitWhereInput = {
       booking: { caregiverId },
       ...(query.status ? { status: query.status } : {}),
+      ...(Object.keys(scheduledDate).length > 0 ? { scheduledDate } : {}),
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.visit.count({ where }),
       this.prisma.visit.findMany({
         where,
-        orderBy: { scheduledDate: 'asc' },
+        orderBy: { scheduledDate: query.sort },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: {
@@ -285,6 +371,7 @@ export class VisitsService {
       throw new BadRequestException(`Cannot move visit from ${visit.status} to ${to}`);
     }
     const from = visit.status;
+    let bookingCompleted = false;
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.visit.update({
         where: { id: visitId },
@@ -293,6 +380,18 @@ export class VisitsService {
       await tx.visitStatusHistory.create({
         data: { visitId, fromStatus: from, toStatus: to, actorId: actor.sub },
       });
+      if (to === VisitStatus.COMPLETED) {
+        const open = await tx.visit.count({
+          where: { bookingId: visit.bookingId, status: { in: OPEN_VISIT_STATUSES } },
+        });
+        if (open === 0) {
+          const closed = await tx.booking.updateMany({
+            where: { id: visit.bookingId, status: BookingStatus.CONFIRMED },
+            data: { status: BookingStatus.COMPLETED },
+          });
+          bookingCompleted = closed.count > 0;
+        }
+      }
       return result;
     });
     await this.audit.log({
@@ -302,6 +401,14 @@ export class VisitsService {
       entityId: visitId,
       metadata: { from, to },
     });
+    if (bookingCompleted) {
+      await this.audit.log({
+        actorId: actor.sub,
+        action: 'booking.completed',
+        entityType: 'Booking',
+        entityId: visit.bookingId,
+      });
+    }
     await this.notifications.notify({
       userId: visit.booking.customer.id,
       phone: visit.booking.customer.phone,
@@ -325,9 +432,9 @@ export class VisitsService {
    */
   async requestCheckInOtp(user: AuthUser, id: string) {
     const visit = await this.loadForCaregiver(user, id);
-    if (!VISIT_CHECKIN_STATUSES.includes(visit.status)) {
+    if (!VISIT_OTP_STATUSES.includes(visit.status)) {
       throw new BadRequestException(
-        `A check-in OTP can only be issued for a confirmed or en-route visit (now ${visit.status})`,
+        `An OTP can only be issued for a confirmed, en-route or in-progress visit (now ${visit.status})`,
       );
     }
     const code = randomInt(100000, 999999).toString();
@@ -387,7 +494,14 @@ export class VisitsService {
     if (method === CheckMethod.GPS && (dto.lat === undefined || dto.lng === undefined)) {
       throw new BadRequestException('GPS check-in requires lat and lng');
     }
-    if (method === CheckMethod.OTP) {
+    // Validate the state first so a valid OTP is never burned on a check-in that cannot happen.
+    const visit = await this.loadForCaregiver(user, id);
+    if (visit.status !== VisitStatus.EN_ROUTE) {
+      throw new BadRequestException(`Cannot move visit from ${visit.status} to CHECKED_IN`);
+    }
+    if (method === CheckMethod.GPS) {
+      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-in');
+    } else {
       await this.verifyCheckInOtp(id, dto.code);
     }
     return this.runCaregiverTransition(user, id, VisitStatus.CHECKED_IN, {
@@ -401,12 +515,20 @@ export class VisitsService {
   /** FR-CG7: check out; care moves to IN_PROGRESS then CHECKED_OUT. */
   async checkOut(user: AuthUser, id: string, dto: CheckInDto) {
     const visit = await this.loadForCaregiver(user, id);
-    if (visit.status === VisitStatus.CHECKED_IN) {
-      await this.runCaregiverTransition(user, id, VisitStatus.IN_PROGRESS, {});
-    }
     const method = dto.method ?? CheckMethod.GPS;
     if (method === CheckMethod.GPS && (dto.lat === undefined || dto.lng === undefined)) {
       throw new BadRequestException('GPS check-out requires lat and lng');
+    }
+    if (visit.status !== VisitStatus.CHECKED_IN && visit.status !== VisitStatus.IN_PROGRESS) {
+      throw new BadRequestException(`Cannot move visit from ${visit.status} to CHECKED_OUT`);
+    }
+    if (method === CheckMethod.GPS) {
+      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-out');
+    } else {
+      await this.verifyCheckInOtp(id, dto.code);
+    }
+    if (visit.status === VisitStatus.CHECKED_IN) {
+      await this.runCaregiverTransition(user, id, VisitStatus.IN_PROGRESS, {});
     }
     return this.runCaregiverTransition(user, id, VisitStatus.CHECKED_OUT, {
       checkOutAt: new Date(),
@@ -496,7 +618,7 @@ export class CaregiverVisitsController {
   @Post(':id/check-in')
   @ApiOperation({
     summary: 'Caregiver check-in',
-    description: 'Verifies caregiver arrival using GPS coordinates or customer-provided OTP.',
+    description: 'Verifies caregiver arrival using GPS coordinates (within the configured radius of the visit address) or a customer-provided OTP. The visit must be EN_ROUTE.',
   })
   checkIn(
     @CurrentUser() user: AuthUser,
@@ -509,7 +631,7 @@ export class CaregiverVisitsController {
   @Post(':id/check-out')
   @ApiOperation({
     summary: 'Caregiver check-out',
-    description: 'Records departure time and coordinates from the patient location.',
+    description: 'Records departure time and coordinates from the patient location. GPS check-out must be within the configured radius of the visit address; method OTP requires a code issued via POST /caregiver/visits/{id}/check-in-otp.',
   })
   checkOut(
     @CurrentUser() user: AuthUser,

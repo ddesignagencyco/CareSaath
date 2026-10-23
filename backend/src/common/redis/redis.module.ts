@@ -20,6 +20,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.quit();
   }
 
+  /** Delete every key matching `pattern` (SCAN-based, safe on large keyspaces). */
+  async deleteByPattern(pattern: string): Promise<void> {
+    const keys: string[] = [];
+    for await (const batch of this.client.scanStream({ match: pattern, count: 100 })) {
+      keys.push(...(batch as string[]));
+    }
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+
   async ping(): Promise<boolean> {
     try {
       const res = await this.client.ping();
