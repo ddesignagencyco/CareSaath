@@ -116,6 +116,8 @@
     "awaitingGateway": "{method} کی تصدیق کا انتظار",
     "pendingToast": "ادائیگی شروع ہو گئی۔ تصدیق کے بعد یہ ادا شدہ دکھائی دے گی۔",
     "comingSoon": "جلد دستیاب",
+    "redirecting": "محفوظ چیک آؤٹ کھل رہا ہے…",
+    "gatewayNote": "کارڈ ادائیگی محفوظ چیک آؤٹ کھولتی ہے۔ JazzCash اور Easypaisa جلد دستیاب ہوں گے۔",
     "onlineUnavailable": "آن لائن ادائیگی (کارڈ، JazzCash، Easypaisa) ابھی دستیاب نہیں۔ وزٹ پر کیئرگیور کو نقد ادائیگی کریں۔"
   },
   "review": {

@@ -116,6 +116,8 @@
     "awaitingGateway": "Awaiting {method} confirmation",
     "pendingToast": "Payment started. It will show as paid once confirmed.",
     "comingSoon": "Coming soon",
+    "redirecting": "Opening secure checkout…",
+    "gatewayNote": "Card payments open a secure checkout. JazzCash and Easypaisa are coming soon.",
     "onlineUnavailable": "Online payments (cards, JazzCash, Easypaisa) aren't available yet. Pay the caregiver in cash at the visit."
   },
   "review": {

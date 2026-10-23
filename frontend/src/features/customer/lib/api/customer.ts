@@ -22,10 +22,10 @@ import type {
   CaregiverSearchItem,
   CreateBookingInput,
   CustomerBookingListItem,
-  CustomerPayment,
   CustomerPaymentWithVisit,
   CustomerVisitDetail,
   EmergencyContact,
+  InitiatePaymentResult,
   PatientInput,
   PublicCaregiver,
   RescheduleInput,
@@ -133,13 +133,13 @@ export const visitsApi = {
 
 export const paymentsApi = {
   /**
-   * POST /customer/payments. Every method starts PENDING: CASH settles when the
-   * caregiver confirms receipt; CARD/JAZZCASH/EASYPAISA only get a placeholder
-   * gatewayRef ("gw_<id>") and settle via the gateway webhook (no checkout URL yet).
+   * POST /customer/payments. CASH returns the bare PENDING payment (settles when
+   * the caregiver confirms receipt). A gateway method returns { payment, checkoutUrl }:
+   * CARD opens Stripe Checkout, and settlement happens via the Stripe webhook.
    * `amount` is omitted so the backend charges rateSnapshot - discountAmount.
    */
-  initiate: (dto: { visitId: string; method: PaymentMethod }) =>
-    M ? mock.initiatePayment(dto) : http.post<CustomerPayment>("/customer/payments", dto),
+  initiate: (dto: { visitId: string; method: PaymentMethod }): Promise<InitiatePaymentResult> =>
+    M ? mock.initiatePayment(dto) : http.post<InitiatePaymentResult>("/customer/payments", dto),
   /** GET /customer/payments?status=&page=&limit= */
   list: (q: PageQuery & { status?: PaymentStatus }) =>
     M ? mock.listPayments(q) : http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", q),

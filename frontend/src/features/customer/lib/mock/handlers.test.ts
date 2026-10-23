@@ -111,9 +111,11 @@ describe("customer mock mode", () => {
     );
     expect(payable.length).toBeGreaterThanOrEqual(2);
 
-    const cash = await settle(m.paymentsApi.initiate({ visitId: payable[0].id, method: "CASH" }));
+    const cashRes = await settle(m.paymentsApi.initiate({ visitId: payable[0].id, method: "CASH" }));
+    const cash = "payment" in cashRes ? cashRes.payment : cashRes; // mock returns a bare payment
     expect(cash).toMatchObject({ status: "PENDING", method: "CASH", gatewayRef: null, paidAt: null });
-    const card = await settle(m.paymentsApi.initiate({ visitId: payable[1].id, method: "CARD" }));
+    const cardRes = await settle(m.paymentsApi.initiate({ visitId: payable[1].id, method: "CARD" }));
+    const card = "payment" in cardRes ? cardRes.payment : cardRes;
     expect(card).toMatchObject({ status: "PENDING", paidAt: null, gatewayRef: `gw_${card.id}` });
 
     await expect(settle(m.paymentsApi.initiate({ visitId: payable[0].id, method: "CASH" }))).rejects.toMatchObject({

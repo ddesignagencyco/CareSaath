@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useAction } from "@shared/api/use-action";
+import { useToast } from "@shared/ui/toast";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { formatMoney } from "@shared/lib/format";
@@ -92,16 +93,15 @@ export function ArrivalCodeNotice({ phone }: { phone: string }) {
 /* ---- Payment ----------------------------------------------------------------- */
 
 /**
- * Only cash can be completed today. The API accepts CARD/JAZZCASH/EASYPAISA but
- * returns just a PENDING payment with a placeholder gatewayRef ("gw_<id>") and no
- * checkout URL, so the customer could never finish it, and the PENDING row would
- * block paying cash ("A payment for this visit is already in progress").
+ * Cash settles when the caregiver confirms receipt. Card opens Stripe Checkout:
+ * the API returns { payment, checkoutUrl } and we redirect, settling via webhook.
+ * JazzCash/Easypaisa stay disabled until their gateway integration lands.
  */
 const METHODS: { value: PaymentMethod; icon: React.ComponentType<{ className?: string }>; available: boolean }[] = [
   { value: "CASH", icon: Banknote, available: true },
+  { value: "CARD", icon: CreditCard, available: true },
   { value: "JAZZCASH", icon: Smartphone, available: false },
   { value: "EASYPAISA", icon: Smartphone, available: false },
-  { value: "CARD", icon: CreditCard, available: false },
 ];
 
 export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
@@ -111,14 +111,24 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
   const L = useLabels();
   const methodLabel = (m: PaymentMethod) => (m === "CASH" ? t("methodCash") : m === "CARD" ? t("methodCard") : L.paymentMethod(m));
   const methodDescription = (m: PaymentMethod) => (m === "CASH" ? t("methodCashHint") : m === "CARD" ? t("methodCardHint") : t("methodWalletHint"));
+  const toast = useToast();
   const payments = useQuery({ queryKey: [...keys.payments, "list"], queryFn: () => paymentsApi.list({ limit: 100 }) });
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [open, setOpen] = useState(false);
   const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
   const pay = useAction(() => paymentsApi.initiate({ visitId: visit.id, method }), {
     invalidate: [keys.payments],
-    success: (p) => (p.status === "PAID" ? t("paidToast", { amount: formatMoney(p.amount) }) : p.method === "CASH" ? t("cashToast") : t("pendingToast")),
-    onSuccess: () => setOpen(false),
+    success: null,
+    onSuccess: (res) => {
+      // A gateway method returns a hosted-checkout URL — hand off to it.
+      if ("checkoutUrl" in res) {
+        toast.success(t("redirecting"));
+        window.location.assign(res.checkoutUrl);
+        return;
+      }
+      toast.success(res.status === "PAID" ? t("paidToast", { amount: formatMoney(res.amount) }) : res.method === "CASH" ? t("cashToast") : t("pendingToast"));
+      setOpen(false);
+    },
   });
 
   const payable = visit.booking.status === "CONFIRMED" && visit.status !== "CANCELLED" && visit.status !== "DECLINED";
@@ -193,7 +203,7 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
                 <span className={clsx("size-5 rounded-full border-2", method === value ? "border-[6px] border-brand-600" : "border-ink-300")} />
               </button>
             ))}
-            <p className="pt-1 text-xs text-ink-500">{t("onlineUnavailable")}</p>
+            <p className="pt-1 text-xs text-ink-500">{t("gatewayNote")}</p>
           </div>
         </Modal>
       )}

@@ -19,6 +19,18 @@ Not covered (needs real providers, as agreed): the JazzCash / Easypaisa / Card w
 
 Note: the encryption-key mismatch in item 1 only affects **data written by the seed script** (it used different keys). Records created through the running API encrypt and decrypt correctly, which the live run confirmed for patient medical context. Fixing item 1 still matters so the seeded demo data is readable.
 
+## Update — resolved by dev (pulls up to `82f487c`, 23 October 2026)
+
+Two dev pulls landed the backend side of most items below:
+
+- **Phase 14 — `12e7e10` (31 fixes "from frontend wiring requirements"):** root `.env` loaded before key derivation and undecryptable fields now return null (**item 1**); payments charge server-side only and gateway methods return `{ payment, checkoutUrl }` with cancel/expire of PENDING rows, and the caregiver sees payments on visit detail (**items 2, 3, 4**); role guards on patients/addresses/availability/emergency-contacts (**item 5**); OTP verify takes an audience and ADMIN never creates accounts (**item 6**); a booking flips to COMPLETED when its last open visit completes (**item 7**); Cloudinary public delivery URLs, PDFs as raw, image-only photos, `photoUrl` on caregiver responses (**item 11**); reactivate lifts suspension + deactivate route + search-cache invalidation + caregiver named on booking/visit (**items 8, 9, 10**); payout note/rejection stored, admin updates return list rows (**items 12, 13**); GPS geofence, OTP check-out verified, OTP kept until valid (**item 14**); caregiver visits date/from/to/sort filters (**item 15**); register returns 409 + fresh tokens (**item 16**); notification read-state, channel filter, new caregiver events (**item 17**); `GET /promos/quote`, one use per customer (**item 18**); SOS coordinates stored + linked in the admin alert (**item 19**); plus the P2 validation/status-code fixes.
+- **Payments — `6b8599e` + `8dfb610`:** Stripe Checkout for card payments with verified webhook signatures. `POST /customer/payments` now returns the bare payment for **CASH** and `{ payment, checkoutUrl }` for **CARD** (Stripe) / JazzCash / Easypaisa.
+- **Storage — `67b17f4` + `82f487c`:** PDF/image viewing works against real Cloudinary, and every uploaded-document response now carries a viewable `url`.
+
+**Frontend wiring done in response (this branch):** the customer payment dialog now enables **Card** alongside Cash; a gateway method's `{ payment, checkoutUrl }` redirects the browser to the hosted checkout (`window.location.assign`), settling via the Stripe webhook. JazzCash/Easypaisa stay "coming soon" until their gateway lands. (`paymentsApi.initiate` return type is now `InitiatePaymentResult`.) Everything else below was already wired to expect these fixes (see each "Frontend today"), so no further frontend change was required; document viewing and the caregiver cash-confirm card light up automatically now that the backend returns the data. **Card payments require the backend's `STRIPE_*` env (see `.env.example`); without it the gateway URL is a placeholder.**
+
+---
+
 The items below are things the **backend** must change or add. Nothing outside `frontend/` was modified. For each item:
 
 - **Needed:** the backend change. Backend paths are relative to `backend/src/`.

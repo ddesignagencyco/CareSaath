@@ -226,7 +226,8 @@ describe("CareSaath live flow — all roles", () => {
   it("payments (cash): customer initiates, caregiver confirms", async () => {
     signIn("customer", ctx.cust!);
     await step("Customer", "POST /customer/payments (CASH, no amount)", async () => {
-      const p = await customer.paymentsApi.initiate({ visitId: ctx.visitId!, method: "CASH" });
+      const res = await customer.paymentsApi.initiate({ visitId: ctx.visitId!, method: "CASH" });
+      const p = "payment" in res ? res.payment : res; // CASH returns the bare payment
       ctx.paymentId = p.id;
       expectThat(p.status === "PENDING", `payment ${p.status}`);
       expectThat(p.amount > 0 && p.caregiverAmount > 0, "amount/caregiverAmount not computed server-side");

@@ -125,6 +125,13 @@ export interface CustomerPaymentWithVisit extends CustomerPayment {
   };
 }
 
+/**
+ * POST /customer/payments response. Cash returns the bare payment row; a
+ * gateway method (CARD via Stripe, or JazzCash/Easypaisa) returns the payment
+ * plus a hosted-checkout URL the customer is redirected to.
+ */
+export type InitiatePaymentResult = CustomerPayment | { payment: CustomerPayment; checkoutUrl: string };
+
 export interface ReviewInput {
   /** 1–5 */
   rating: number;
