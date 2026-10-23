@@ -7,13 +7,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { IconButton } from "@shared/ui/button";
-import { authApi } from "@/features/admin/lib/api/admin";
+import { useQuery } from "@tanstack/react-query";
+import { authApi, meApi } from "@/features/admin/lib/api/admin";
 import { USE_MOCKS } from "@/features/admin/lib/api/http";
 import { decodeToken, session } from "@/features/admin/lib/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
-import { ApiHealthPill } from "./api-health";
 import { Sidebar } from "./sidebar";
 
 const SESSION_EVENT = "caresaath:admin-session";
@@ -63,8 +63,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const tStates = useTranslations("common.states");
 
   useEffect(() => {
-    if (hydrated && !current) router.replace("/admin/login");
+    if (hydrated && !current) router.replace("/login?next=/admin");
   }, [hydrated, current, router]);
+
+  // The admin's own name (the token carries no name; /customer/me is the shared profile route).
+  const me = useQuery({ queryKey: ["a-me"], queryFn: meApi.get, enabled: !!current, staleTime: 300_000 });
 
   // Close the mobile menu after navigation.
   const [lastPath, setLastPath] = useState(pathname);
@@ -82,7 +85,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     const refresh = session.get()?.refreshToken;
     session.clear();
     if (refresh) await authApi.logout(refresh).catch(() => undefined);
-    router.replace("/admin/login");
+    router.replace("/login");
   }
 
   return (
@@ -122,17 +125,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </IconButton>
         </div>
         <div className="flex-1" />
-        {USE_MOCKS ? (
+        {USE_MOCKS && (
           <span className="hidden rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-accent-400/30 sm:inline">
             {tStates("mockBadge")}
           </span>
-        ) : (
-          <ApiHealthPill />
         )}
         <LanguageToggle />
         <div className="border-s border-ink-100 ps-2">
           <ProfileMenu
-            name={t("adminName")}
+            name={me.data?.fullName || t("adminName")}
             phone={current ? formatPkMobile(current.phone) : ""}
             role={t("role")}
             items={[{ href: "/admin/settings", label: t("platformSettings"), icon: Settings2 }]}

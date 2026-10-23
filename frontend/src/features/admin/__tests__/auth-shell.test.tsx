@@ -78,7 +78,7 @@ describe("admin shell", () => {
     expect(router.replace).not.toHaveBeenCalled();
 
     act(() => session.clear()); // dispatches caresaath:admin-session
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/admin/login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login?next=/admin"));
     expect(screen.queryByText("Console content")).not.toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("admin shell", () => {
         <p>Console content</p>
       </AdminShell>,
     );
-    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/admin/login"));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login?next=/admin"));
     expect(screen.queryByText("Console content")).not.toBeInTheDocument();
   });
 });

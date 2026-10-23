@@ -12,6 +12,7 @@ import { formatPkMobile, parsePkMobile } from "../lib/phone";
 import { Button } from "../ui/button";
 import { OtpInput } from "../ui/otp-input";
 import { PhoneField } from "../ui/phone-field";
+import { useToast } from "../ui/toast";
 
 export interface LoginFeature {
   icon: React.ComponentType<{ className?: string }>;
@@ -113,6 +114,7 @@ function Steps({ step }: { step: "phone" | "otp" }) {
 export function LoginScreen(props: LoginScreenProps) {
   const t = useTranslations("shared");
   const apiError = useApiErrorText();
+  const toast = useToast();
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);
@@ -145,6 +147,7 @@ export function LoginScreen(props: LoginScreenProps) {
       setStep("otp");
       setCode("");
       setResendIn(RESEND_SECONDS);
+      toast.success(t("login.codeSent", { phone: formatPkMobile(fullPhone) }));
     } catch (err) {
       setError(err instanceof Error ? apiError(err) : t("login.couldNotSend"));
     } finally {
@@ -158,7 +161,11 @@ export function LoginScreen(props: LoginScreenProps) {
     setLoading(true);
     try {
       const message = await props.verifyOtp(fullPhone, value);
-      if (message) setError(message);
+      if (message) {
+        setError(message);
+      } else {
+        toast.success(t("login.signedIn"));
+      }
     } catch (err) {
       setError(err instanceof Error ? apiError(err) : t("login.verificationFailed"));
       setCode("");

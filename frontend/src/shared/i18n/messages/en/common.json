@@ -50,6 +50,7 @@
     "notificationsNew": "Notifications, {count} new",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "home": "CareSaath home"
+    "home": "CareSaath home",
+    "viewAll": "View all notifications"
   }
 }

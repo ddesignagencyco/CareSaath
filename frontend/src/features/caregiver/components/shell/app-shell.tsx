@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, CalendarClock, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
+import { CalendarClock, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,8 +14,10 @@ import { IconButton } from "@shared/ui/button";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
-import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
+import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/caregiver/lib/notifications";
+import { NotificationBell } from "@shared/ui/notification-bell";
 import { ApiError, USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { homeFor, refreshTokens, tokenRole, useMe, useSessionRaw, useSignOut } from "@/features/caregiver/lib/auth";
 import { useRequestCount, useUnreadCount } from "./counts";
@@ -32,20 +34,6 @@ function CountBadge({ count, className }: { count?: number; className?: string }
     >
       {count > 9 ? "9+" : count}
     </span>
-  );
-}
-
-function BellLink({ unread }: { unread: number }) {
-  const t = useTranslations("common.nav");
-  return (
-    <Link
-      href="/caregiver/notifications"
-      aria-label={unread ? t("notificationsNew", { count: unread }) : t("notifications")}
-      className="relative inline-flex size-10 items-center justify-center rounded-xl text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900"
-    >
-      <Bell className="size-5" />
-      <CountBadge count={unread} className="absolute -top-0.5 -end-0.5" />
-    </Link>
   );
 }
 
@@ -70,6 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("caregiverA");
   const tNav = useTranslations("common.nav");
   const tStates = useTranslations("common.states");
+  const describe = useDescribe();
 
   // Session no longer valid (expired or unknown user): start again at login.
   const unauthorized = me.error instanceof ApiError && me.error.status === 401;
@@ -80,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     if (!raw) {
-      router.replace("/caregiver/login");
+      router.replace("/login?next=/caregiver");
       return;
     }
     if (!me.data) return;
@@ -180,7 +169,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
         )}
         <LanguageToggle onChange={(l) => meApi.update({ preferredLanguage: l === "ur" ? "UR" : "EN" }).catch(() => undefined)} />
-        <BellLink unread={unread} />
+        <NotificationBell
+          queryKey={[...keys.notifications, "list"]}
+          queryFn={() => notificationsApi.list({ limit: 50 })}
+          describe={describe}
+          seenEvent={SEEN_EVENT}
+          getSeenAt={getSeenAt}
+          markSeen={markSeen}
+          allHref="/caregiver/notifications"
+          labels={{
+            title: t("notifications.title"),
+            empty: t("notifications.empty"),
+            viewAll: tNav("viewAll"),
+            idle: tNav("notifications"),
+            withCount: (n) => tNav("notificationsNew", { count: n }),
+          }}
+        />
         <div className="hidden border-s border-ink-100 ps-2 lg:block">
           <ProfileMenu
             name={name}

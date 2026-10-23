@@ -88,6 +88,6 @@ export function useSignOut() {
     window.dispatchEvent(new Event(SESSION_EVENT));
     client.clear();
     if (refresh) await authApi.logout(refresh).catch(() => undefined);
-    router.replace("/caregiver/login");
+    router.replace("/login");
   }, [client, router]);
 }

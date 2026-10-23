@@ -17,7 +17,8 @@ import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { ApiError, USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
-import { getSeenAt, SEEN_EVENT } from "@/features/customer/lib/labels";
+import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/customer/lib/labels";
+import { NotificationBell } from "@shared/ui/notification-bell";
 
 /** Message key under customerA.shell. */
 type NavLabel =
@@ -102,6 +103,8 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("customerA.shell");
   const tn = useTranslations("common.nav");
   const ts = useTranslations("common.states");
+  const cn = useTranslations("customerA.notifications");
+  const describe = useDescribe();
   const { raw, hydrated } = useSessionRaw();
   const me = useMe();
   const signOut = useSignOut();
@@ -116,7 +119,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
     if (unauthorized) signOut();
   }, [unauthorized, signOut]);
   useEffect(() => {
-    if (hydrated && !raw) router.replace("/customer/login");
+    if (hydrated && !raw) router.replace("/login?next=/customer");
   }, [hydrated, raw, router]);
 
   if (hydrated && !raw) return null;
@@ -200,18 +203,22 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
           </span>
         )}
         <LanguageToggle onChange={(l) => meApi.update({ preferredLanguage: l === "ur" ? "UR" : "EN" }).catch(() => undefined)} />
-        <Link
-          href="/customer/notifications"
-          aria-label={unread ? tn("notificationsNew", { count: unread }) : tn("notifications")}
-          className="relative inline-flex size-10 items-center justify-center rounded-xl text-ink-600 transition-colors hover:bg-ink-50 hover:text-ink-900"
-        >
-          <Bell className="size-5" />
-          {unread > 0 && (
-            <span className="tabular absolute -top-0.5 -end-0.5 min-w-[18px] rounded-full bg-danger-600 px-1 text-center text-[10px] leading-[18px] font-bold text-white ring-2 ring-white">
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )}
-        </Link>
+        <NotificationBell
+          queryKey={[...keys.notifications, "list"]}
+          queryFn={() => notificationsApi.list({ limit: 50 })}
+          describe={describe}
+          seenEvent={SEEN_EVENT}
+          getSeenAt={getSeenAt}
+          markSeen={markSeen}
+          allHref="/customer/notifications"
+          labels={{
+            title: cn("title"),
+            empty: cn("empty"),
+            viewAll: tn("viewAll"),
+            idle: tn("notifications"),
+            withCount: (n) => tn("notificationsNew", { count: n }),
+          }}
+        />
         <div className="hidden border-s border-ink-100 ps-2 lg:block">
           <ProfileMenu
             name={name}

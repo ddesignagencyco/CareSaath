@@ -58,6 +58,6 @@ export function useSignOut() {
     clearSession();
     client.removeQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("c-") });
     if (refresh) await authApi.logout(refresh).catch(() => undefined);
-    router.replace("/customer/login");
+    router.replace("/login");
   }, [client, router]);
 }

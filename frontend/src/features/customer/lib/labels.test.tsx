@@ -140,6 +140,6 @@ describe("useSignOut", () => {
     expect(client.getQueryData(["g-me"])).toEqual({ id: "cg" });
     expect(client.getQueryData(["admin", "x"])).toBe(1);
     expect(f.calls.map((c) => [c.method, c.url.pathname, c.body])).toEqual([["POST", "/api/v1/auth/logout", { refreshToken: "refresh-1" }]]);
-    expect(replace).toHaveBeenCalledWith("/customer/login");
+    expect(replace).toHaveBeenCalledWith("/login");
   });
 });

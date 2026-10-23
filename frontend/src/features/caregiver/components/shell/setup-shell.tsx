@@ -30,7 +30,7 @@ export function SetupShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!raw) router.replace("/caregiver/login");
+    if (!raw) router.replace("/login?next=/caregiver/onboarding");
     else if (me.data && homeFor(me.data) === "/caregiver") router.replace("/caregiver");
   }, [hydrated, raw, me.data, router]);
 

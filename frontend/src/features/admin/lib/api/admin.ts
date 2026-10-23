@@ -36,6 +36,7 @@ import type {
   VerificationStatus,
 } from "@shared/types";
 import { checkHealth, type Health } from "@shared/api/http";
+import type { Me } from "@shared/caregiver-types";
 import { http, USE_MOCKS } from "./http";
 
 /**
@@ -48,6 +49,24 @@ export const CAN_DEACTIVATE_CAREGIVER = USE_MOCKS;
 export const healthApi = {
   /** GET /health (public) — the mock is always healthy. */
   check: (): Promise<Health> => (USE_MOCKS ? Promise.resolve({ status: "ok", postgres: true, redis: true }) : checkHealth()),
+};
+
+export const meApi = {
+  /** GET /customer/me — the shared profile endpoint; used to show the admin's own name. */
+  get: (): Promise<Me> =>
+    USE_MOCKS
+      ? Promise.resolve<Me>({
+          id: "admin",
+          phone: "+923000000000",
+          role: "ADMIN",
+          fullName: "Platform Admin",
+          preferredLanguage: "EN",
+          status: "ACTIVE",
+          lastLoginAt: null,
+          createdAt: new Date().toISOString(),
+          caregiverProfile: null,
+        })
+      : http.get<Me>("/customer/me"),
 };
 
 export const authApi = {

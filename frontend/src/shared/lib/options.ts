@@ -20,18 +20,8 @@ export const DOC_TYPE_OPTIONS: SelectOption<DocType>[] = (["LICENSE", "CERTIFICA
   label: DOC_TYPE_LABEL[t],
 }));
 
-/** Pilot cities are TBD (open question #3); these cover the likely set. */
-export const CITY_OPTIONS: SelectOption<string>[] = [
-  "Lahore",
-  "Islamabad",
-  "Rawalpindi",
-  "Karachi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Gujranwala",
-  "Sialkot",
-].map((c) => ({ value: c, label: c }));
+/** Pilot launch is Lahore only for now; add more cities here as the pilot expands. */
+export const CITY_OPTIONS: SelectOption<string>[] = ["Lahore"].map((c) => ({ value: c, label: c }));
 
 /** "3520112345671" or partial -> "35201-1234567-1" as the user types. */
 export function formatCnic(input: string): string {

@@ -13,7 +13,9 @@
     "didntGet": "Didn't get it?",
     "resendIn": "Resend in {time}",
     "resend": "Resend code",
-    "mockCode": "Mock mode: code {code}"
+    "mockCode": "Mock mode: code {code}",
+    "codeSent": "Verification code sent to {phone}",
+    "signedIn": "Signed in — opening your dashboard"
   },
   "phone": {
     "label": "Mobile number",

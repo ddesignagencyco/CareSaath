@@ -74,9 +74,10 @@ Priority:
   `payments: { select: { id, method, status, amount, caregiverAmount, paidAt }, orderBy: { createdAt: 'desc' } }`.
 - **Frontend today:** the "Confirm cash received" card is built and typed for exactly that field (`CaregiverVisitDetail.payments`). It stays hidden until the field appears; no frontend change is needed afterwards.
 
-### 5. Customer-only routes have no role guard
-- **Problem:** `customer/patients`, `customer/addresses` and `customer/emergency-contacts` have no `@Roles(UserRole.CUSTOMER)`. A caregiver or admin token can read and create patients and addresses; a caregiver token gets `200 []` on `GET /customer/patients`.
-- **Needed:** add `@Roles(UserRole.CUSTOMER)` to PatientsController, AddressesController and the emergency-contact routes. `/customer/me` can stay open to all roles, since every app uses it.
+### 5. Customer-only routes have no role guard (partially fixed)
+- **Problem:** `CustomerPaymentsController` now carries `@Roles(UserRole.CUSTOMER)` (fixed), but `customer/patients`, `customer/addresses` and the emergency-contact routes on `UsersController` **still have none**. Re-verified live (23 Oct 2026): a **CAREGIVER** token gets `200 []` on both `GET /customer/patients` and `GET /customer/addresses`.
+- **Needed:** add `@Roles(UserRole.CUSTOMER)` to `PatientsController` (`patients/patients.module.ts`), `AddressesController` (`addresses/addresses.module.ts`) and the emergency-contact routes (`users/users.module.ts`). Keep `/customer/me` open to all roles, since every app uses it for role detection.
+- **Frontend today:** each app checks the role after login and in its shell, and the new `/login` routes strictly by the token's role — but a caregiver/admin token can still read a customer's patients/addresses directly at the API until the guards are added.
 - **Frontend today:** every app checks the role after login and in its shell, and signs out a mismatched role.
 
 ### 6. Logging in on any app creates a customer account
@@ -116,19 +117,21 @@ Priority:
   - Loads `GET /caregivers/:id` separately.
   - That route returns 404 once a caregiver is suspended; the UI then says the details aren't available.
 
-### 11. No caregiver photo in public profiles; storage URLs don't load in dev
-- **Problems:**
-  - `GET /caregivers` and `GET /caregivers/:id` return no photo URL.
-  - Cloudinary isn't configured, so every presigned URL is `https://storage.local/...` and can't load. This affects document, prescription and photo URLs.
-  - The in-memory fallback is lost on restart.
-- **Needed:**
-  - A short-lived `photoUrl` in both public responses, and optionally in `GET /caregiver/profile`.
-  - Real presigned storage (Cloudinary, S3 or MinIO), or a dev stub that serves files.
-  - `POST /caregiver/photo` should accept images only; it currently also allows PDF.
-- **Frontend today:**
-  - Initials avatars everywhere.
-  - The in-app file viewer shows its error state.
-  - Files are never opened in a new tab.
+### 11. Cloudinary storage: uploads work, but file VIEWING is broken (P0)
+Live end-to-end test, 23 Oct 2026, against the running backend with Cloudinary configured in the root `.env` (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER`). Startup logs `Storage: Cloudinary (descwlwga)`, so the config is picked up.
+
+- **Upload — WORKS ✅ (images):** `POST /caregiver/photo` and `POST /caregiver/documents` with a PNG both succeed and the asset lands in Cloudinary. Confirmed via the Cloudinary Admin API: `resource_type: "image", type: "upload", format: "png"`.
+- **Viewing — BROKEN ❌ (all roles):** `GET /caregiver/photo/url` (and `/caregiver/documents/:id/url`, and the admin/customer equivalents, all of which call `StorageService.presignedGet`) returns a URL that **fails with `{"error":{"message":"General Error"}}`**. Root cause in `backend/src/common/storage/*.ts`:
+  ```ts
+  return cloudinary.utils.private_download_url(fileKey, 'auto', { resource_type: 'auto', expires_at });
+  ```
+  The assets are uploaded as **public `type: 'upload'`**, so the *private-download* API is the wrong API for them; and `'auto'` is passed as the **format** (2nd positional arg) and as `resource_type`, both invalid. Cloudinary's own canonical delivery URL for the stored asset is simply `https://res.cloudinary.com/<cloud>/image/upload/v<ver>/<fileKey>`.
+  - **Fix:** for public uploads, return the plain secure delivery URL — `cloudinary.url(fileKey, { resource_type, secure: true })` (derive `resource_type` as `image` for images, `raw` for PDFs; store it alongside `fileKey` so viewing knows which). Drop `private_download_url`/`expires_at` entirely unless you switch uploads to `type: 'authenticated'` (then sign the delivery URL with the correct format + resource_type, not `'auto'`). Until this changes, **no uploaded file can be viewed in any panel.**
+- **PDF upload — FAILS ⚠️:** `POST /caregiver/documents` with `application/pdf` returns **500** (image uploads to the same route succeed). CNIC/licence docs are typically PDFs. Likely the `resource_type: 'auto'` path for PDFs and/or the account's "PDF and ZIP files delivery" restriction. Decide `resource_type: 'raw'` (or `'image'`) explicitly for PDFs and enable PDF delivery on the Cloudinary account; confirm with a real PDF.
+- **Still open (unchanged):**
+  - `GET /caregivers` and `GET /caregivers/:id` return **no photo URL** — a customer never sees the caregiver's photo before the visit (SRS §9.2). Add a `photoUrl` (built the same corrected way) to both public responses, and optionally to `GET /caregiver/profile`.
+  - `POST /caregiver/photo` should accept images only; it currently also allows PDF (`validateUpload` permits `application/pdf`).
+- **Frontend today:** uploads go through fine; the in-app `FileViewer` shows its error state because the `{url}` it's handed 500s. This cannot be fixed on the frontend — the backend must return a valid delivery URL. No file is opened in a new tab.
 
 ### 12. Payout notes and rejection reasons aren't stored
 - **Problem:** `ResolvePayoutDto.note` is dropped. `reason` only goes into AuditLog metadata. So the caregiver never sees why a payout was rejected, or the transfer reference.
@@ -143,6 +146,7 @@ Priority:
   - `POST /admin/caregivers/:id/*` returns no `user`, and the CNIC isn't decrypted
 - **Needed:** return the same `include`/presentation as the list endpoints.
 - **Frontend today:** merges the response into the row it already has.
+- **Partially fixed (23 Oct 2026):** `GET /disputes` now returns `resolutionNote` and the visit, and the UI shows them; the bare-row responses on the admin update routes above are still the issue.
 
 ### 14. Check-in and check-out problems
 - **Problems:**
@@ -214,6 +218,7 @@ Priority:
 24. **Wrong status codes:**
     - Deleting a patient or address that a booking uses returns 404; it should be 409.
     - `CreatePayoutRequestDto.payoutAccountId` and `CaregiverReportIncidentDto.visitId` use `@IsString`; use `@IsUUID()` so bad IDs give 400, not a Prisma 500.
+    - Deleting a payout account that has payout history returns a **500** (FK constraint) instead of **409**; `PayoutAccountsService.remove` (`payouts/payouts.module.ts`) should catch the constraint and return a clear 409. (The frontend already maps status 500 here to a "remove blocked" message.)
 25. **Patients:** `dateOfBirth` and `gender` can't be cleared; allow `null`.
 26. **Emergency contacts:** `phone` has no format validation; use the same Pakistani mobile regex as auth.
 27. **Re-verification:**
