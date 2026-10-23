@@ -83,6 +83,15 @@ npm run test:run   # single run (~30 s, 500+ tests)
 - Coverage: shared HTTP client (refresh, errors), phone/money/date formatting, translation files (en/ur parity, valid ICU, matching placeholders), shared UI components, and per section an API contract test for every route (method, path, exact body/query) plus mock mode, helpers and key page flows.
 - Tests live next to the module (`*.test.ts`) or in `src/features/<section>/__tests__/`.
 
+### Live flow test (needs the running backend)
+
+`npm run test:e2e` runs a full production-shaped journey across all three roles
+(register → approve → book → visit lifecycle → cash → payout → disputes/safety)
+through the frontend's own API functions against the real backend. It creates
+fresh test users (seeded demo data untouched) and prints a pass/fail line per
+API. Requires the backend on :3000 and its Docker services up. The cash path is
+covered; gateway webhook settlement needs real providers (see docs/requirement.md).
+
 ## Scripts
 
 | Command | Purpose |

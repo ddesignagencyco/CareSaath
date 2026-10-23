@@ -1,8 +1,23 @@
 # Backend requirements from the frontend wiring
 
-Wiring the frontend to the backend (`frontend/` against `backend/`, API v1), 22 October 2026.
+Wiring the frontend to the backend (`frontend/` against `backend/`, API v1), 22–23 October 2026.
 
 The frontend now calls every route in the OpenAPI spec (78 paths) through its API layer (`src/features/*/lib/api/*.ts`). The one exception is `POST /payments/webhook/{provider}`, which only the payment gateway calls. Each request and response type was checked against the backend source (controller → service → Prisma `select`/`include`). The read routes were also called on the local backend to compare real responses.
+
+## Live flow verification (23 October 2026)
+
+A full production-shaped journey was run through the frontend's own API functions against the running backend (`src/e2e/full-flow.e2e.ts`, `npm run test:e2e`). It creates fresh test users (seeded demo data untouched) and exercises all three roles end to end. **42 of 43 steps passed**; the one miss is the cache issue in item 31 below (now polled around in the test).
+
+Confirmed working end to end against the real backend:
+
+- **Admin:** health, analytics, commissions (read + update), caregiver verification queue, document presigned URL, approve; payout queue → approve → mark-paid; safety-incident triage + status update; dispute queue + resolve.
+- **Customer:** profile read/update, patient create + single-record read (medical context **decrypts correctly** for data written by this backend), address create, emergency contact; public caregiver profile; booking (SINGLE) create, prescription upload; visit tracking; review; cash payment initiate; payment receipt; safety report; dispute raise + list.
+- **Caregiver:** register (role upgrade handled), document upload, availability set, profile status; booking queue, accept; visit lifecycle en-route → check-in (GPS) → check-out → note → COMPLETED; confirm cash → PAID; earnings (available balance after paid cash); payout account + payout request.
+- **Money math checks out:** a Rs 600 cash visit at 20% commission produced the caregiver's available balance, which flowed through a payout request to admin settlement.
+
+Not covered (needs real providers, as agreed): the JazzCash / Easypaisa / Card webhook settlement path (`POST /payments/webhook/{provider}`) — see item 2.
+
+Note: the encryption-key mismatch in item 1 only affects **data written by the seed script** (it used different keys). Records created through the running API encrypt and decrypt correctly, which the live run confirmed for patient medical context. Fixing item 1 still matters so the seeded demo data is readable.
 
 The items below are things the **backend** must change or add. Nothing outside `frontend/` was modified. For each item:
 
@@ -216,6 +231,11 @@ Priority:
     - Visit info on `GET /disputes`.
     - `lastLoginAt` isn't set for seeded users.
     - A fixed message for "Cannot move a payout from X to Y", so it can be translated.
+31. **Public caregiver search cache isn't invalidated** (`caregivers/caregivers.module.ts`, found in the live run).
+    - `GET /caregivers` caches each `(specialty, city, page, limit)` page in Redis for `search.cacheTtlSeconds` (default 30s). `VerificationService.approve`, `suspend`, `reactivate` and `reject` (`verification/verification.module.ts`) never clear it.
+    - Effect: a newly **approved** caregiver stays absent from search, and a **suspended** one stays visible, for up to 30s. Booking still re-checks APPROVED server-side, so this is a visibility/staleness issue, not a security hole.
+    - Suggested change: on any verification-status change, delete the `search:caregivers:*` keys (`redis.keys` + `del`, or keep a key set), or drop the cache for that specialty/city.
+    - Frontend today: the live-flow test polls the search for up to 35s; the UI just shows whatever search returns.
 
 ---
 
