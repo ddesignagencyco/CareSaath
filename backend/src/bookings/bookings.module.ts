@@ -51,7 +51,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
-import { StorageService } from '../common/storage/storage.module.js';
+import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -391,9 +391,21 @@ export class BookingsService {
           sizeBytes: true,
           createdAt: true,
           uploadedById: true,
+          fileKey: true,
         },
       },
     } satisfies Prisma.BookingInclude;
+  }
+
+  /** Prescriptions carry a viewable `url`; the internal storage key is not exposed. */
+  private async presentBooking<T extends { prescriptions: Array<{ fileKey: string }> }>(booking: T) {
+    const prescriptions = await Promise.all(
+      booking.prescriptions.map(async ({ fileKey, ...rest }) => {
+        const { url } = await withFileUrl(this.storage, { fileKey });
+        return { ...rest, url };
+      }),
+    );
+    return { ...booking, prescriptions };
   }
 
   async getBooking(id: string) {
@@ -404,7 +416,7 @@ export class BookingsService {
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
-    return booking;
+    return this.presentBooking(booking);
   }
 
   async listCustomer(user: AuthUser, query: ListBookingsQueryDto): Promise<Paginated<unknown>> {
@@ -433,7 +445,7 @@ export class BookingsService {
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
-    return booking;
+    return this.presentBooking(booking);
   }
 
   /** FR-C5: attach a doctor's prescription / care-plan document to a booking. */
@@ -490,6 +502,7 @@ export class BookingsService {
       mimeType: doc.mimeType,
       sizeBytes: doc.sizeBytes,
       createdAt: doc.createdAt,
+      url: (await withFileUrl(this.storage, doc)).url,
     };
   }
 

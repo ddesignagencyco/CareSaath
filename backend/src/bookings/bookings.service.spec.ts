@@ -70,7 +70,7 @@ describe('BookingsService.accept', () => {
     prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
     );
-    prisma.booking.findUnique.mockResolvedValue({ id: 'b-1', status: BookingStatus.CONFIRMED });
+    prisma.booking.findUnique.mockResolvedValue({ id: 'b-1', status: BookingStatus.CONFIRMED, prescriptions: [] });
 
     const result = await service.accept(caregiverUser, 'b-1');
 

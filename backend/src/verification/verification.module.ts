@@ -31,7 +31,7 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
-import { StorageService } from '../common/storage/storage.module.js';
+import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { paginate } from '../common/dto/pagination.js';
@@ -143,7 +143,14 @@ export class VerificationService {
         },
       }),
     ]);
-    return paginate(items.map(presentCnic), query.page, query.limit, total);
+    const presented = await Promise.all(items.map((item) => this.withDocumentUrls(presentCnic(item))));
+    return paginate(presented, query.page, query.limit, total);
+  }
+
+  /** Give every credential document a viewable `url` (see GET .../documents/:id/url for a fresh one). */
+  private async withDocumentUrls<T extends { documents: Array<{ fileKey: string }> }>(profile: T) {
+    const documents = await Promise.all(profile.documents.map((doc) => withFileUrl(this.storage, doc)));
+    return { ...profile, documents };
   }
 
   private async load(id: string) {
@@ -169,7 +176,7 @@ export class VerificationService {
     if (!profile) {
       throw new NotFoundException('Caregiver not found');
     }
-    return presentCnic(profile);
+    return this.withDocumentUrls(presentCnic(profile));
   }
 
   /** FR-A1: approve after manual PNC/PMDC cross-check (SRS §7.5). */
