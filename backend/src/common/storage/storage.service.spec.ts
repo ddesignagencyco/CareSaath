@@ -16,6 +16,13 @@ describe('StorageService (in-memory fallback)', () => {
     expect(stored.fileKey.endsWith('.pdf')).toBe(true);
   });
 
+  it('drops the extension from image ids but keeps plain names intact', async () => {
+    const withExt = await storage.put('p', 'photo.png', Buffer.from('x'), 'image/png');
+    const noExt = await storage.put('p', 'scan', Buffer.from('x'), 'image/png');
+    expect(withExt.fileKey).toMatch(/-photo$/);
+    expect(noExt.fileKey).toMatch(/-scan$/);
+  });
+
   it('accepts only images for photos', () => {
     expect(() => storage.validateImageUpload('image/png', 10)).not.toThrow();
     expect(() => storage.validateImageUpload('application/pdf', 10)).toThrow(BadRequestException);
