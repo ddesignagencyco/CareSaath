@@ -5,11 +5,11 @@ services:
       POSTGRES_USER: caresaath
       POSTGRES_PASSWORD: caresaath
       POSTGRES_DB: caresaath
-    ports: ["5432:5432"]
+    ports: ["15432:5432"] # 5432 may be taken by another local project
     volumes: [pgdata:/var/lib/postgresql/data]
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    ports: ["16379:6379"] # 6379 may be taken by another local project
   mailhog:
     image: mailhog/mailhog
     # 1025/8025 may be taken by another local project; use 11025/18025

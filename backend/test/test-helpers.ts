@@ -8,6 +8,7 @@ export function createPrismaMock() {
   const model = () => ({
     findUnique: vi.fn(),
     findFirst: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
@@ -78,6 +79,7 @@ export function createRedisMock() {
       incr: vi.fn().mockResolvedValue(0),
       expire: vi.fn().mockResolvedValue(1),
     },
+    deleteByPattern: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -91,6 +93,7 @@ export function createSmsMock() {
 export function createStorageMock() {
   return {
     validateUpload: vi.fn(),
+    validateImageUpload: vi.fn(),
     put: vi.fn(),
     presignedGet: vi.fn().mockResolvedValue('https://storage.local/signed'),
   };

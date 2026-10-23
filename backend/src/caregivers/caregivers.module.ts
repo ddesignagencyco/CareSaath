@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Get,
   Injectable,
@@ -55,6 +56,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { AuthService } from '../auth/auth.service.js';
 import { StorageService } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -207,6 +210,7 @@ export class CaregiversService {
     private readonly storage: StorageService,
     private readonly redis: RedisService,
     private readonly config: ConfigService,
+    private readonly auth: AuthService,
   ) {}
 
   async register(user: AuthUser, dto: RegisterCaregiverDto) {
@@ -214,7 +218,7 @@ export class CaregiversService {
       where: { userId: user.sub },
     });
     if (existing) {
-      throw new NotFoundException('Caregiver profile already exists');
+      throw new ConflictException('Caregiver profile already exists');
     }
     const commission = await this.prisma.commissionRate.findUnique({
       where: { category: dto.specialty },
@@ -252,7 +256,14 @@ export class CaregiversService {
       entityId: profile.id,
       metadata: { status: VerificationStatus.PENDING },
     });
-    return profile;
+    // The account's role just changed; hand back tokens that carry CAREGIVER so no refresh round-trip is needed.
+    const tokens = await this.auth.issueTokens(user.sub, 'CAREGIVER', user.phone);
+    return { ...profile, ...tokens };
+  }
+
+  /** Public delivery URL for a stored photo key, or null when none was uploaded. */
+  private async photoUrlFor(photoKey: string | null): Promise<string | null> {
+    return photoKey ? this.storage.presignedGet(photoKey) : null;
   }
 
   async getMine(user: AuthUser) {
@@ -268,7 +279,11 @@ export class CaregiversService {
       throw new NotFoundException('Caregiver profile not found');
     }
     const cnic = decryptMaybe(profile.cnic, CNIC_KEY);
-    return { ...profile, cnic: cnic ? maskValue(cnic, 4) : null };
+    return {
+      ...profile,
+      cnic: cnic ? maskValue(cnic, 4) : null,
+      photoUrl: await this.photoUrlFor(profile.photoKey),
+    };
   }
 
   async updateProfile(user: AuthUser, dto: UpdateCaregiverProfileDto) {
@@ -400,11 +415,18 @@ export class CaregiversService {
           ratingAverage: true,
           ratingCount: true,
           serviceArea: true,
+          photoKey: true,
           user: { select: { fullName: true } },
         },
       }),
     ]);
-    const result = paginate(items, query.page, query.limit, total);
+    const withPhotos = await Promise.all(
+      items.map(async ({ photoKey, ...rest }) => ({
+        ...rest,
+        photoUrl: await this.photoUrlFor(photoKey),
+      })),
+    );
+    const result = paginate(withPhotos, query.page, query.limit, total);
     if (ttlSeconds > 0) {
       await this.redis.client.set(cacheKey, JSON.stringify(result), 'EX', ttlSeconds);
     }
@@ -442,7 +464,8 @@ export class CaregiversService {
     if (!profile) {
       throw new NotFoundException('Caregiver not found');
     }
-    return profile;
+    const { photoKey, ...rest } = profile;
+    return { ...rest, photoUrl: await this.photoUrlFor(photoKey) };
   }
 
   async photoUrl(user: AuthUser) {
@@ -465,7 +488,7 @@ export class CaregiversService {
     if (!profile) {
       throw new NotFoundException('Caregiver profile not found');
     }
-    this.storage.validateUpload(file.mimetype, file.buffer.length);
+    this.storage.validateImageUpload(file.mimetype, file.buffer.length);
     const stored = await this.storage.put(
       `caregivers/${profile.id}/photo`,
       file.originalname,
@@ -490,7 +513,7 @@ export class CaregiverController {
   @ApiOperation({
     summary: 'Caregiver onboarding registration',
     description:
-      'Registers caregiver profile with license, specialty, CNIC, and service cities. Initial status is PENDING admin verification.',
+      'Registers caregiver profile with license, specialty, CNIC, and service cities. Initial status is PENDING admin verification. The account role changes from CUSTOMER to CAREGIVER (one role per account), so the response also carries a fresh accessToken/refreshToken pair for the new role. Returns 409 if a profile already exists.',
   })
   register(@CurrentUser() user: AuthUser, @Body() dto: RegisterCaregiverDto) {
     return this.caregivers.register(user, dto);
@@ -627,7 +650,7 @@ export class PublicCaregiverController {
 }
 
 @Module({
-  imports: [PlatformConfigModule],
+  imports: [PlatformConfigModule, AuthModule],
   controllers: [CaregiverController, PublicCaregiverController],
   providers: [CaregiversService],
 })

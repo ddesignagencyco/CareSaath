@@ -19,6 +19,7 @@ import {
   BookingStatus,
   PaymentStatus,
   PayoutStatus,
+  Prisma,
   UserRole,
   VerificationStatus,
 } from '../generated/prisma/client.js';
@@ -53,6 +54,9 @@ function rangeStart(range: AnalyticsRangeDto['range']): Date | null {
 
 function cellToString(cell: unknown): string {
   if (cell === null || cell === undefined) return '';
+  if (cell instanceof Date) return cell.toISOString();
+  // Prisma Decimal (and similar) serialise to a quoted string via JSON; use their plain text form.
+  if (Prisma.Decimal.isDecimal(cell)) return (cell as Prisma.Decimal).toString();
   if (typeof cell === 'object') return JSON.stringify(cell);
   if (typeof cell === 'string') return cell;
   if (typeof cell === 'number' || typeof cell === 'boolean' || typeof cell === 'bigint') {
@@ -108,19 +112,19 @@ export class AnalyticsService {
         where: { verificationStatus: VerificationStatus.PENDING },
       }),
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.PAID, createdAt: dateFilter },
+        where: { status: PaymentStatus.PAID, paidAt: dateFilter },
         _sum: { amount: true },
         _count: { _all: true },
       }),
       this.prisma.payment.aggregate({
-        where: { status: PaymentStatus.PAID, createdAt: dateFilter },
+        where: { status: PaymentStatus.PAID, paidAt: dateFilter },
         _sum: { commissionAmount: true },
       }),
       this.prisma.payoutRequest.aggregate({
-        where: { status: PayoutStatus.PAID, requestedAt: dateFilter },
+        where: { status: PayoutStatus.PAID, processedAt: dateFilter },
         _sum: { amount: true },
       }),
-      this.prisma.visit.count({ where: { status: 'COMPLETED', createdAt: dateFilter } }),
+      this.prisma.visit.count({ where: { status: 'COMPLETED', scheduledDate: dateFilter } }),
     ]);
 
     const cancellationRate = bookingsTotal === 0 ? 0 : cancelledCount / bookingsTotal;
@@ -178,13 +182,20 @@ export class AnalyticsService {
       case 'payouts': {
         const payouts = await this.prisma.payoutRequest.findMany({
           orderBy: { requestedAt: 'desc' },
+          include: {
+            caregiver: { select: { user: { select: { fullName: true } } } },
+            payoutAccount: { select: { provider: true, accountTitle: true } },
+          },
         });
         return toCsv([
-          ['id', 'caregiverId', 'payoutAccountId', 'amount', 'status', 'requestedAt', 'processedAt'],
+          ['id', 'caregiverId', 'caregiverName', 'payoutAccountId', 'provider', 'accountTitle', 'amount', 'status', 'requestedAt', 'processedAt'],
           ...payouts.map((p) => [
             p.id,
             p.caregiverId,
+            p.caregiver.user.fullName,
             p.payoutAccountId,
+            p.payoutAccount.provider,
+            p.payoutAccount.accountTitle,
             p.amount,
             p.status,
             p.requestedAt.toISOString(),
@@ -195,13 +206,19 @@ export class AnalyticsService {
       case 'bookings': {
         const bookings = await this.prisma.booking.findMany({
           orderBy: { createdAt: 'desc' },
+          include: {
+            customer: { select: { fullName: true } },
+            caregiver: { select: { user: { select: { fullName: true } } } },
+          },
         });
         return toCsv([
-          ['id', 'customerId', 'caregiverId', 'serviceType', 'status', 'rateSnapshot', 'discountAmount', 'startDate', 'endDate'],
+          ['id', 'customerId', 'customerName', 'caregiverId', 'caregiverName', 'serviceType', 'status', 'rateSnapshot', 'discountAmount', 'startDate', 'endDate'],
           ...bookings.map((b) => [
             b.id,
             b.customerId,
+            b.customer.fullName,
             b.caregiverId,
+            b.caregiver.user.fullName,
             b.serviceType,
             b.status,
             b.rateSnapshot,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AvailabilityService } from './availability.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
@@ -29,7 +29,19 @@ describe('AvailabilityService', () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
     await expect(
       service.setRules(user, { rules: [{ dayOfWeek: 1, startTime: '17:00', endTime: '09:00' }] }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects duplicate (day, start) windows', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    await expect(
+      service.setRules(user, {
+        rules: [
+          { dayOfWeek: 1, startTime: '09:00', endTime: '12:00' },
+          { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('replaces the weekly rule set in a transaction', async () => {
@@ -51,7 +63,7 @@ describe('AvailabilityService', () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
     await expect(
       service.addBlock(user, { startDate: '2026-02-10', endDate: '2026-02-01' }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('refuses to delete a block not owned by the caregiver', async () => {

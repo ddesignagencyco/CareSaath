@@ -67,7 +67,7 @@ describe('Caregiver availability & profile (e2e)', () => {
       .put('/api/v1/caregiver/availability')
       .set(bearer(token))
       .send({ rules: [{ dayOfWeek: 2, startTime: '18:00', endTime: '08:00' }] });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 
   it('adds and removes an availability block', async () => {

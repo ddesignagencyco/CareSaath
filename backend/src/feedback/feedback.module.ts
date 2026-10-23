@@ -17,15 +17,22 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNumberString,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
   MinLength,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import {
   IncidentPriority,
@@ -70,13 +77,25 @@ export class ReportIncidentDto {
 
 export class CaregiverReportIncidentDto extends ReportIncidentDto {
   @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Visit UUID' })
-  @IsString()
+  @IsUUID()
   visitId!: string;
+}
+
+@ValidatorConstraint({ name: 'coordinateRange', async: false })
+class CoordinateRange implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments) {
+    const limit = args.constraints[0] as number;
+    return Math.abs(Number(value)) <= limit;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return `${args.property} must be within ±${args.constraints[0]}`;
+  }
 }
 
 export class SosDto {
   @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Active visit UUID' })
-  @IsString()
+  @IsUUID()
   visitId!: string;
 
   @ApiPropertyOptional({ example: 'Medical emergency: patient difficulty breathing.', description: 'Optional emergency situation note' })
@@ -85,12 +104,18 @@ export class SosDto {
   @MaxLength(2000)
   note?: string;
 
-  @ApiPropertyOptional({ example: 31.516300, description: 'Device latitude' })
+  @ApiPropertyOptional({ example: '31.516300', description: 'Device latitude (-90..90), as a number or numeric string' })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'number' ? String(value) : value))
+  @IsNumberString()
+  @Validate(CoordinateRange, [90])
   latitude?: string;
 
-  @ApiPropertyOptional({ example: 74.345200, description: 'Device longitude' })
+  @ApiPropertyOptional({ example: '74.345200', description: 'Device longitude (-180..180), as a number or numeric string' })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'number' ? String(value) : value))
+  @IsNumberString()
+  @Validate(CoordinateRange, [180])
   longitude?: string;
 }
 
@@ -258,6 +283,8 @@ export class FeedbackService {
           source: IncidentSource.SOS,
           priority: IncidentPriority.CRITICAL,
           description: dto.note ?? 'SOS raised during visit',
+          latitude: dto.latitude ?? null,
+          longitude: dto.longitude ?? null,
         },
       });
       await tx.incidentEvent.create({
@@ -286,13 +313,24 @@ export class FeedbackService {
     const location = visit.booking.address
       ? `${visit.booking.address.addressLine}, ${visit.booking.address.city}`
       : undefined;
+    const mapsLink =
+      dto.latitude && dto.longitude
+        ? `https://www.google.com/maps?q=${dto.latitude},${dto.longitude}`
+        : undefined;
     for (const admin of admins) {
       await this.notifications.notify({
         userId: admin.id,
         phone: admin.phone,
         event: 'safety_incident.sos',
-        payload: { incidentId: incident.id, visitId: visit.id, priority: 'CRITICAL' },
-        message: `SOS on visit ${visit.id}${location ? ` at ${location}` : ''}. Immediate review required.`,
+        payload: {
+          incidentId: incident.id,
+          visitId: visit.id,
+          priority: 'CRITICAL',
+          ...(mapsLink ? { mapsLink } : {}),
+        },
+        message: `SOS on visit ${visit.id}${location ? ` at ${location}` : ''}${
+          mapsLink ? ` (${mapsLink})` : ''
+        }. Immediate review required.`,
       });
     }
     for (const contact of visit.booking.customer.emergencyContacts) {

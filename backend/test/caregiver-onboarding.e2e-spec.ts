@@ -91,7 +91,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
         serviceCities: ['Lahore'],
         ratePerVisit: 5000,
       });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
   });
 
   it('does not list a PENDING caregiver in public search', async () => {

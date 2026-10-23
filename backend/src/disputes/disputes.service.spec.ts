@@ -95,6 +95,7 @@ describe('DisputesService', () => {
     expect(prisma.dispute.update).toHaveBeenCalledWith({
       where: { id: 'd-1' },
       data: expect.objectContaining({ status: 'RESOLVED', resolvedById: 'u-admin' }),
+      include: expect.any(Object),
     });
     expect(notifications.notify).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u-cust', event: 'dispute.resolved' }),

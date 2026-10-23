@@ -52,8 +52,14 @@ export async function createTestApp(): Promise<{
     process.env['CLOUDINARY_API_SECRET'] = '';
   }
 
+  // Likewise Stripe: card payments use the generic gateway flow unless E2E_USE_STRIPE=true.
+  if (process.env['E2E_USE_STRIPE'] !== 'true') {
+    process.env['STRIPE_SECRET_KEY'] = '';
+    process.env['STRIPE_WEBHOOK_SECRET'] = '';
+  }
+
   const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleFixture.createNestApplication<INestApplication<App>>();
+  const app = moduleFixture.createNestApplication<INestApplication<App>>({ rawBody: true });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

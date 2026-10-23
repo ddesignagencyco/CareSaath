@@ -10,6 +10,7 @@ import { OtpPurpose, UserStatus, UserRole } from '../generated/prisma/client.js'
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { ConfigService } from '../config/platform-config.module.js';
+import type { LoginAudience } from './dto/auth.dto.js';
 import { SmsService } from './sms.service.js';
 
 const OTP_MAX_ATTEMPTS = 5;
@@ -21,6 +22,18 @@ export interface TokenPair {
   accessToken: string;
   refreshToken: string;
 }
+
+export interface LoginResult extends TokenPair {
+  user: { id: string; phone: string; role: UserRole; fullName: string | null };
+}
+
+/** Roles each login audience may sign in with. */
+const AUDIENCE_ROLES: Record<LoginAudience, UserRole[]> = {
+  CUSTOMER: [UserRole.CUSTOMER],
+  // A customer account becomes a caregiver through POST /caregiver/register.
+  CAREGIVER: [UserRole.CAREGIVER, UserRole.CUSTOMER],
+  ADMIN: [UserRole.ADMIN],
+};
 
 @Injectable()
 export class AuthService {
@@ -76,7 +89,7 @@ export class AuthService {
     return { ttlSeconds };
   }
 
-  async verifyOtp(phone: string, code: string): Promise<TokenPair> {
+  async verifyOtp(phone: string, code: string, audience?: LoginAudience): Promise<LoginResult> {
     const key = this.otpKey(phone, 'LOGIN');
     const stored = await this.redis.client.get(key);
     if (!stored) {
@@ -96,13 +109,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid OTP');
     }
 
+    let user = await this.prisma.user.findUnique({ where: { phone } });
+    if (audience) {
+      const mismatch = user
+        ? !AUDIENCE_ROLES[audience].includes(user.role)
+        : audience === 'ADMIN';
+      if (mismatch) {
+        // Refuse before any account is created or tokens are issued.
+        throw new ForbiddenException('This account cannot sign in to this app');
+      }
+    }
+
     await this.redis.client.del(key, `${key}:attempts`);
     await this.prisma.otpCode.updateMany({
       where: { phone, purpose: 'LOGIN', consumedAt: null },
       data: { consumedAt: new Date() },
     });
 
-    let user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
       user = await this.prisma.user.create({
         data: { phone, role: UserRole.CUSTOMER },
@@ -116,7 +139,11 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    return this.issueTokens(user.id, user.role, user.phone);
+    const tokens = await this.issueTokens(user.id, user.role, user.phone);
+    return {
+      ...tokens,
+      user: { id: user.id, phone: user.phone, role: user.role, fullName: user.fullName },
+    };
   }
 
   async refresh(refreshToken: string): Promise<TokenPair> {
@@ -157,7 +184,8 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async issueTokens(
+  /** Mint a token pair from the user's current role (used after a role change). */
+  async issueTokens(
     userId: string,
     role: UserRole,
     phone: string,

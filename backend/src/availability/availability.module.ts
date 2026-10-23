@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -18,6 +19,7 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -29,10 +31,12 @@ import {
   Matches,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class AvailabilityRuleDto {
@@ -66,6 +70,8 @@ export class SetAvailabilityDto {
   @IsArray()
   @ArrayMinSize(0)
   @ArrayMaxSize(7 * 4)
+  @ValidateNested({ each: true })
+  @Type(() => AvailabilityRuleDto)
   rules!: AvailabilityRuleDto[];
 }
 
@@ -82,6 +88,12 @@ export class BlockDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+/** Blocks are stored as UTC-midnight dates; "today" must be the calendar day in Pakistan (UTC+5). */
+export function todayInPakistan(now = new Date()): Date {
+  const pkt = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+  return new Date(`${pkt.toISOString().slice(0, 10)}T00:00:00.000Z`);
 }
 
 @Injectable()
@@ -110,7 +122,7 @@ export class AvailabilityService {
         orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
       }),
       this.prisma.availabilityBlock.findMany({
-        where: { caregiverId, endDate: { gte: new Date() } },
+        where: { caregiverId, endDate: { gte: todayInPakistan() } },
         orderBy: { startDate: 'asc' },
       }),
     ]);
@@ -120,10 +132,18 @@ export class AvailabilityService {
   /** FR-CG4: full replace of the weekly availability set. */
   async setRules(user: AuthUser, dto: SetAvailabilityDto) {
     const caregiverId = await this.caregiverId(user);
+    const seen = new Set<string>();
     for (const rule of dto.rules) {
       if (rule.startTime >= rule.endTime) {
-        throw new NotFoundException(`Invalid window for day ${rule.dayOfWeek}: start must be before end`);
+        throw new BadRequestException(`Invalid window for day ${rule.dayOfWeek}: start must be before end`);
       }
+      const slot = `${rule.dayOfWeek}@${rule.startTime}`;
+      if (seen.has(slot)) {
+        throw new BadRequestException(
+          `Duplicate window for day ${rule.dayOfWeek} starting at ${rule.startTime}`,
+        );
+      }
+      seen.add(slot);
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.availabilityRule.deleteMany({ where: { caregiverId } });
@@ -153,7 +173,7 @@ export class AvailabilityService {
     const start = new Date(dto.startDate);
     const end = new Date(dto.endDate);
     if (end < start) {
-      throw new NotFoundException('endDate must be on or after startDate');
+      throw new BadRequestException('endDate must be on or after startDate');
     }
     const block = await this.prisma.availabilityBlock.create({
       data: { caregiverId, startDate: start, endDate: end, reason: dto.reason ?? null },
@@ -182,6 +202,7 @@ export class AvailabilityService {
 
 @ApiTags('Caregiver - Availability')
 @ApiBearerAuth()
+@Roles('CAREGIVER')
 @Controller('caregiver/availability')
 export class AvailabilityController {
   constructor(private readonly availability: AvailabilityService) {}

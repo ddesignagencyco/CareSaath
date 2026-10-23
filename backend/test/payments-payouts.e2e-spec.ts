@@ -187,7 +187,8 @@ describe('Payments & payouts (e2e)', () => {
       .set(bearer(customerToken))
       .send({ visitId: cardVisitId, method: 'CARD' });
     expect(res.status).toBe(201);
-    expect(res.body.gatewayRef).toMatch(/^gw_/);
+    expect(res.body.payment.gatewayRef).toMatch(/^gw_/);
+    expect(res.body.checkoutUrl).toContain(res.body.payment.gatewayRef);
   });
 
   it('settles the card payment via a public, idempotent webhook', async () => {

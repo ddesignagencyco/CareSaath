@@ -1,5 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Length, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
+
+export const LOGIN_AUDIENCES = ['CUSTOMER', 'CAREGIVER', 'ADMIN'] as const;
+export type LoginAudience = (typeof LOGIN_AUDIENCES)[number];
 
 export class RequestOtpDto {
   @ApiProperty({
@@ -33,6 +36,15 @@ export class VerifyOtpDto {
   @IsString()
   @Length(4, 8)
   code!: string;
+
+  @ApiPropertyOptional({
+    enum: LOGIN_AUDIENCES,
+    description:
+      'App the user is signing in to. ADMIN never creates accounts and requires an ADMIN user; CUSTOMER requires a customer account; CAREGIVER accepts a caregiver or a not-yet-registered customer account. A mismatch is refused (403) without issuing tokens.',
+  })
+  @IsOptional()
+  @IsIn(LOGIN_AUDIENCES)
+  audience?: LoginAudience;
 }
 
 export class RefreshTokenDto {

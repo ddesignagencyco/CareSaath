@@ -82,6 +82,13 @@ export class ListIncidentsQueryDto {
  * FR-A6: admins triage safety incidents. Every change appends an IncidentEvent
  * so the incident keeps a full audit trail (SRS Auditability).
  */
+/** Same relations on the queue and on update responses so clients can swap rows in place. */
+const INCIDENT_INCLUDE = {
+  reportedBy: { select: { id: true, fullName: true, role: true, phone: true } },
+  assignedAdmin: { select: { id: true, fullName: true } },
+  events: { orderBy: { at: 'asc' } },
+} satisfies Prisma.SafetyIncidentInclude;
+
 @Injectable()
 export class AdminSafetyService {
   constructor(
@@ -102,11 +109,7 @@ export class AdminSafetyService {
         orderBy: { createdAt: 'asc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
-        include: {
-          reportedBy: { select: { id: true, fullName: true, role: true, phone: true } },
-          assignedAdmin: { select: { id: true, fullName: true } },
-          events: { orderBy: { at: 'asc' } },
-        },
+        include: INCIDENT_INCLUDE,
       }),
     ]);
     return paginate(items, query.page, query.limit, total);
@@ -134,6 +137,7 @@ export class AdminSafetyService {
           ...(dto.status === IncidentStatus.RESOLVED ? { resolvedAt: new Date() } : {}),
           ...(!incident.assignedAdminId ? { assignedAdminId: admin.sub } : {}),
         },
+        include: INCIDENT_INCLUDE,
       });
       await tx.incidentEvent.create({
         data: {

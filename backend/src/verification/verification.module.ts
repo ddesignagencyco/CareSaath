@@ -18,7 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
   CredentialDecision,
   CredentialReviewKind,
@@ -30,7 +30,9 @@ import { decryptMaybe, deriveKey } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService } from '../common/storage/storage.module.js';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { paginate } from '../common/dto/pagination.js';
 
@@ -38,8 +40,8 @@ import { paginate } from '../common/dto/pagination.js';
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
 
 /** Admins need the CNIC for PNC/PMDC cross-check; decrypt it for display. */
-function presentCnic<T extends { cnic: string }>(profile: T): T {
-  return { ...profile, cnic: decryptMaybe(profile.cnic, CNIC_KEY) ?? profile.cnic };
+function presentCnic<T extends { cnic: string }>(profile: T): Omit<T, 'cnic'> & { cnic: string | null } {
+  return { ...profile, cnic: decryptMaybe(profile.cnic, CNIC_KEY) };
 }
 
 export class DecisionDto {
@@ -63,6 +65,14 @@ export class ListCaregiversQueryDto {
   @IsEnum(VerificationStatus)
   status?: VerificationStatus;
 
+  @ApiPropertyOptional({
+    example: '2027-01-31',
+    description: 'Only caregivers whose re-verification is due on or before this date; results are sorted by due date',
+  })
+  @IsOptional()
+  @IsDateString()
+  reverifyDueBefore?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
@@ -85,15 +95,46 @@ export class VerificationService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: StorageService,
+    private readonly redis: RedisService,
+    private readonly notifications: NotificationsService,
   ) {}
 
+  /** Public search results are cached in Redis; any visibility change must drop them. */
+  private async invalidateSearchCache(): Promise<void> {
+    try {
+      await this.redis.deleteByPattern('search:caregivers:*');
+    } catch {
+      // The cache is short-lived; never fail the admin action over it.
+    }
+  }
+
+  private async notifyCaregiver(profileId: string, event: string, message: string) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { id: profileId },
+      select: { user: { select: { id: true, phone: true } } },
+    });
+    if (!profile) return;
+    await this.notifications.notify({
+      userId: profile.user.id,
+      phone: profile.user.phone,
+      event,
+      payload: { caregiverId: profileId },
+      message,
+    });
+  }
+
   async list(query: ListCaregiversQueryDto) {
-    const where = query.status ? { verificationStatus: query.status } : {};
+    const where = {
+      ...(query.status ? { verificationStatus: query.status } : {}),
+      ...(query.reverifyDueBefore
+        ? { reverifyDueAt: { lte: new Date(query.reverifyDueBefore) } }
+        : {}),
+    };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.caregiverProfile.count({ where }),
       this.prisma.caregiverProfile.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: query.reverifyDueBefore ? { reverifyDueAt: 'asc' } : { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: {
@@ -114,6 +155,21 @@ export class VerificationService {
       throw new NotFoundException('Caregiver not found');
     }
     return profile;
+  }
+
+  /** Same shape as the list endpoint: user included, CNIC decrypted. */
+  private async loadPresented(id: string) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, phone: true, fullName: true, status: true } },
+        documents: true,
+      },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver not found');
+    }
+    return presentCnic(profile);
   }
 
   /** FR-A1: approve after manual PNC/PMDC cross-check (SRS §7.5). */
@@ -152,7 +208,9 @@ export class VerificationService {
       entityType: 'CaregiverProfile',
       entityId: id,
     });
-    return this.load(id);
+    await this.invalidateSearchCache();
+    await this.notifyCaregiver(id, 'caregiver.verification.approved', 'Your CareSaath profile has been verified. You are now visible to families.');
+    return this.loadPresented(id);
   }
 
   async reject(admin: AuthUser, id: string, dto: DecisionDto) {
@@ -183,7 +241,9 @@ export class VerificationService {
       entityId: id,
       metadata: { reason: dto.reason ?? null },
     });
-    return this.load(id);
+    await this.invalidateSearchCache();
+    await this.notifyCaregiver(id, 'caregiver.verification.rejected', `Your CareSaath verification was not approved${dto.reason ? `: ${dto.reason}` : '.'}`);
+    return this.loadPresented(id);
   }
 
   /** FR-A2: periodic re-verification. */
@@ -217,7 +277,8 @@ export class VerificationService {
       entityId: id,
       metadata: { reverifyInDays: days },
     });
-    return this.load(profile.id);
+    await this.invalidateSearchCache();
+    return this.loadPresented(profile.id);
   }
 
   /** FR-A3: suspend (temporary) — profile disappears from search. */
@@ -234,7 +295,8 @@ export class VerificationService {
       entityId: id,
       metadata: { reason: dto.reason ?? null },
     });
-    return this.load(id);
+    await this.invalidateSearchCache();
+    return this.loadPresented(id);
   }
 
   /** FR-A3: deactivate — user-level block. */
@@ -251,22 +313,35 @@ export class VerificationService {
       entityId: profile.userId,
       metadata: { reason: dto.reason ?? null },
     });
-    return this.load(id);
+    await this.invalidateSearchCache();
+    return this.loadPresented(id);
   }
 
   async reactivate(admin: AuthUser, id: string) {
     const profile = await this.load(id);
-    await this.prisma.user.update({
-      where: { id: profile.userId },
-      data: { status: UserStatus.ACTIVE },
+    const liftSuspension = profile.verificationStatus === VerificationStatus.SUSPENDED;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: profile.userId },
+        data: { status: UserStatus.ACTIVE },
+      });
+      if (liftSuspension) {
+        // approvedAt / reverifyDueAt are deliberately left untouched.
+        await tx.caregiverProfile.update({
+          where: { id },
+          data: { verificationStatus: VerificationStatus.APPROVED },
+        });
+      }
     });
     await this.audit.log({
       actorId: admin.sub,
       action: 'caregiver.reactivated',
       entityType: 'User',
       entityId: profile.userId,
+      metadata: { suspensionLifted: liftSuspension },
     });
-    return this.load(id);
+    await this.invalidateSearchCache();
+    return this.loadPresented(id);
   }
 
   async documentUrl(id: string, documentId: string) {
@@ -347,10 +422,23 @@ export class VerificationController {
     return this.verification.suspend(admin, id, dto);
   }
 
+  @Post(':id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate caregiver account',
+    description: 'Blocks the caregiver user account (status DEACTIVATED) and removes them from search. Use reactivate to restore.',
+  })
+  deactivate(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DecisionDto,
+  ) {
+    return this.verification.deactivate(admin, id, dto);
+  }
+
   @Post(':id/reactivate')
   @ApiOperation({
     summary: 'Reactivate suspended caregiver',
-    description: 'Restores caregiver to active approved status.',
+    description: 'Reactivates a deactivated account and lifts a suspension (verification status returns to APPROVED, original approval and re-verification dates are kept).',
   })
   reactivate(
     @CurrentUser() admin: AuthUser,
@@ -373,6 +461,7 @@ export class VerificationController {
 }
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [VerificationController],
   providers: [VerificationService],
 })

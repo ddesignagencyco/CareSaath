@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { VisitsService } from './visits.module.js';
+import { VisitsService, distanceMeters } from './visits.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
   createAuditMock,
@@ -27,6 +27,14 @@ function visitFixture(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe('distanceMeters', () => {
+  it('is zero for identical points and ~111 km per degree of latitude', () => {
+    expect(distanceMeters(31.5, 74.3, 31.5, 74.3)).toBe(0);
+    expect(distanceMeters(31, 74, 32, 74)).toBeGreaterThan(110000);
+    expect(distanceMeters(31, 74, 32, 74)).toBeLessThan(112000);
+  });
+});
 
 describe('VisitsService transitions', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
@@ -139,5 +147,58 @@ describe('VisitsService transitions', () => {
     expect(result).toMatchObject({ status: 'CHECKED_IN' });
     expect(redis.client.del).toHaveBeenCalled();
     expect(prisma.otpCode.updateMany).toHaveBeenCalled();
+  });
+
+  it('rejects a GPS check-in outside the geofence', async () => {
+    const withAddress = visitFixture({ status: 'EN_ROUTE' });
+    (withAddress.booking as Record<string, unknown>)['address'] = { latitude: 31.5, longitude: 74.3 };
+    prisma.visit.findFirst.mockResolvedValue(withAddress);
+    await expect(
+      service.checkIn(caregiver, 'v-1', { lat: 31.6, lng: 74.3 }),
+    ).rejects.toThrow(/from the visit address/);
+    expect(prisma.visit.update).not.toHaveBeenCalled();
+  });
+
+  it('does not burn the check-in OTP when the visit is not EN_ROUTE', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CONFIRMED' }));
+    await expect(
+      service.checkIn(caregiver, 'v-1', { method: 'OTP', code: '123456' }),
+    ).rejects.toThrow('Cannot move visit from CONFIRMED to CHECKED_IN');
+    expect(redis.client.get).not.toHaveBeenCalled();
+    expect(redis.client.del).not.toHaveBeenCalled();
+  });
+
+  it('requires a valid code for an OTP check-out', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'IN_PROGRESS' }));
+    redis.client.get.mockResolvedValue(null);
+    await expect(
+      service.checkOut(caregiver, 'v-1', { method: 'OTP' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('completes the booking once its last open visit is completed', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+    prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+    prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'COMPLETED' });
+    prisma.visit.count.mockResolvedValue(0);
+    prisma.booking.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.submitNote(caregiver, 'v-1', { summary: 'done' });
+
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: 'b-1', status: 'CONFIRMED' },
+      data: { status: 'COMPLETED' },
+    });
+  });
+
+  it('keeps the booking open while other visits are still pending', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+    prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+    prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'COMPLETED' });
+    prisma.visit.count.mockResolvedValue(2);
+
+    await service.submitNote(caregiver, 'v-1', { summary: 'done' });
+
+    expect(prisma.booking.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -12,11 +12,12 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Language } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class UpdateProfileDto {
@@ -42,7 +43,9 @@ export class EmergencyContactDto {
 
   @ApiProperty({ example: '+923002220001', description: 'Emergency phone number' })
   @IsString()
-  @MinLength(1)
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'phone must be a valid phone number (e.g. +923001234567)',
+  })
   phone!: string;
 }
 
@@ -150,6 +153,7 @@ export class UsersController {
     return this.users.updateMe(user, dto);
   }
 
+  @Roles('CUSTOMER')
   @Get('emergency-contacts')
   @ApiOperation({
     summary: 'List emergency contacts',
@@ -159,6 +163,7 @@ export class UsersController {
     return this.users.listEmergencyContacts(user);
   }
 
+  @Roles('CUSTOMER')
   @Post('emergency-contacts')
   @ApiOperation({
     summary: 'Add an emergency contact',
@@ -168,6 +173,7 @@ export class UsersController {
     return this.users.addEmergencyContact(user, dto);
   }
 
+  @Roles('CUSTOMER')
   @Delete('emergency-contacts/:id')
   @ApiOperation({
     summary: 'Remove an emergency contact',

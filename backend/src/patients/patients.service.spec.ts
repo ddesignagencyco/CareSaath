@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PatientsService } from './patients.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { createAuditMock, createPrismaMock } from '../../test/test-helpers.js';
@@ -36,7 +36,7 @@ describe('PatientsService', () => {
   it('refuses to delete a patient that has bookings', async () => {
     prisma.patientProfile.findFirst.mockResolvedValue({ id: 'p-1' });
     prisma.booking.count.mockResolvedValue(2);
-    await expect(service.remove(user, 'p-1')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.remove(user, 'p-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('deletes a patient with no bookings', async () => {

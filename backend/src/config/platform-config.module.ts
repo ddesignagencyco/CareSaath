@@ -1,9 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Injectable,
   Module,
+  NotFoundException,
   Param,
   Put,
 } from '@nestjs/common';
@@ -66,6 +69,12 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     envVar: 'RETENTION_NOTIFICATION_DAYS',
     envDefault: 90,
     description: 'Days to keep delivered notifications before cleanup.',
+  },
+  {
+    key: 'visit.geofenceRadiusMeters',
+    envVar: 'VISIT_GEOFENCE_RADIUS_METERS',
+    envDefault: 300,
+    description: 'Maximum distance (metres) between a GPS check-in/check-out and the visit address; 0 disables the check.',
   },
   {
     key: 'search.cacheTtlSeconds',
@@ -142,10 +151,10 @@ export class ConfigService {
   async set(admin: AuthUser, key: string, value: number): Promise<ConfigDefinition & { value: number }> {
     const def = CONFIG_BY_KEY.get(key);
     if (!def) {
-      throw new Error(`Unknown config key: ${key}`);
+      throw new NotFoundException(`Unknown config key: ${key}`);
     }
     if (!Number.isFinite(value) || value < 0) {
-      throw new Error('Config value must be a non-negative number');
+      throw new BadRequestException('Config value must be a non-negative number');
     }
     await this.prisma.platformConfig.upsert({
       where: { key },
@@ -161,6 +170,23 @@ export class ConfigService {
       metadata: { value },
     });
     return { ...def, value };
+  }
+
+  /** Drop the admin override so the setting falls back to its env/default value. */
+  async reset(admin: AuthUser, key: string): Promise<ConfigDefinition & { value: number; overridden: false }> {
+    const def = CONFIG_BY_KEY.get(key);
+    if (!def) {
+      throw new NotFoundException(`Unknown config key: ${key}`);
+    }
+    await this.prisma.platformConfig.deleteMany({ where: { key } });
+    await this.redis.client.del(`${CONFIG_CACHE_PREFIX}${key}`);
+    await this.audit.log({
+      actorId: admin.sub,
+      action: 'config.reset',
+      entityType: 'PlatformConfig',
+      entityId: key,
+    });
+    return { ...def, value: this.envDefault(def), overridden: false };
   }
 }
 
@@ -191,6 +217,15 @@ export class AdminConfigController {
     @Body() dto: SetConfigDto,
   ) {
     return this.config.set(admin, key, dto.value);
+  }
+
+  @Delete(':key')
+  @ApiOperation({
+    summary: 'Reset platform parameter to its default',
+    description: 'Removes the admin override so the setting returns to its environment/default value.',
+  })
+  reset(@CurrentUser() admin: AuthUser, @Param('key') key: string) {
+    return this.config.reset(admin, key);
   }
 }
 

@@ -1,5 +1,6 @@
 import {
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -16,6 +17,7 @@ import { IsDecimal, IsOptional, IsString, MaxLength, MinLength } from 'class-val
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class AddressDto {
@@ -115,7 +117,7 @@ export class AddressesService {
     await this.get(user, id);
     const bookingCount = await this.prisma.booking.count({ where: { addressId: id } });
     if (bookingCount > 0) {
-      throw new NotFoundException(
+      throw new ConflictException(
         'Address is referenced by existing bookings and cannot be deleted',
       );
     }
@@ -132,6 +134,7 @@ export class AddressesService {
 
 @ApiTags('Customer - Addresses')
 @ApiBearerAuth()
+@Roles('CUSTOMER')
 @Controller('customer/addresses')
 export class AddressesController {
   constructor(private readonly addresses: AddressesService) {}

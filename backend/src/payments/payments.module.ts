@@ -1,16 +1,24 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Body,
   Controller,
   Get,
+  Headers,
+  HttpCode,
   Injectable,
   Logger,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
+  Req,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,8 +28,12 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
+import type Stripe from 'stripe';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import {
   BookingStatus,
   PaymentMethod,
@@ -38,6 +50,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { StripeService } from './stripe.service.js';
 
 /**
  * Digital payment methods all start PENDING and settle via a gateway webhook;
@@ -48,6 +61,45 @@ const GATEWAY_METHODS: PaymentMethod[] = [
   PaymentMethod.JAZZCASH,
   PaymentMethod.EASYPAISA,
 ];
+
+/** A gateway payment still PENDING after this long is abandoned (set to FAILED) on the next attempt. */
+const GATEWAY_PENDING_TTL_MINUTES = Number(process.env['PAYMENT_PENDING_TTL_MINUTES'] ?? 30);
+
+/** Hosted-checkout base; the gateway integration is TBD (TRD §6.5) until merchant credentials exist. */
+function checkoutUrlFor(method: PaymentMethod, gatewayRef: string): string {
+  const base = process.env['PAYMENT_CHECKOUT_BASE_URL'] ?? 'https://checkout.caresaath.pk';
+  return `${base.replace(/\/+$/, '')}/${method.toLowerCase()}/${encodeURIComponent(gatewayRef)}`;
+}
+
+const WEBHOOK_PROVIDERS = ['card', 'jazzcash', 'easypaisa'];
+
+/**
+ * Webhook authenticity (TRD §6.5). The gateway signs `<gatewayRef>:<status>` with
+ * HMAC-SHA256 (hex) using a shared secret: PAYMENT_WEBHOOK_SECRET_<PROVIDER>, or
+ * PAYMENT_WEBHOOK_SECRET for all providers. With no secret configured, webhooks
+ * are accepted in development but refused in production (fail closed).
+ */
+export function verifyWebhookSignature(
+  provider: string,
+  gatewayRef: string,
+  status: string,
+  signature: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const secret =
+    env[`PAYMENT_WEBHOOK_SECRET_${provider.toUpperCase()}`] ?? env['PAYMENT_WEBHOOK_SECRET'];
+  if (!secret) {
+    if (env['NODE_ENV'] === 'production') {
+      throw new ServiceUnavailableException('Payment webhook secret is not configured');
+    }
+    return;
+  }
+  const expected = createHmac('sha256', secret).update(`${gatewayRef}:${status}`).digest();
+  const given = Buffer.from(signature ?? '', 'hex');
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    throw new UnauthorizedException('Invalid webhook signature');
+  }
+}
 
 export function isGatewayMethod(method: PaymentMethod): boolean {
   return GATEWAY_METHODS.includes(method);
@@ -68,18 +120,12 @@ export function splitCommission(
 
 export class InitiatePaymentDto {
   @ApiProperty({ format: 'uuid', example: 'v1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Visit UUID to pay for' })
-  @IsString()
+  @IsUUID()
   visitId!: string;
 
   @ApiProperty({ enum: PaymentMethod, example: PaymentMethod.JAZZCASH, description: 'Selected payment method (CASH, JAZZCASH, EASYPAISA, CARD)' })
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
-
-  @ApiPropertyOptional({ example: 60000, description: 'Amount in paisa (defaults to visit rate)' })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  amount?: number;
 }
 
 export class CashConfirmationDto {
@@ -111,6 +157,11 @@ export class ListPaymentsQueryDto {
   @IsEnum(PaymentStatus)
   status?: PaymentStatus;
 
+  @ApiPropertyOptional({ format: 'uuid', description: 'Only payments for this visit' })
+  @IsOptional()
+  @IsUUID()
+  visitId?: string;
+
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -135,7 +186,13 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly stripe?: StripeService,
   ) {}
+
+  /** Card payments go through Stripe whenever it is configured. */
+  private usesStripe(method: PaymentMethod): boolean {
+    return method === PaymentMethod.CARD && Boolean(this.stripe?.enabled);
+  }
 
   private paymentInclude() {
     return {
@@ -157,7 +214,18 @@ export class PaymentsService {
   private async loadPayableVisit(user: AuthUser, visitId: string) {
     const visit = await this.prisma.visit.findFirst({
       where: { id: visitId, booking: { customerId: user.sub } },
-      include: { booking: { include: { caregiver: { include: { commissionRate: true } } } } },
+      include: {
+        booking: {
+          include: {
+            caregiver: {
+              include: {
+                commissionRate: true,
+                user: { select: { id: true, phone: true } },
+              },
+            },
+          },
+        },
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
@@ -171,9 +239,28 @@ export class PaymentsService {
     return visit;
   }
 
-  /** FR-C8, TRD §6.5: start a payment for a visit. */
+  /** Abandon gateway payments left PENDING past the TTL so they stop blocking the visit. */
+  private async expireStaleGatewayPayments(visitId: string) {
+    const cutoff = new Date(Date.now() - GATEWAY_PENDING_TTL_MINUTES * 60 * 1000);
+    await this.prisma.payment.updateMany({
+      where: {
+        visitId,
+        status: PaymentStatus.PENDING,
+        method: { in: GATEWAY_METHODS },
+        createdAt: { lt: cutoff },
+      },
+      data: { status: PaymentStatus.FAILED },
+    });
+  }
+
+  /**
+   * FR-C8, TRD §6.5: start a payment for a visit. The amount is always computed
+   * server-side from the booking's rate snapshot minus its discount. Gateway
+   * methods return `{ payment, checkoutUrl }`; cash returns the payment row.
+   */
   async initiate(user: AuthUser, dto: InitiatePaymentDto) {
     const visit = await this.loadPayableVisit(user, dto.visitId);
+    await this.expireStaleGatewayPayments(visit.id);
     const existing = await this.prisma.payment.findFirst({
       where: { visitId: visit.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID] } },
     });
@@ -184,7 +271,7 @@ export class PaymentsService {
           : 'A payment for this visit is already in progress',
       );
     }
-    const amount = dto.amount ?? visit.booking.rateSnapshot - visit.booking.discountAmount;
+    const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
     if (amount <= 0) {
       throw new BadRequestException('Payment amount must be positive');
     }
@@ -209,16 +296,76 @@ export class PaymentsService {
       entityId: payment.id,
       metadata: { visitId: visit.id, method: dto.method, amount },
     });
+    if (this.usesStripe(dto.method)) {
+      try {
+        const session = await this.stripe!.createCheckoutSession({
+          paymentId: payment.id,
+          visitId: visit.id,
+          amount,
+          description: 'CareSaath home visit',
+        });
+        const withRef = await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { gatewayRef: session.id },
+        });
+        return { payment: withRef, checkoutUrl: session.url };
+      } catch (err) {
+        // Don't leave a PENDING row that would block retrying with another method.
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: PaymentStatus.FAILED },
+        });
+        this.logger.error(`Stripe checkout failed for payment ${payment.id}: ${(err as Error).message}`);
+        throw new BadGatewayException('The card payment could not be started, please try again');
+      }
+    }
     if (isGatewayMethod(dto.method)) {
       // The gateway integration is TBD (TRD §6.5); the ref stands in for the
-      // hosted-checkout redirect reference until merchant credentials exist.
+      // hosted-checkout reference until merchant credentials exist.
       const gatewayRef = `gw_${payment.id}`;
-      return this.prisma.payment.update({
+      const withRef = await this.prisma.payment.update({
         where: { id: payment.id },
         data: { gatewayRef },
       });
+      return { payment: withRef, checkoutUrl: checkoutUrlFor(dto.method, gatewayRef) };
     }
+    const caregiverUser = visit.booking.caregiver.user;
+    await this.notifications.notify({
+      userId: caregiverUser.id,
+      phone: caregiverUser.phone,
+      event: 'payment.cash.initiated',
+      payload: { paymentId: payment.id, visitId: visit.id, amount },
+      message: `The customer will pay Rs ${amount / 100} in cash for your visit. Confirm once you have received it.`,
+    });
     return payment;
+  }
+
+  /** The customer abandons a payment that is still PENDING so another method can be tried. */
+  async cancel(user: AuthUser, id: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id, visit: { booking: { customerId: user.sub } } },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status !== PaymentStatus.PENDING) {
+      throw new BadRequestException(`Only a pending payment can be cancelled (this one is ${payment.status})`);
+    }
+    const updated = await this.prisma.payment.update({
+      where: { id },
+      data: { status: PaymentStatus.FAILED },
+    });
+    if (this.usesStripe(payment.method) && payment.gatewayRef?.startsWith('cs_')) {
+      await this.stripe!.expireSession(payment.gatewayRef);
+    }
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'payment.cancelled',
+      entityType: 'Payment',
+      entityId: id,
+      metadata: { method: payment.method },
+    });
+    return updated;
   }
 
   private async markPaid(paymentId: string, source: string) {
@@ -320,9 +467,72 @@ export class PaymentsService {
     throw new BadRequestException('Unsupported webhook status');
   }
 
+  /**
+   * Stripe webhook (signature already verified). Settlement is idempotent, and a
+   * session is only trusted when its amount and currency match the payment.
+   */
+  async handleStripeEvent(event: Stripe.Event) {
+    switch (event.type) {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
+        const session = event.data.object;
+        if (session.payment_status !== 'paid') {
+          return { received: true, settled: false };
+        }
+        const payment = await this.findStripePayment(session);
+        if (!payment) return { received: true, settled: false };
+        if (session.currency !== 'pkr' || session.amount_total !== payment.amount) {
+          this.logger.error(
+            `Stripe session ${session.id} does not match payment ${payment.id} (${session.amount_total} ${session.currency} vs ${payment.amount} pkr); not settling`,
+          );
+          return { received: true, settled: false };
+        }
+        await this.markPaid(payment.id, 'stripe');
+        return { received: true, settled: true };
+      }
+      case 'checkout.session.expired':
+      case 'checkout.session.async_payment_failed': {
+        const payment = await this.findStripePayment(event.data.object);
+        if (payment?.status === PaymentStatus.PENDING) {
+          await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { status: PaymentStatus.FAILED },
+          });
+          await this.audit.log({
+            actorId: null,
+            action: 'payment.failed',
+            entityType: 'Payment',
+            entityId: payment.id,
+            metadata: { gatewayRef: event.data.object.id, source: 'stripe', event: event.type },
+          });
+        }
+        return { received: true, settled: false };
+      }
+      default:
+        return { received: true, settled: false };
+    }
+  }
+
+  private async findStripePayment(session: Stripe.Checkout.Session) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        method: PaymentMethod.CARD,
+        OR: [
+          { gatewayRef: session.id },
+          ...(session.metadata?.['paymentId'] ? [{ id: session.metadata['paymentId'] }] : []),
+        ],
+      },
+    });
+    if (!payment) {
+      this.logger.warn(`Stripe event for unknown session ${session.id}`);
+    }
+    return payment;
+  }
+
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       visit: { booking: { customerId: user.sub } },
+      ...(query.visitId ? { visitId: query.visitId } : {}),
       ...(query.status ? { status: query.status } : {}),
     };
     const [total, items] = await this.prisma.$transaction([
@@ -360,7 +570,7 @@ export class CustomerPaymentsController {
   @Post()
   @ApiOperation({
     summary: 'Initiate visit payment',
-    description: 'Creates a payment transaction for a visit via cash or digital mobile gateway.',
+    description: 'Creates a payment for a visit. The amount is always the booking rate minus its discount. Cash returns the payment row; CARD / JAZZCASH / EASYPAISA return { payment, checkoutUrl } for the hosted checkout.',
   })
   initiate(@CurrentUser() user: AuthUser, @Body() dto: InitiatePaymentDto) {
     return this.payments.initiate(user, dto);
@@ -373,6 +583,15 @@ export class CustomerPaymentsController {
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListPaymentsQueryDto) {
     return this.payments.listForCustomer(user, query);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({
+    summary: 'Cancel a pending payment',
+    description: 'Abandons a payment that is still PENDING (sets it to FAILED) so another method can be used for the visit. Gateway payments also expire automatically after PAYMENT_PENDING_TTL_MINUTES (default 30).',
+  })
+  cancel(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payments.cancel(user, id);
   }
 
   @Get(':id')
@@ -405,16 +624,60 @@ export class CaregiverPaymentsController {
 @ApiTags('System & Webhooks')
 @Controller('payments')
 export class PaymentWebhookController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly stripe: StripeService,
+  ) {}
 
   @Public()
-  @ApiHeader({ name: 'x-gateway-signature', required: false, description: 'Optional gateway webhook signature' })
+  @ApiHeader({ name: 'stripe-signature', required: true, description: 'Stripe webhook signature' })
+  @Post('webhook/stripe')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Stripe webhook callback',
+    description: 'Receives checkout.session.* events from Stripe. The signature is verified against STRIPE_WEBHOOK_SECRET using the raw request body; settlement is idempotent.',
+  })
+  stripeWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('stripe-signature') signature?: string,
+  ) {
+    if (!req.rawBody) {
+      throw new BadRequestException('Missing request body');
+    }
+    let event: Stripe.Event;
+    try {
+      event = this.stripe.constructEvent(req.rawBody, signature);
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) throw err;
+      throw new BadRequestException('Invalid Stripe signature');
+    }
+    return this.payments.handleStripeEvent(event);
+  }
+
+  @Public()
+  @ApiHeader({
+    name: 'x-gateway-signature',
+    required: false,
+    description: 'Hex HMAC-SHA256 of "<gatewayRef>:<status>" using the provider webhook secret. Required whenever a secret is configured (always in production). May also be sent as "signature" in the body.',
+  })
   @Post('webhook/:provider')
   @ApiOperation({
     summary: 'Payment gateway webhook callback',
     description: 'Receives asynchronous payment notifications from JazzCash, Easypaisa, or Card processors. Idempotent settlement.',
   })
-  webhook(@Body() dto: GatewayWebhookDto) {
+  webhook(
+    @Param('provider') provider: string,
+    @Body() dto: GatewayWebhookDto,
+    @Headers('x-gateway-signature') headerSignature?: string,
+  ) {
+    if (!WEBHOOK_PROVIDERS.includes(provider.toLowerCase())) {
+      throw new NotFoundException('Unknown payment provider');
+    }
+    if (provider.toLowerCase() === 'card' && this.stripe.enabled) {
+      // Card settlement is Stripe-only once Stripe is configured.
+      throw new NotFoundException('Use /payments/webhook/stripe for card payments');
+    }
+    verifyWebhookSignature(provider, dto.gatewayRef, dto.status, headerSignature ?? dto.signature);
     return this.payments.handleGatewayWebhook(dto);
   }
 }
@@ -426,7 +689,7 @@ export class PaymentWebhookController {
     CaregiverPaymentsController,
     PaymentWebhookController,
   ],
-  providers: [PaymentsService],
+  providers: [PaymentsService, StripeService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

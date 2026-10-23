@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CaregiversService } from './caregivers.module.js';
 import { deriveKey, encryptField } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -29,6 +29,7 @@ describe('CaregiversService', () => {
       storage as never,
       redis as never,
       config as never,
+      { issueTokens: async () => ({ accessToken: 'a', refreshToken: 'r' }) } as never,
     );
   });
 
@@ -43,7 +44,7 @@ describe('CaregiversService', () => {
         serviceCities: ['Lahore'],
         ratePerVisit: 5000,
       }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('requires a configured commission rate for the specialty', async () => {
@@ -73,7 +74,7 @@ describe('CaregiversService', () => {
       serviceCities: ['Lahore'],
       ratePerVisit: 5000,
     });
-    expect(result).toMatchObject({ id: 'cg-1' });
+    expect(result).toMatchObject({ id: 'cg-1', accessToken: 'a', refreshToken: 'r' });
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { role: 'CAREGIVER' } }),
     );
@@ -120,7 +121,7 @@ describe('CaregiversService', () => {
       mimetype: 'image/png',
       buffer: Buffer.from('x'),
     });
-    expect(storage.validateUpload).toHaveBeenCalled();
+    expect(storage.validateImageUpload).toHaveBeenCalled();
     expect(result).toMatchObject({ photoKey: 'caregivers/cg-1/photo/x.png' });
   });
 

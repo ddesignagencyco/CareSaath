@@ -199,14 +199,14 @@ describe('Booking & visit lifecycle (e2e)', () => {
     const checkIn = await request(server)
       .post(`/api/v1/caregiver/visits/${visitId}/check-in`)
       .set(bearer(caregiverToken))
-      .send({ method: 'GPS', lat: 31.52, lng: 74.35 });
+      .send({ method: 'GPS', lat: 31.5204, lng: 74.3587 });
     expect(checkIn.status).toBe(201);
     expect(checkIn.body.status).toBe('CHECKED_IN');
 
     const checkOut = await request(server)
       .post(`/api/v1/caregiver/visits/${visitId}/check-out`)
       .set(bearer(caregiverToken))
-      .send({ method: 'GPS', lat: 31.52, lng: 74.35 });
+      .send({ method: 'GPS', lat: 31.5204, lng: 74.3587 });
     expect(checkOut.status).toBe(201);
     expect(checkOut.body.status).toBe('CHECKED_OUT');
   });
