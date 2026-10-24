@@ -112,7 +112,7 @@ function seed(): MockDb {
     licenseBody: body,
     experienceYears: years,
     bio,
-    photoKey: null,
+    photoUrl: null,
     ratePerVisit: rate * 100,
     serviceArea: { cities },
     ratingAverage: rating,
@@ -365,6 +365,7 @@ function seed(): MockDb {
     payload,
     status: "SENT",
     sentAt: createdAt,
+    readAt: null,
     createdAt,
   });
 

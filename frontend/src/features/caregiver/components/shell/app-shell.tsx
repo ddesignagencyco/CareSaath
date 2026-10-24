@@ -176,6 +176,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           seenEvent={SEEN_EVENT}
           getSeenAt={getSeenAt}
           markSeen={markSeen}
+          markRead={(before) =>
+            notificationsApi
+              .markRead({ before })
+              .then(() => client.invalidateQueries({ queryKey: keys.notifications }))
+              .catch(() => undefined)
+          }
           allHref="/caregiver/notifications"
           labels={{
             title: t("notifications.title"),

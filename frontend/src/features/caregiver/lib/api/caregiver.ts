@@ -94,8 +94,9 @@ export const bookingsApi = {
 };
 
 export const visitsApi = {
-  /** GET /caregiver/visits?status=&date= (the API validates `date` but ignores it; filter client-side) */
-  list: (q: PageQuery & { status?: VisitStatus; date?: string }) => (M ? mock.listVisits(q) : http.get<Paginated<CaregiverVisitListItem>>("/caregiver/visits", q)),
+  /** GET /caregiver/visits?status=&date=&from=&to=&sort= (date/from/to are YYYY-MM-DD; sort by scheduled date). */
+  list: (q: PageQuery & { status?: VisitStatus; date?: string; from?: string; to?: string; sort?: "asc" | "desc" }) =>
+    M ? mock.listVisits(q) : http.get<Paginated<CaregiverVisitListItem>>("/caregiver/visits", q),
   /** GET /caregiver/visits/:id */
   get: (id: string) => (M ? mock.getVisit(id) : http.get<CaregiverVisitDetail>(`/caregiver/visits/${id}`)),
   /** POST /caregiver/visits/:id/en-route */
@@ -150,6 +151,10 @@ export const disputesApi = {
 };
 
 export const notificationsApi = {
-  /** GET /notifications — one row per channel; the app shows PUSH rows only. */
-  list: (q: PageQuery) => (M ? mock.listNotifications(q) : http.get<Paginated<AppNotification>>("/notifications", q)),
+  /** GET /notifications?channel=&unread= — one row per channel; the app shows PUSH rows only. */
+  list: (q: PageQuery & { channel?: string; unread?: boolean }) =>
+    M ? mock.listNotifications(q) : http.get<Paginated<AppNotification>>("/notifications", q),
+  /** POST /notifications/read — mark the given ids (or everything before a time) as read. */
+  markRead: (dto: { ids?: string[]; before?: string }) =>
+    M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
 };

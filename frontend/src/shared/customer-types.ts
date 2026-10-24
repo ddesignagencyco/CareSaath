@@ -19,14 +19,14 @@ export interface CaregiverSearchItem {
   ratingCount: number;
   serviceArea: { cities: string[] };
   user: { fullName: string };
+  /** Viewable profile photo URL (null when none uploaded). */
+  photoUrl: string | null;
 }
 
 /** GET /caregivers/:id */
 export interface PublicCaregiver extends CaregiverSearchItem {
   licenseNumber: string;
   licenseBody: LicenseBody;
-  /** Storage key only; the API has no public photo URL yet. */
-  photoKey: string | null;
   createdAt: string;
   availabilityRules: Pick<AvailabilityRule, "dayOfWeek" | "startTime" | "endTime">[];
 }
@@ -131,6 +131,13 @@ export interface CustomerPaymentWithVisit extends CustomerPayment {
  * plus a hosted-checkout URL the customer is redirected to.
  */
 export type InitiatePaymentResult = CustomerPayment | { payment: CustomerPayment; checkoutUrl: string };
+
+/** GET /promos/quote — a per-visit discount preview for the review step. */
+export interface PromoQuote {
+  code: string;
+  discountAmount: number;
+  perVisitAfterDiscount: number;
+}
 
 export interface ReviewInput {
   /** 1–5 */

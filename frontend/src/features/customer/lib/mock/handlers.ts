@@ -263,7 +263,7 @@ export async function deleteAddress(id: string) {
 
 /* ---- Caregiver directory (public) ------------------------------------------ */
 
-const toSearchItem = ({ id, specialty, ratePerVisit, experienceYears, bio, ratingAverage, ratingCount, serviceArea, user }: MockCaregiver): CaregiverSearchItem => ({
+const toSearchItem = ({ id, specialty, ratePerVisit, experienceYears, bio, ratingAverage, ratingCount, serviceArea, user, photoUrl }: MockCaregiver): CaregiverSearchItem => ({
   id,
   specialty,
   ratePerVisit,
@@ -273,6 +273,7 @@ const toSearchItem = ({ id, specialty, ratePerVisit, experienceYears, bio, ratin
   ratingCount,
   serviceArea,
   user,
+  photoUrl,
 });
 
 export async function searchCaregivers(q: PageQuery & { specialty?: Specialty; city?: string }): Promise<Paginated<CaregiverSearchItem>> {
@@ -314,7 +315,7 @@ function simulate() {
 }
 
 function push(userId: string, event: string, payload: Record<string, unknown>): AppNotification {
-  return { id: uid("n"), userId, channel: "PUSH", event, payload, status: "SENT", sentAt: nowIso(), createdAt: nowIso() };
+  return { id: uid("n"), userId, channel: "PUSH", event, payload, status: "SENT", sentAt: nowIso(), readAt: null, createdAt: nowIso() };
 }
 
 function detail(id: string): BookingDetail {
@@ -347,6 +348,13 @@ function occurrences(start: string, end: string, type: "SINGLE" | "RECURRING", w
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return out;
+}
+
+export async function quotePromoPreview(code: string, caregiverId: string): Promise<{ code: string; discountAmount: number; perVisitAfterDiscount: number }> {
+  await delay(150);
+  const c = db().caregivers.find((x) => x.id === caregiverId) ?? notFound("Caregiver not available");
+  const { promo, discountAmount } = quotePromo(code, c.ratePerVisit);
+  return { code: promo.code, discountAmount, perVisitAfterDiscount: c.ratePerVisit - discountAmount };
 }
 
 export function quotePromo(code: string, baseAmount: number) {
@@ -668,6 +676,17 @@ export async function getPayment(id: string): Promise<CustomerPaymentWithVisit> 
   return clone(myPayments().find((p) => p.id === id) ?? notFound("Payment not found"));
 }
 
+export async function cancelPayment(id: string): Promise<CustomerPayment> {
+  await delay(200);
+  const d = db();
+  const p = d.payments.find((x) => x.id === id) ?? notFound("Payment not found");
+  if (p.status !== "PENDING") bad(`Only a pending payment can be cancelled (this one is ${p.status})`);
+  p.status = "FAILED";
+  p.updatedAt = nowIso();
+  persist();
+  return clone(p);
+}
+
 /* ---- Disputes & notifications ---------------------------------------------------- */
 
 export async function listDisputes(): Promise<DisputeRow[]> {
@@ -696,4 +715,20 @@ export async function listNotifications(q: PageQuery): Promise<Paginated<AppNoti
   simulate();
   const user = currentUser();
   return paginate(db().notifications.filter((n) => n.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), q);
+}
+
+export async function markNotifsRead(dto: { ids?: string[]; before?: string }): Promise<{ updated: number }> {
+  await delay(100);
+  const user = currentUser();
+  const now = nowIso();
+  let updated = 0;
+  for (const n of db().notifications) {
+    if (n.userId !== user.id || n.readAt) continue;
+    if (dto.ids && !dto.ids.includes(n.id)) continue;
+    if (dto.before && n.createdAt > dto.before) continue;
+    n.readAt = now;
+    updated++;
+  }
+  persist();
+  return { updated };
 }

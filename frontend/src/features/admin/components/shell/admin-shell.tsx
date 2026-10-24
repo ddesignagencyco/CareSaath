@@ -85,7 +85,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     const refresh = session.get()?.refreshToken;
     session.clear();
     if (refresh) await authApi.logout(refresh).catch(() => undefined);
-    router.replace("/login");
+    // Full navigation (not router.replace) so the client router cache can't
+    // restore the previous login screen with a stale phone/OTP still filled in.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard reload to drop all client state on signout
+    window.location.assign("/login");
   }
 
   return (

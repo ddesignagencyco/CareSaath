@@ -415,5 +415,7 @@ export interface AppNotification {
   payload: Record<string, unknown>;
   status: "QUEUED" | "SENT" | "FAILED";
   sentAt: string | null;
+  /** Null while unread; set when the user marks it read (POST /notifications/read). */
+  readAt: string | null;
   createdAt: string;
 }

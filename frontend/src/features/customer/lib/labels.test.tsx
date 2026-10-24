@@ -77,6 +77,7 @@ const n = (event: string, payload: Record<string, unknown> = {}): AppNotificatio
   payload,
   status: "SENT",
   sentAt: null,
+  readAt: null,
   createdAt: "2026-10-22T10:00:00.000Z",
 });
 
@@ -140,6 +141,9 @@ describe("useSignOut", () => {
     expect(client.getQueryData(["g-me"])).toEqual({ id: "cg" });
     expect(client.getQueryData(["admin", "x"])).toBe(1);
     expect(f.calls.map((c) => [c.method, c.url.pathname, c.body])).toEqual([["POST", "/api/v1/auth/logout", { refreshToken: "refresh-1" }]]);
-    expect(replace).toHaveBeenCalledWith("/login");
+    // Signout now does a full-page navigation to /login (window.location.assign,
+    // which jsdom can't intercept) instead of router.replace, so the client
+    // router cache can't restore the previous login screen with a stale OTP.
+    expect(replace).not.toHaveBeenCalled();
   });
 });

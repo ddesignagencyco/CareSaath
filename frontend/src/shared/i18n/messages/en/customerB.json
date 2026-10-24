@@ -116,9 +116,25 @@
     "awaitingGateway": "Awaiting {method} confirmation",
     "pendingToast": "Payment started. It will show as paid once confirmed.",
     "comingSoon": "Coming soon",
+    "payAnotherWay": "Cancel and pay another way",
+    "abandoned": "Payment cancelled. Choose another method.",
     "redirecting": "Opening secure checkout…",
     "gatewayNote": "Card payments open a secure checkout. JazzCash and Easypaisa are coming soon.",
     "onlineUnavailable": "Online payments (cards, JazzCash, Easypaisa) aren't available yet. Pay the caregiver in cash at the visit."
+  },
+  "paymentReturn": {
+    "paidTitle": "Payment received",
+    "paidBody": "Your card payment is confirmed. Thank you.",
+    "confirmingTitle": "Confirming your payment…",
+    "confirmingBody": "This takes a few seconds. You can safely return to your booking.",
+    "cancelledTitle": "Payment cancelled",
+    "cancelledBody": "No charge was made. You can try again or pay cash at the visit.",
+    "genericTitle": "Payment status",
+    "genericBody": "Check your bookings for the latest payment status.",
+    "amount": "Amount",
+    "viewBooking": "View booking",
+    "myBookings": "My bookings",
+    "tryAgain": "Back to booking"
   },
   "review": {
     "yours": "Your review",

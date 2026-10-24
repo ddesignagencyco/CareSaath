@@ -116,6 +116,9 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [open, setOpen] = useState(false);
   const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
+  const payable = visit.booking.status === "CONFIRMED" && visit.status !== "CANCELLED" && visit.status !== "DECLINED";
+  const existing = payments.data?.items.find((p) => p.visitId === visit.id && (p.status === "PAID" || p.status === "PENDING"));
+
   const pay = useAction(() => paymentsApi.initiate({ visitId: visit.id, method }), {
     invalidate: [keys.payments],
     success: null,
@@ -131,8 +134,11 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
     },
   });
 
-  const payable = visit.booking.status === "CONFIRMED" && visit.status !== "CANCELLED" && visit.status !== "DECLINED";
-  const existing = payments.data?.items.find((p) => p.visitId === visit.id && (p.status === "PAID" || p.status === "PENDING"));
+  // Abandon a stuck PENDING gateway payment so the customer can pay another way.
+  const abandon = useAction(() => paymentsApi.cancel(existing?.id ?? ""), {
+    invalidate: [keys.payments],
+    success: t("abandoned"),
+  });
 
   if (!payable && !existing) return null;
 
@@ -157,6 +163,17 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
           <Button onClick={() => setOpen(true)}>{t("payNow")}</Button>
         )}
       </div>
+      {/* A PENDING non-cash payment blocks paying cash — let the customer abandon it. */}
+      {existing?.status === "PENDING" && existing.method !== "CASH" && (
+        <button
+          type="button"
+          onClick={() => abandon.mutate(undefined)}
+          disabled={abandon.isPending}
+          className="mt-2 text-sm font-semibold text-brand-700 hover:underline disabled:opacity-60"
+        >
+          {t("payAnotherWay")}
+        </button>
+      )}
       {existing?.status === "PAID" && existing.paidAt && <p className="mt-1 text-xs text-ink-500">{t("paidAt", { date: f.dateTime(existing.paidAt) })}</p>}
 
       {open && (

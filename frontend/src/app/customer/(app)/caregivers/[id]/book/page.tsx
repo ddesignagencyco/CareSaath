@@ -19,10 +19,10 @@ import { Field, Input } from "@shared/ui/field";
 import { Avatar, Skeleton } from "@shared/ui/misc";
 import { useToast } from "@shared/ui/toast";
 import type { Address, PatientProfile } from "@shared/caregiver-types";
-import type { PublicCaregiver } from "@shared/customer-types";
+import type { PromoQuote, PublicCaregiver } from "@shared/customer-types";
 import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
 import { AddressForm, PatientForm } from "@/features/customer/components/forms";
-import { addressesApi, bookingsApi, patientsApi } from "@/features/customer/lib/api/customer";
+import { addressesApi, bookingsApi, patientsApi, promosApi } from "@/features/customer/lib/api/customer";
 import { ApiError } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 import { isUnreadableMedical } from "@/features/customer/lib/labels";
@@ -105,6 +105,7 @@ export default function BookPage() {
   const [to, setTo] = useState("11:00");
   const [promo, setPromo] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [applied, setApplied] = useState<PromoQuote | null>(null);
   const [rx, setRx] = useState<File | null>(null);
   const [rxError, setRxError] = useState<string | null>(null);
   const [adding, setAdding] = useState<"patient" | "address" | null>(null);
@@ -175,11 +176,26 @@ export default function BookPage() {
     },
   );
 
+  const quote = useAction(() => promosApi.quote(promo.trim().toUpperCase(), id), {
+    invalidate: [],
+    success: null,
+    onSuccess: (q) => {
+      setApplied(q);
+      setPromoError(null);
+    },
+    onError: (err) => {
+      setApplied(null);
+      setPromoError(apiError(err));
+      return true;
+    },
+  });
+
   if (caregiver.isError) {
     return <p className="text-sm text-danger-600">{apiError(caregiver.error)}</p>;
   }
 
   const perVisit = c?.ratePerVisit ?? 0;
+  const effectivePerVisit = applied ? applied.perVisitAfterDiscount : perVisit;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 pb-6">
@@ -411,33 +427,52 @@ export default function BookPage() {
               {rxError && <p className="mt-1 text-sm text-danger-600">{rxError}</p>}
             </div>
 
-            <Field label={t("review.promo")} error={promoError} hint={t("review.promoHint")}>
+            <Field label={t("review.promo")} error={promoError} hint={applied ? undefined : t("review.promoHint")}>
               {(fid) => (
-                <Input
-                  id={fid}
-                  value={promo}
-                  maxLength={24}
-                  className="uppercase"
-                  placeholder={t("review.promoPlaceholder")}
-                  dir="ltr"
-                  onChange={(e) => {
-                    setPromo(e.target.value.replace(/[^a-zA-Z0-9]/g, ""));
-                    setPromoError(null);
-                  }}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id={fid}
+                    value={promo}
+                    maxLength={24}
+                    className="uppercase"
+                    placeholder={t("review.promoPlaceholder")}
+                    dir="ltr"
+                    onChange={(e) => {
+                      setPromo(e.target.value.replace(/[^a-zA-Z0-9]/g, ""));
+                      setPromoError(null);
+                      setApplied(null);
+                    }}
+                  />
+                  <Button variant="secondary" type="button" loading={quote.isPending} disabled={!promo.trim()} onClick={() => quote.mutate(undefined)}>
+                    {t("review.promoApply")}
+                  </Button>
+                </div>
               )}
             </Field>
-
-            <div className="rounded-xl bg-ink-25 p-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-ink-600">
-                  {t("review.price", { price: formatMoney(perVisit), count: dates.length })}
-                </span>
-                <span className="tabular font-bold text-ink-900">{formatMoney(perVisit * dates.length)}</span>
-              </div>
-              <p className="mt-2 text-xs text-ink-500">
-                {t("review.payNote")}
+            {applied && (
+              <p className="-mt-2 flex items-center gap-1.5 text-sm font-semibold text-success-700">
+                <Check className="size-4" /> {t("review.promoOk", { amount: formatMoney(applied.discountAmount) })}
               </p>
+            )}
+
+            <div className="space-y-1.5 rounded-xl bg-ink-25 p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-ink-600">{t("review.price", { price: formatMoney(perVisit), count: dates.length })}</span>
+                <span className={clsx("tabular", applied ? "text-ink-400 line-through" : "font-bold text-ink-900")}>{formatMoney(perVisit * dates.length)}</span>
+              </div>
+              {applied && (
+                <>
+                  <div className="flex justify-between text-success-700">
+                    <span>{t("review.promoLine", { code: applied.code })}</span>
+                    <span className="tabular">−{formatMoney(applied.discountAmount * dates.length)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-ink-100 pt-1.5">
+                    <span className="font-semibold text-ink-900">{t("review.total")}</span>
+                    <span className="tabular font-bold text-ink-900">{formatMoney(effectivePerVisit * dates.length)}</span>
+                  </div>
+                </>
+              )}
+              <p className="pt-1 text-xs text-ink-500">{t("review.payNote")}</p>
             </div>
           </div>
         )}

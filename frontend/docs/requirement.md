@@ -27,7 +27,16 @@ Two dev pulls landed the backend side of most items below:
 - **Payments — `6b8599e` + `8dfb610`:** Stripe Checkout for card payments with verified webhook signatures. `POST /customer/payments` now returns the bare payment for **CASH** and `{ payment, checkoutUrl }` for **CARD** (Stripe) / JazzCash / Easypaisa.
 - **Storage — `67b17f4` + `82f487c`:** PDF/image viewing works against real Cloudinary, and every uploaded-document response now carries a viewable `url`.
 
-**Frontend wiring done in response (this branch):** the customer payment dialog now enables **Card** alongside Cash; a gateway method's `{ payment, checkoutUrl }` redirects the browser to the hosted checkout (`window.location.assign`), settling via the Stripe webhook. JazzCash/Easypaisa stay "coming soon" until their gateway lands. (`paymentsApi.initiate` return type is now `InitiatePaymentResult`.) Everything else below was already wired to expect these fixes (see each "Frontend today"), so no further frontend change was required; document viewing and the caregiver cash-confirm card light up automatically now that the backend returns the data. **Card payments require the backend's `STRIPE_*` env (see `.env.example`); without it the gateway URL is a placeholder.**
+**Frontend wiring done in response (this branch):**
+- **Payments (card):** the payment dialog enables **Card** alongside Cash; a gateway method's `{ payment, checkoutUrl }` redirects to the hosted checkout (`window.location.assign`), settling via the Stripe webhook; JazzCash/Easypaisa stay "coming soon". Added `/payments/return` (polls for webhook settlement) and a "cancel & pay another way" path for a stuck PENDING payment (`paymentsApi.cancel`). `paymentsApi.initiate` → `InitiatePaymentResult`. **Card requires the backend's `STRIPE_*` env; webhook hits the backend at `POST /api/v1/payments/webhook/stripe` (port 3000), not the frontend.**
+- **Caregiver photos (A):** public search + profile now render `photoUrl` (Avatar gained an image variant).
+- **Promo codes (B):** booking review has an **Apply** button that previews the discount via `GET /promos/quote` and shows the discounted total.
+- **Notification read-state (C):** `AppNotification.readAt` drives unread (cross-device); opening the bell persists read via `POST /notifications/read` and invalidates the list. Local "seen" kept as an instant overlay.
+- **Admin deactivate (D):** `caregiversApi.deactivate` now calls the real `POST /admin/caregivers/:id/deactivate` (the UI was already built behind a capability flag).
+- **Caregiver visit filters (E):** visits page gained a server-filtered "jump to a day" date picker (`?date=`), and the API types carry `from/to/sort`.
+- **Prescription viewing (F):** already worked once the backend returned valid URLs (item 11) — no change needed.
+
+Sign-out now does a full-page navigation to `/login` so the client router cache can't restore a stale OTP screen. The rest below was already wired to expect these fixes (see each "Frontend today").
 
 ---
 

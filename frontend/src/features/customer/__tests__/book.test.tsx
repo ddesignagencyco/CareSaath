@@ -141,8 +141,8 @@ describe("booking flow", { timeout: 15_000 }, () => {
 
     const error = await screen.findByText(s.M.apiErrors.Promo_code_is_not_valid);
     expect(error).toHaveTextContent("پرومو کوڈ درست نہیں ہے");
-    // Rendered by the promo Field (same wrapper as the input), not as a toast.
-    expect(promo.parentElement).toContainElement(error);
+    // Rendered by the promo Field (the input now sits in a flex row with the Apply button), not as a toast.
+    expect(promo.parentElement?.parentElement).toContainElement(error);
     expect(nav.replace).not.toHaveBeenCalled();
 
     // Editing the code clears the error.

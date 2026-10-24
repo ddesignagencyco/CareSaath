@@ -59,7 +59,7 @@ export function CaregiverCard({ c }: { c: CaregiverSearchItem }) {
       className="group flex h-full flex-col rounded-2xl border border-ink-100 bg-white p-5 shadow-card transition-colors hover:border-brand-300"
     >
       <div className="flex items-start gap-3">
-        <Avatar name={c.user.fullName} size="lg" />
+        <Avatar name={c.user.fullName} src={c.photoUrl} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-ink-900">{c.user.fullName}</p>
           <p className="text-sm text-ink-500">{L.specialty(c.specialty)}</p>

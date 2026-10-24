@@ -7,15 +7,22 @@ import { useHydrated } from "../hooks/use-hydrated";
 import { initials } from "../lib/format";
 import { Button } from "./button";
 
-export function Avatar({ name, size = "md", className }: { name: string; size?: "sm" | "md" | "lg"; className?: string }) {
+export function Avatar({ name, src, size = "md", className }: { name: string; src?: string | null; size?: "sm" | "md" | "lg"; className?: string }) {
+  const sizing = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-14 text-lg" }[size];
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- remote presigned URL, not a static asset
+      <img
+        src={src}
+        alt={name}
+        className={clsx("shrink-0 rounded-full object-cover", sizing, className)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
-      className={clsx(
-        "inline-flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-800",
-        { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-14 text-lg" }[size],
-        className,
-      )}
+      className={clsx("inline-flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-bold text-brand-800", sizing, className)}
     >
       {initials(name)}
     </span>

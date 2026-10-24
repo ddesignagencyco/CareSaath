@@ -174,6 +174,10 @@
       "promo": "پرومو کوڈ",
       "promoHint": "درخواست بھیجتے وقت لاگو ہوگا۔",
       "promoPlaceholder": "مثلاً WELCOME10",
+      "promoApply": "لاگو کریں",
+      "promoOk": "کوڈ لاگو ہو گیا — آپ ہر وزٹ پر {amount} بچاتے ہیں",
+      "promoLine": "پرومو {code}",
+      "total": "کل",
       "price": "{price} × {count, plural, one {# وزٹ} other {# وزٹ}}",
       "payNote": "کیئرگیور کی تصدیق کے بعد آپ ہر وزٹ کی ادائیگی کرتے ہیں: وزٹ پر نقد، JazzCash، Easypaisa یا کارڈ۔ پرومو رعایت ہر وزٹ پر لاگو ہوتی ہے۔"
     },

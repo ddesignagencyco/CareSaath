@@ -35,5 +35,5 @@ export function useUnreadCount(enabled: boolean) {
     refetchInterval: 60_000,
     enabled,
   });
-  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && n.createdAt > seenAt).length;
+  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && !n.readAt && n.createdAt > seenAt).length;
 }

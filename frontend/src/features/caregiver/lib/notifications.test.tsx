@@ -25,6 +25,7 @@ const n = (event: string, payload: Record<string, unknown> = {}): AppNotificatio
   payload,
   status: "SENT",
   sentAt: null,
+  readAt: null,
   createdAt: "2026-10-22T05:00:00.000Z",
 });
 

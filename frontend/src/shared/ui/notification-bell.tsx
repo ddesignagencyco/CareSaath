@@ -47,6 +47,7 @@ export function NotificationBell({
   seenEvent,
   getSeenAt,
   markSeen,
+  markRead,
   allHref,
   labels,
 }: {
@@ -56,6 +57,8 @@ export function NotificationBell({
   seenEvent: string;
   getSeenAt: () => string;
   markSeen: (iso: string) => void;
+  /** Persist read state to the server (everything created at or before `before`). */
+  markRead?: (before: string) => void;
   allHref: string;
   labels: Labels;
 }) {
@@ -80,7 +83,8 @@ export function NotificationBell({
 
   const list = useQuery({ queryKey, queryFn, refetchInterval: 60_000, staleTime: 30_000 });
   const items = (list.data?.items ?? []).filter((n) => n.channel === "PUSH");
-  const unread = items.filter((n) => n.createdAt > seenAt).length;
+  // Unread = not read on the server (cross-device) and not yet seen on this device (instant).
+  const unread = items.filter((n) => !n.readAt && n.createdAt > seenAt).length;
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +107,10 @@ export function NotificationBell({
       const next = !o;
       if (next) {
         setSeenBefore(getSeenAt());
-        if (items[0]) markSeen(items[0].createdAt); // clears the badge
+        if (items[0]) {
+          markSeen(items[0].createdAt); // clears the badge on this device instantly
+          markRead?.(items[0].createdAt); // persists read state to the server
+        }
       }
       return next;
     });

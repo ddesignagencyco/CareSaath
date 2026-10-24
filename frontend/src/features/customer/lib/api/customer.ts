@@ -22,11 +22,13 @@ import type {
   CaregiverSearchItem,
   CreateBookingInput,
   CustomerBookingListItem,
+  CustomerPayment,
   CustomerPaymentWithVisit,
   CustomerVisitDetail,
   EmergencyContact,
   InitiatePaymentResult,
   PatientInput,
+  PromoQuote,
   PublicCaregiver,
   RescheduleInput,
   ReviewInput,
@@ -97,6 +99,12 @@ export const caregiversApi = {
   get: (id: string) => (M ? mock.getCaregiver(id) : http.get<PublicCaregiver>(`/caregivers/${id}`)),
 };
 
+export const promosApi = {
+  /** GET /promos/quote?code=&caregiverId= — preview a promo discount before booking. */
+  quote: (code: string, caregiverId: string) =>
+    M ? mock.quotePromoPreview(code, caregiverId) : http.get<PromoQuote>("/promos/quote", { code, caregiverId }),
+};
+
 export const bookingsApi = {
   /** POST /customer/bookings */
   create: (dto: CreateBookingInput) => (M ? mock.createBooking(dto) : http.post<BookingDetail>("/customer/bookings", dto)),
@@ -145,6 +153,8 @@ export const paymentsApi = {
     M ? mock.listPayments(q) : http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", q),
   /** GET /customer/payments/:id (same include as the list) */
   get: (id: string) => (M ? mock.getPayment(id) : http.get<CustomerPaymentWithVisit>(`/customer/payments/${id}`)),
+  /** PATCH /customer/payments/:id/cancel — abandon a PENDING payment so another method can be used. */
+  cancel: (id: string) => (M ? mock.cancelPayment(id) : http.patch<CustomerPayment>(`/customer/payments/${id}/cancel`, {})),
 };
 
 export const disputesApi = {
@@ -155,6 +165,10 @@ export const disputesApi = {
 };
 
 export const notificationsApi = {
-  /** GET /notifications — the app shows PUSH rows only. */
-  list: (q: PageQuery) => (M ? mock.listNotifications(q) : http.get<Paginated<AppNotification>>("/notifications", q)),
+  /** GET /notifications?channel=&unread= — the app shows PUSH rows only. */
+  list: (q: PageQuery & { channel?: string; unread?: boolean }) =>
+    M ? mock.listNotifications(q) : http.get<Paginated<AppNotification>>("/notifications", q),
+  /** POST /notifications/read — mark the given ids (or everything before a time) as read. */
+  markRead: (dto: { ids?: string[]; before?: string }) =>
+    M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
 };

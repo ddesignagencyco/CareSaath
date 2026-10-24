@@ -38,7 +38,7 @@ export const caregiver: PublicCaregiver = {
   user: { fullName: "Fatima Noor" },
   licenseNumber: "PNC-1",
   licenseBody: "PNC",
-  photoKey: null,
+  photoUrl: null,
   createdAt: T,
   availabilityRules: [1, 2, 3, 4, 5].map((dayOfWeek) => ({ dayOfWeek, startTime: "08:00", endTime: "18:00" })),
 };

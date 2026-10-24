@@ -39,12 +39,8 @@ import { checkHealth, type Health } from "@shared/api/http";
 import type { Me } from "@shared/caregiver-types";
 import { http, USE_MOCKS } from "./http";
 
-/**
- * The backend has no route for deactivating a caregiver account yet
- * (VerificationService.deactivate is not exposed), so the action only exists
- * against the mock.
- */
-export const CAN_DEACTIVATE_CAREGIVER = USE_MOCKS;
+/** FR-A3 deactivate is now exposed by the backend (POST /admin/caregivers/:id/deactivate). */
+export const CAN_DEACTIVATE_CAREGIVER = true;
 
 export const healthApi = {
   /** GET /health (public) — the mock is always healthy. */
@@ -107,16 +103,9 @@ export const caregiversApi = {
    */
   reactivate: (id: string) =>
     USE_MOCKS ? mock.reactivateCaregiver(id) : http.post<AdminCaregiverRecord>(`/admin/caregivers/${id}/reactivate`),
-  /**
-   * Mock only. VerificationService.deactivate exists in the backend but no
-   * controller route exposes it yet (FR-A3), so in real mode this rejects
-   * instead of calling a non-existent route. Gate the UI on
-   * CAN_DEACTIVATE_CAREGIVER.
-   */
-  deactivate: (id: string): Promise<AdminCaregiverRecord> =>
-    CAN_DEACTIVATE_CAREGIVER
-      ? mock.deactivateCaregiver(id)
-      : Promise.reject(new Error("Deactivating a caregiver is not supported by the API yet")),
+  /** POST /admin/caregivers/:id/deactivate (FR-A3) — blocks the user account and hides them from search. */
+  deactivate: (id: string, reason?: string): Promise<AdminCaregiverRecord> =>
+    USE_MOCKS ? mock.deactivateCaregiver(id) : http.post<AdminCaregiverRecord>(`/admin/caregivers/${id}/deactivate`, { reason }),
   /** GET /admin/caregivers/:id/documents/:documentId/url */
   documentUrl: (id: string, documentId: string) =>
     USE_MOCKS

@@ -449,15 +449,28 @@ function visitDetail(id: string): CaregiverVisitDetail {
   });
 }
 
-export async function listVisits(q: PageQuery & { status?: VisitStatus }): Promise<Paginated<CaregiverVisitListItem>> {
+export async function listVisits(
+  q: PageQuery & { status?: VisitStatus; date?: string; from?: string; to?: string; sort?: "asc" | "desc" },
+): Promise<Paginated<CaregiverVisitListItem>> {
   await delay();
   requireCaregiverToken();
   const p = myProfile();
   const d = db();
   const mine = new Set(d.bookings.filter((b) => b.caregiverId === p.id).map((b) => b.id));
+  const day = (iso: string) => iso.slice(0, 10);
   const rows = d.visits
-    .filter((v) => mine.has(v.bookingId) && (!q.status || v.status === q.status))
-    .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.timeWindowStart.localeCompare(b.timeWindowStart))
+    .filter(
+      (v) =>
+        mine.has(v.bookingId) &&
+        (!q.status || v.status === q.status) &&
+        (!q.date || day(v.scheduledDate) === q.date) &&
+        (!q.from || day(v.scheduledDate) >= q.from) &&
+        (!q.to || day(v.scheduledDate) <= q.to),
+    )
+    .sort((a, b) => {
+      const c = a.scheduledDate.localeCompare(b.scheduledDate) || a.timeWindowStart.localeCompare(b.timeWindowStart);
+      return q.sort === "desc" ? -c : c;
+    })
     .map((v) => {
       const r = bookingRelations(v.bookingId);
       return { ...v, booking: { ...r.b, patient: { name: r.patient.name, relationship: r.patient.relationship }, address: r.address } };
@@ -759,4 +772,20 @@ export async function listNotifications(q: PageQuery): Promise<Paginated<AppNoti
   await delay(200);
   const user = currentUser();
   return paginate(db().notifications.filter((n) => n.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), q);
+}
+
+export async function markNotifsRead(dto: { ids?: string[]; before?: string }): Promise<{ updated: number }> {
+  await delay(100);
+  const user = currentUser();
+  const now = nowIso();
+  let updated = 0;
+  for (const n of db().notifications) {
+    if (n.userId !== user.id || n.readAt) continue;
+    if (dto.ids && !dto.ids.includes(n.id)) continue;
+    if (dto.before && n.createdAt > dto.before) continue;
+    n.readAt = now;
+    updated++;
+  }
+  persist();
+  return { updated };
 }

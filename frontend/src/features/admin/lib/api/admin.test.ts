@@ -42,6 +42,8 @@ const cases: Case[] = [
   ["caregivers.reverify (default)", () => caregiversApi.reverify("cg1"), "POST", "/admin/caregivers/cg1/reverify", {}],
   ["caregivers.suspend", () => caregiversApi.suspend("cg1", "Complaint"), "POST", "/admin/caregivers/cg1/suspend", { reason: "Complaint" }],
   ["caregivers.reactivate", () => caregiversApi.reactivate("cg1"), "POST", "/admin/caregivers/cg1/reactivate", {}],
+  ["caregivers.deactivate", () => caregiversApi.deactivate("cg1"), "POST", "/admin/caregivers/cg1/deactivate", {}],
+  ["caregivers.deactivate (with reason)", () => caregiversApi.deactivate("cg1", "Repeated no-shows"), "POST", "/admin/caregivers/cg1/deactivate", { reason: "Repeated no-shows" }],
   ["caregivers.documentUrl", () => caregiversApi.documentUrl("cg1", "doc9"), "GET", "/admin/caregivers/cg1/documents/doc9/url", undefined, {}],
   ["analytics.overview", () => analyticsApi.overview("90d"), "GET", "/admin/analytics", undefined, { range: "90d" }],
   ["safety.list", () => safetyApi.list({ status: "OPEN", priority: "HIGH", page: 1, limit: 20 }), "GET", "/admin/safety-incidents", undefined, { status: "OPEN", priority: "HIGH", page: "1", limit: "20" }],
@@ -100,11 +102,8 @@ describe("admin API contract (real mode)", () => {
     await expect(analyticsApi.exportCsv("bookings")).resolves.toEqual({ filename: "bookings-report.csv", csv: "" });
   });
 
-  it("deactivate is unavailable: rejects without touching the network", async () => {
-    expect(CAN_DEACTIVATE_CAREGIVER).toBe(false);
-    const f = mockFetch();
-    await expect(caregiversApi.deactivate("cg1")).rejects.toThrow(/not supported/);
-    expect(f.calls).toHaveLength(0);
+  it("deactivate is now available (FR-A3 route exposed)", () => {
+    expect(CAN_DEACTIVATE_CAREGIVER).toBe(true);
   });
 
   it("surfaces the backend error message", async () => {

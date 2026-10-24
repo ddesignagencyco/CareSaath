@@ -43,7 +43,7 @@ export default function CaregiverProfilePage() {
           <div className="space-y-5">
             <Card className="p-5 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <Avatar name={p.user.fullName} size="lg" />
+                <Avatar name={p.user.fullName} src={p.photoUrl} size="lg" />
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{p.user.fullName}</h1>
                   <p className="text-ink-500">{L.specialty(p.specialty)}</p>

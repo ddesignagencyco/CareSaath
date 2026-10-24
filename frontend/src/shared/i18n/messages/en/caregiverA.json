@@ -109,7 +109,10 @@
     "upcoming": "Upcoming",
     "past": "Past",
     "noUpcoming": "No upcoming visits",
-    "noPast": "No past visits yet"
+    "noPast": "No past visits yet",
+    "onDate": "Jump to a day",
+    "clearDate": "Clear",
+    "noOnDate": "No visits on this day"
   },
   "visitRow": {
     "to": "to {time}",

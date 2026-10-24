@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useCallback, useSyncExternalStore } from "react";
 import type { Me } from "@shared/caregiver-types";
 import type { TokenPair } from "@shared/types";
@@ -80,7 +79,6 @@ export function homeFor(me: Me): "/caregiver/onboarding" | "/caregiver/status" |
 }
 
 export function useSignOut() {
-  const router = useRouter();
   const client = useQueryClient();
   return useCallback(async () => {
     const refresh = session.get()?.refreshToken;
@@ -88,6 +86,9 @@ export function useSignOut() {
     window.dispatchEvent(new Event(SESSION_EVENT));
     client.clear();
     if (refresh) await authApi.logout(refresh).catch(() => undefined);
-    router.replace("/login");
-  }, [client, router]);
+    // Full navigation (not router.replace) so the client router cache can't
+    // restore the previous login screen with a stale phone/OTP still filled in.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard reload to drop all client state on signout
+    window.location.assign("/login");
+  }, [client]);
 }

@@ -419,6 +419,7 @@ function seed(): MockDb {
     payload,
     status: "SENT",
     sentAt: createdAt,
+    readAt: null,
     createdAt,
   });
   const notifications: AppNotification[] = [

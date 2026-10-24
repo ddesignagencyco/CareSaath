@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Bell, CalendarCheck2, CircleUserRound, Home, MapPin, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Users, Wallet } from "lucide-react";
 import Link from "next/link";
@@ -90,7 +90,7 @@ function useUnread(enabled: boolean) {
     refetchInterval: 30_000,
     enabled,
   });
-  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && n.createdAt > seenAt).length;
+  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && !n.readAt && n.createdAt > seenAt).length;
 }
 
 /**
@@ -109,6 +109,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
   const signOut = useSignOut();
   const unread = useUnread(!!me.data);
+  const qc = useQueryClient();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.customer.sidebarCollapsed");
 
   // GET /customer/me has no role guard, so a non-customer session (e.g. a stale
@@ -210,6 +211,12 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
           seenEvent={SEEN_EVENT}
           getSeenAt={getSeenAt}
           markSeen={markSeen}
+          markRead={(before) =>
+            notificationsApi
+              .markRead({ before })
+              .then(() => qc.invalidateQueries({ queryKey: keys.notifications }))
+              .catch(() => undefined)
+          }
           allHref="/customer/notifications"
           labels={{
             title: cn("title"),
