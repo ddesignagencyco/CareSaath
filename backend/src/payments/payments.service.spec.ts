@@ -302,11 +302,17 @@ describe('PaymentsService with Stripe', () => {
       id: 'cs_test_1',
       payment_status: 'paid',
       currency: 'pkr',
-      amount_total: 6000,
+      amount_total: 60000,
       metadata: { paymentId: 'pay-1' },
       ...overrides,
     }) as never;
   const event = (type: string, object: unknown) => ({ type, data: { object } }) as never;
+
+  /** Visit rates above Stripe's PKR minimum. */
+  const cardVisit = () =>
+    payableVisit({
+      booking: { ...payableVisit().booking, rateSnapshot: 60000 },
+    });
 
   beforeEach(() => {
     prisma = createPrismaMock();
@@ -326,7 +332,7 @@ describe('PaymentsService with Stripe', () => {
   });
 
   it('starts a Stripe Checkout session for card payments and stores its id', async () => {
-    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.visit.findFirst.mockResolvedValue(cardVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
     prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
@@ -334,12 +340,25 @@ describe('PaymentsService with Stripe', () => {
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never });
 
     expect(stripe.createCheckoutSession).toHaveBeenCalledWith(
-      expect.objectContaining({ paymentId: 'pay-1', amount: 6000 }),
+      expect.objectContaining({ paymentId: 'pay-1', amount: 60000 }),
     );
     expect(result).toMatchObject({
       payment: { gatewayRef: 'cs_test_1' },
       checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_test_1',
     });
+  });
+
+  it('rejects card payments below the Stripe minimum before creating a payment', async () => {
+    prisma.visit.findFirst.mockResolvedValue(
+      payableVisit({ booking: { ...payableVisit().booking, rateSnapshot: 10000 } }),
+    );
+    prisma.payment.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never }),
+    ).rejects.toThrow(/minimum of PKR 140/);
+    expect(prisma.payment.create).not.toHaveBeenCalled();
+    expect(stripe.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it('does not use Stripe for cash or wallet payments', async () => {
@@ -352,7 +371,7 @@ describe('PaymentsService with Stripe', () => {
   });
 
   it('fails the pending payment when Stripe cannot create the session', async () => {
-    prisma.visit.findFirst.mockResolvedValue(payableVisit());
+    prisma.visit.findFirst.mockResolvedValue(cardVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
     prisma.payment.update.mockResolvedValue({});
@@ -368,11 +387,11 @@ describe('PaymentsService with Stripe', () => {
   });
 
   it('settles a pending card payment on a paid checkout.session.completed', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 60000, status: 'PENDING', method: 'CARD' });
     prisma.payment.findUnique.mockResolvedValue({
       id: 'pay-1',
       status: 'PENDING',
-      amount: 6000,
+      amount: 60000,
       visitId: 'v-1',
       visit: { booking: { customer: { id: 'u-cust', phone: '+923001234567' } } },
     });
@@ -387,7 +406,7 @@ describe('PaymentsService with Stripe', () => {
   });
 
   it('does not settle when the amount or currency does not match', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 60000, status: 'PENDING', method: 'CARD' });
     for (const bad of [{ amount_total: 100 }, { currency: 'usd' }]) {
       const result = await service.handleStripeEvent(event('checkout.session.completed', session(bad)));
       expect(result).toEqual({ received: true, settled: false });
@@ -404,7 +423,7 @@ describe('PaymentsService with Stripe', () => {
   });
 
   it('marks a pending payment FAILED when the session expires', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 6000, status: 'PENDING', method: 'CARD' });
+    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-1', amount: 60000, status: 'PENDING', method: 'CARD' });
     prisma.payment.update.mockResolvedValue({});
     await service.handleStripeEvent(event('checkout.session.expired', session({ payment_status: 'unpaid' })));
     expect(prisma.payment.update).toHaveBeenCalledWith({ where: { id: 'pay-1' }, data: { status: 'FAILED' } });
