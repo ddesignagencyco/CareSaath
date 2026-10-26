@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
+import type { Server } from 'node:net';
 import { io, Socket } from 'socket.io-client';
 import { bearer, createTestApp, signAccessToken, uniquePhone } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
@@ -54,7 +55,7 @@ describe('Realtime (e2e)', () => {
   beforeAll(async () => {
     ({ app, prisma, jwt, close } = await createTestApp());
     await app.listen(0);
-    const address = app.getHttpServer().address() as { port: number };
+    const address = (app.getHttpServer() as unknown as Server).address() as { port: number };
     url = `http://localhost:${address.port}`;
 
     const admin = await prisma.user.create({ data: { phone: uniquePhone(), role: 'ADMIN', fullName: 'RT Admin' } });

@@ -6,6 +6,9 @@ import { bearer, createTestApp, signAccessToken, uniquePhone, VALID_PDF } from '
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { JwtService } from '@nestjs/jwt';
 
+/** A city no other record uses, so these searches never depend on how much data the database holds. */
+const E2E_CITY = `E2E-City-${Date.now()}`;
+
 describe('Caregiver onboarding -> verification (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -53,6 +56,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
       await prisma.caregiverProfile.deleteMany({ where: { userId: caregiverUserId } });
       await prisma.user.deleteMany({ where: { id: caregiverUserId } });
     }
+    await prisma.notification.deleteMany({ where: { userId: { in: adminIds } } });
     await prisma.user.deleteMany({ where: { id: { in: adminIds } } });
     await close();
   });
@@ -68,7 +72,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
         specialty: 'NURSING',
         experienceYears: 5,
         bio: 'E2E caregiver',
-        serviceCities: ['Lahore'],
+        serviceCities: [E2E_CITY],
         ratePerVisit: 5000,
       });
     expect(res.status).toBe(201);
@@ -88,14 +92,14 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
         licenseNumber: 'PNC-998877',
         licenseBody: 'PNC',
         specialty: 'NURSING',
-        serviceCities: ['Lahore'],
+        serviceCities: [E2E_CITY],
         ratePerVisit: 5000,
       });
     expect(res.status).toBe(409);
   });
 
   it('does not list a PENDING caregiver in public search', async () => {
-    const res = await request(app.getHttpServer()).get('/api/v1/caregivers?city=Lahore');
+    const res = await request(app.getHttpServer()).get(`/api/v1/caregivers?city=${E2E_CITY}`);
     expect(res.status).toBe(200);
     const ids = (res.body.items as Array<{ id: string }>).map((c) => c.id);
     expect(ids).not.toContain(caregiverProfileId);
@@ -152,7 +156,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
 
   it('now publishes the caregiver in public search and profile', async () => {
     const search = await request(app.getHttpServer()).get(
-      '/api/v1/caregivers?city=Lahore&specialty=NURSING',
+      `/api/v1/caregivers?city=${E2E_CITY}&specialty=NURSING`,
     );
     expect(search.status).toBe(200);
     const ids = (search.body.items as Array<{ id: string }>).map((c) => c.id);

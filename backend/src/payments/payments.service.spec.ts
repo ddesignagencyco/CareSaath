@@ -130,7 +130,7 @@ describe('PaymentsService', () => {
   it('initiates a cash payment with a commission split', async () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
-    prisma.payment.create.mockImplementation(async ({ data }: never) => ({ id: 'pay-1', ...data }));
+    prisma.payment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'pay-1', ...data }));
 
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'CASH' as never });
 
@@ -148,7 +148,7 @@ describe('PaymentsService', () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-2' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
       id: where.id,
       ...data,
     }));
@@ -164,7 +164,7 @@ describe('PaymentsService', () => {
   it('always charges the booking rate minus discount, ignoring any client amount', async () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
-    prisma.payment.create.mockImplementation(async ({ data }: never) => ({ id: 'pay-1', ...data }));
+    prisma.payment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'pay-1', ...data }));
 
     const result = await service.initiate(customer, {
       visitId: 'v-1',
@@ -392,9 +392,10 @@ describe('PaymentsService', () => {
     expect(prisma.payment.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'PAID' }) }),
     );
-    const paidTo = notifications.notify.mock.calls
-      .map(([n]: [{ userId: string; event: string }]) => [n.userId, n.event])
-      .filter(([, event]: string[]) => event === 'payment.paid');
+    const paidTo = (notifications.notify.mock.calls as unknown[][])
+      .map((call) => call[0] as { userId: string; event: string })
+      .filter((n) => n.event === 'payment.paid')
+      .map((n) => [n.userId, n.event]);
     expect(paidTo).toEqual([
       ['u-cust', 'payment.paid'],
       ['u-cg', 'payment.paid'],
@@ -484,7 +485,7 @@ describe('PaymentsService with Stripe', () => {
     prisma.visit.findFirst.mockResolvedValue(cardVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data }));
 
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never });
 
@@ -514,7 +515,7 @@ describe('PaymentsService with Stripe', () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data }));
     await service.initiate(customer, { visitId: 'v-1', method: 'JAZZCASH' as never });
     expect(stripe.createCheckoutSession).not.toHaveBeenCalled();
   });

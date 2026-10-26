@@ -42,7 +42,7 @@ function createResponse(): Response & {
       if (chunk !== undefined && chunk !== null) {
         res.write(chunk);
       }
-      return res;
+      return res as unknown as Response;
     },
     setHeader(name: string, value: string | number | readonly string[]): void {
       res.headers[name.toLowerCase()] = String(value);

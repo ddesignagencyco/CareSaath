@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
+import type { Response as SuperResponse } from 'superagent';
 import { bearer, createTestApp, signAccessToken, uniquePhone } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { JwtService } from '@nestjs/jwt';
@@ -10,10 +11,12 @@ import type { JwtService } from '@nestjs/jwt';
  * Payment -> payout lifecycle: cash settle, gateway webhook idempotency,
  * commission config, caregiver earnings and admin payout approval.
  */
-const binary = (res: NodeJS.ReadableStream, callback: (err: Error | null, body: Buffer) => void) => {
+/** supertest parser that keeps a binary (PDF) body as a Buffer. */
+const binary = (res: SuperResponse, callback: (err: Error | null, body: Buffer) => void) => {
+  const stream = res as unknown as NodeJS.ReadableStream;
   const chunks: Buffer[] = [];
-  res.on('data', (chunk: Buffer) => chunks.push(chunk));
-  res.on('end', () => callback(null, Buffer.concat(chunks)));
+  stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+  stream.on('end', () => callback(null, Buffer.concat(chunks)));
 };
 
 describe('Payments & payouts (e2e)', () => {

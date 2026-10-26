@@ -76,7 +76,7 @@ describe('PayoutsService', () => {
 
   it('creates a payout account with an encrypted number', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
-    prisma.payoutAccount.create.mockImplementation(async ({ data }: never) => ({
+    prisma.payoutAccount.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       id: 'acct-1',
       createdAt: new Date(),
       updatedAt: new Date(),
