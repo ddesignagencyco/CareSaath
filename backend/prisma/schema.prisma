@@ -516,6 +516,10 @@ model Payment {
   caregiverAmount  Int           @default(0)
   gatewayRef       String?
   paidAt           DateTime?
+  /// Cash is only PAID once BOTH sides confirm: the customer that they handed it over, the caregiver that they received it.
+  customerConfirmedAt  DateTime?
+  caregiverConfirmedAt DateTime?
+  confirmationNote     String?
   payoutRequestId  String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt

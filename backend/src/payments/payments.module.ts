@@ -50,6 +50,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { StripeService } from './stripe.service.js';
 
 /**
@@ -190,7 +191,28 @@ export class PaymentsService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     @Optional() private readonly stripe?: StripeService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  /** Tell the customer, the caregiver and the admins that a payment changed. */
+  private async emitPayment(paymentId: string, action: string, status: PaymentStatus) {
+    if (!this.realtime) return;
+    const parties = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: {
+        visitId: true,
+        visit: { select: { booking: { select: { customerId: true, caregiver: { select: { userId: true } } } } } },
+      },
+    });
+    if (!parties) return;
+    this.realtime.entityUpdated(
+      {
+        users: [parties.visit.booking.customerId, parties.visit.booking.caregiver.userId],
+        roles: ['ADMIN'],
+      },
+      { type: 'payment', id: paymentId, action, status, data: { visitId: parties.visitId } },
+    );
+  }
 
   /** Card payments go through Stripe whenever it is configured. */
   private usesStripe(method: PaymentMethod): boolean {
@@ -304,6 +326,7 @@ export class PaymentsService {
       entityId: payment.id,
       metadata: { visitId: visit.id, method: dto.method, amount },
     });
+    await this.emitPayment(payment.id, 'initiated', PaymentStatus.PENDING);
     if (this.usesStripe(dto.method)) {
       try {
         const session = await this.stripe!.createCheckoutSession({
@@ -323,6 +346,7 @@ export class PaymentsService {
           where: { id: payment.id },
           data: { status: PaymentStatus.FAILED },
         });
+        await this.emitPayment(payment.id, 'failed', PaymentStatus.FAILED);
         this.logger.error(`Stripe checkout failed for payment ${payment.id}: ${(err as Error).message}`);
         throw new BadGatewayException('The card payment could not be started, please try again');
       }
@@ -343,7 +367,7 @@ export class PaymentsService {
       phone: caregiverUser.phone,
       event: 'payment.cash.initiated',
       payload: { paymentId: payment.id, visitId: visit.id, amount },
-      message: `The customer will pay Rs ${amount / 100} in cash for your visit. Confirm once you have received it.`,
+      message: `The customer will pay Rs ${amount / 100} in cash for your visit. Confirm once you have received it; the visit can only be closed after both of you confirm.`,
     });
     return payment;
   }
@@ -359,6 +383,11 @@ export class PaymentsService {
     if (payment.status !== PaymentStatus.PENDING) {
       throw new BadRequestException(`Only a pending payment can be cancelled (this one is ${payment.status})`);
     }
+    if (payment.caregiverConfirmedAt) {
+      throw new BadRequestException(
+        'The caregiver has already confirmed receiving this cash; raise a dispute if that is wrong',
+      );
+    }
     const updated = await this.prisma.payment.update({
       where: { id },
       data: { status: PaymentStatus.FAILED },
@@ -373,6 +402,7 @@ export class PaymentsService {
       entityId: id,
       metadata: { method: payment.method },
     });
+    await this.emitPayment(id, 'cancelled', PaymentStatus.FAILED);
     return updated;
   }
 
@@ -383,7 +413,10 @@ export class PaymentsService {
         visit: {
           include: {
             booking: {
-              include: { customer: { select: { id: true, phone: true } } },
+              include: {
+                customer: { select: { id: true, phone: true } },
+                caregiver: { select: { userId: true } },
+              },
             },
           },
         },
@@ -414,22 +447,40 @@ export class PaymentsService {
       phone: payment.visit.booking.customer.phone,
       event: 'payment.paid',
       payload: { paymentId, visitId: payment.visitId, amount: payment.amount },
-      message: `Payment of Rs ${payment.amount / 100} received for your visit.`,
+      message: `Payment of Rs ${payment.amount / 100} was verified for your visit. Your receipt is ready to download.`,
     });
+    const caregiverUserId = payment.visit.booking.caregiver?.userId;
+    if (caregiverUserId) {
+      await this.notifications.notify({
+        userId: caregiverUserId,
+        event: 'payment.paid',
+        payload: { paymentId, visitId: payment.visitId, amount: payment.amount },
+        message: `Payment of Rs ${payment.amount / 100} was verified. Rs ${payment.caregiverAmount / 100} is now in your earnings.`,
+      });
+    }
+    await this.emitPayment(paymentId, 'paid', PaymentStatus.PAID);
     return updated;
   }
 
-  /** Cash on visit (TRD §6.5): the assigned caregiver confirms receipt. */
-  async confirmCash(user: AuthUser, paymentId: string) {
-    const profile = await this.prisma.caregiverProfile.findUnique({
-      where: { userId: user.sub },
-      select: { id: true },
-    });
-    if (!profile) {
-      throw new NotFoundException('Caregiver profile not found');
-    }
+  /** Cash can only be confirmed once the caregiver has actually arrived. */
+  private static readonly CASH_CONFIRMABLE_VISIT_STATUSES: VisitStatus[] = [
+    VisitStatus.CHECKED_IN,
+    VisitStatus.IN_PROGRESS,
+    VisitStatus.CHECKED_OUT,
+    VisitStatus.COMPLETED,
+  ];
+
+  private async loadCashPayment(id: string, party: Prisma.PaymentWhereInput) {
     const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, visit: { booking: { caregiverId: profile.id } } },
+      where: { id, ...party },
+      include: {
+        visit: {
+          select: {
+            status: true,
+            booking: { select: { customerId: true, caregiver: { select: { userId: true } } } },
+          },
+        },
+      },
     });
     if (!payment) {
       throw new NotFoundException('Payment not found');
@@ -437,7 +488,94 @@ export class PaymentsService {
     if (payment.method !== PaymentMethod.CASH) {
       throw new BadRequestException('Only cash payments are confirmed this way');
     }
-    return this.markPaid(paymentId, 'cash');
+    return payment;
+  }
+
+  /**
+   * Cash is a two-sided check (TRD §6.5): the customer confirms handing the money
+   * over and the caregiver confirms receiving it. Each side's confirmation is
+   * stored with its timestamp; the payment becomes PAID only when both exist.
+   * Confirming again is a no-op, so retries are safe.
+   */
+  private async recordCashConfirmation(
+    payment: Awaited<ReturnType<PaymentsService['loadCashPayment']>>,
+    side: 'customer' | 'caregiver',
+    actorId: string,
+    note?: string,
+  ) {
+    if (payment.status === PaymentStatus.PAID) {
+      return payment;
+    }
+    if (payment.status !== PaymentStatus.PENDING) {
+      throw new BadRequestException(`This payment is ${payment.status} and can no longer be confirmed`);
+    }
+    if (!PaymentsService.CASH_CONFIRMABLE_VISIT_STATUSES.includes(payment.visit.status)) {
+      throw new BadRequestException('Cash can only be confirmed once the caregiver has arrived at the visit');
+    }
+    const field = side === 'customer' ? 'customerConfirmedAt' : 'caregiverConfirmedAt';
+    if (payment[field]) {
+      return payment;
+    }
+    const updated = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        [field]: new Date(),
+        ...(side === 'caregiver' && note ? { confirmationNote: note } : {}),
+      },
+    });
+    await this.audit.log({
+      actorId,
+      action: `payment.cash.${side}_confirmed`,
+      entityType: 'Payment',
+      entityId: payment.id,
+      metadata: { amount: payment.amount },
+    });
+    if (updated.customerConfirmedAt && updated.caregiverConfirmedAt) {
+      // Both sides have confirmed: settle (this also notifies both and pushes the update).
+      return this.markPaid(payment.id, 'cash');
+    }
+    const customerId = payment.visit.booking.customerId;
+    const caregiverUserId = payment.visit.booking.caregiver.userId;
+    await this.notifications.notify(
+      side === 'customer'
+        ? {
+            userId: caregiverUserId,
+            event: 'payment.cash.customer_confirmed',
+            payload: { paymentId: payment.id, visitId: payment.visitId, amount: payment.amount },
+            message: `The customer says they handed you Rs ${payment.amount / 100} in cash. Confirm once you have received it.`,
+          }
+        : {
+            userId: customerId,
+            event: 'payment.cash.caregiver_confirmed',
+            payload: { paymentId: payment.id, visitId: payment.visitId, amount: payment.amount },
+            message: `The caregiver says they received Rs ${payment.amount / 100} in cash. Confirm to finish the payment.`,
+          },
+    );
+    await this.emitPayment(payment.id, `${side}_confirmed`, PaymentStatus.PENDING);
+    return updated;
+  }
+
+  /** The customer confirms they handed the cash to the caregiver. */
+  async confirmCashAsCustomer(user: AuthUser, paymentId: string) {
+    const payment = await this.loadCashPayment(paymentId, {
+      visit: { booking: { customerId: user.sub } },
+    });
+    return this.recordCashConfirmation(payment, 'customer', user.sub);
+  }
+
+  /** The assigned caregiver confirms they received the cash. */
+  async confirmCash(user: AuthUser, paymentId: string, dto: CashConfirmationDto = {}) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    const payment = await this.loadCashPayment(paymentId, {
+      visit: { booking: { caregiverId: profile.id } },
+    });
+    return this.recordCashConfirmation(payment, 'caregiver', user.sub, dto.note);
   }
 
   /**
@@ -470,6 +608,7 @@ export class PaymentsService {
         entityId: payment.id,
         metadata: { gatewayRef: dto.gatewayRef },
       });
+      await this.emitPayment(payment.id, 'failed', PaymentStatus.FAILED);
       return updated;
     }
     throw new BadRequestException('Unsupported webhook status');
@@ -513,6 +652,7 @@ export class PaymentsService {
             entityId: payment.id,
             metadata: { gatewayRef: event.data.object.id, source: 'stripe', event: event.type },
           });
+          await this.emitPayment(payment.id, 'failed', PaymentStatus.FAILED);
         }
         return { received: true, settled: false };
       }
@@ -593,6 +733,16 @@ export class CustomerPaymentsController {
     return this.payments.listForCustomer(user, query);
   }
 
+  @Post(':id/confirm-cash')
+  @ApiOperation({
+    summary: 'Confirm you handed over the cash',
+    description:
+      'Customer side of the cash check. Cash is only PAID, and the visit can only be closed, once BOTH the customer (this call) and the caregiver (POST /caregiver/payments/{id}/confirm-cash) have confirmed. Allowed once the caregiver has arrived. Idempotent.',
+  })
+  confirmCash(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payments.confirmCashAsCustomer(user, id);
+  }
+
   @Patch(':id/cancel')
   @ApiOperation({
     summary: 'Cancel a pending payment',
@@ -622,10 +772,15 @@ export class CaregiverPaymentsController {
   @Post(':id/confirm-cash')
   @ApiOperation({
     summary: 'Confirm cash collection on-site',
-    description: 'Caregiver confirms receipt of cash-on-visit from the customer, transitioning payment to PAID.',
+    description:
+      'Caregiver side of the cash check: confirms the cash was received. The payment becomes PAID (and the visit can be closed) only once the customer has confirmed handing it over too; until then it stays PENDING with caregiverConfirmedAt set. Idempotent.',
   })
-  confirmCash(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.payments.confirmCash(user, id);
+  confirmCash(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CashConfirmationDto,
+  ) {
+    return this.payments.confirmCash(user, id, dto);
   }
 }
 

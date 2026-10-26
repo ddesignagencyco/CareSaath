@@ -262,20 +262,110 @@ describe('PaymentsService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('lets the assigned caregiver confirm a cash payment', async () => {
+  const cashPayment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'pay-4',
+    method: 'CASH',
+    status: 'PENDING',
+    amount: 5000,
+    visitId: 'v-1',
+    customerConfirmedAt: null,
+    caregiverConfirmedAt: null,
+    visit: {
+      status: 'CHECKED_OUT',
+      booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } },
+    },
+    ...overrides,
+  });
+  const settleFixture = () => ({
+    id: 'pay-4',
+    status: 'PENDING',
+    amount: 5000,
+    caregiverAmount: 4000,
+    visitId: 'v-1',
+    visit: { booking: { customer: { id: 'u-cust', phone: null }, caregiver: { userId: 'u-cg' } } },
+  });
+
+  it('keeps cash PENDING when only the caregiver has confirmed, and tells the customer', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
-    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-4', method: 'CASH', status: 'PENDING' });
-    prisma.payment.findUnique.mockResolvedValue({
-      id: 'pay-4',
-      status: 'PENDING',
-      amount: 5000,
-      visitId: 'v-1',
-      visit: { booking: { customer: { id: 'u-cust', phone: null } } },
+    prisma.payment.findFirst.mockResolvedValue(cashPayment());
+    prisma.payment.update.mockResolvedValue(cashPayment({ caregiverConfirmedAt: new Date() }));
+
+    const result = await service.confirmCash(caregiver, 'pay-4', { note: 'Received Rs 50' });
+
+    expect(result).toMatchObject({ status: 'PENDING' });
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: 'pay-4' },
+      data: { caregiverConfirmedAt: expect.any(Date), confirmationNote: 'Received Rs 50' },
     });
-    prisma.payment.update.mockResolvedValue({ id: 'pay-4', status: 'PAID' });
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u-cust', event: 'payment.cash.caregiver_confirmed' }),
+    );
+    expect(prisma.payment.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ include: expect.anything() }),
+    );
+  });
+
+  it('keeps cash PENDING when only the customer has confirmed, and tells the caregiver', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment());
+    prisma.payment.update.mockResolvedValue(cashPayment({ customerConfirmedAt: new Date() }));
+
+    const result = await service.confirmCashAsCustomer(customer, 'pay-4');
+
+    expect(result).toMatchObject({ status: 'PENDING' });
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u-cg', event: 'payment.cash.customer_confirmed' }),
+    );
+  });
+
+  it('settles cash as PAID once the second side confirms, notifying both', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ customerConfirmedAt: new Date() }));
+    prisma.payment.update
+      .mockResolvedValueOnce(
+        cashPayment({ customerConfirmedAt: new Date(), caregiverConfirmedAt: new Date() }),
+      )
+      .mockResolvedValueOnce({ id: 'pay-4', status: 'PAID' });
+    prisma.payment.findUnique.mockResolvedValue(settleFixture());
 
     const result = await service.confirmCash(caregiver, 'pay-4');
+
     expect(result).toMatchObject({ status: 'PAID' });
+    expect(prisma.payment.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'PAID' }) }),
+    );
+    const paidTo = notifications.notify.mock.calls
+      .map(([n]: [{ userId: string; event: string }]) => [n.userId, n.event])
+      .filter(([, event]: string[]) => event === 'payment.paid');
+    expect(paidTo).toEqual([
+      ['u-cust', 'payment.paid'],
+      ['u-cg', 'payment.paid'],
+    ]);
+  });
+
+  it('is a no-op when the same side confirms twice', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ caregiverConfirmedAt: new Date() }));
+    await service.confirmCash(caregiver, 'pay-4');
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
+  it('refuses to confirm cash before the caregiver has arrived', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ visit: { status: 'CONFIRMED', booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } } } }));
+    await expect(service.confirmCashAsCustomer(customer, 'pay-4')).rejects.toThrow(/caregiver has arrived/);
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to confirm a payment that already failed', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ status: 'FAILED' }));
+    await expect(service.confirmCashAsCustomer(customer, 'pay-4')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not let the customer cancel cash the caregiver already confirmed', async () => {
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'pay-4', status: 'PENDING', method: 'CASH', caregiverConfirmedAt: new Date(),
+    });
+    await expect(service.cancel(customer, 'pay-4')).rejects.toThrow(/already confirmed/);
   });
 
   it('rejects confirming a non-cash payment', async () => {

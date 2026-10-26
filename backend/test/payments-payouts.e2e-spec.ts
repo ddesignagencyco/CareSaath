@@ -101,7 +101,7 @@ describe('Payments & payouts (e2e)', () => {
         scheduledDate: new Date('2026-03-02T00:00:00.000Z'),
         timeWindowStart: '09:00',
         timeWindowEnd: '11:00',
-        status: 'CONFIRMED',
+        status: 'CHECKED_OUT',
       },
     });
     const cardVisit = await prisma.visit.create({
@@ -167,18 +167,28 @@ describe('Payments & payouts (e2e)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('lets the caregiver confirm the cash payment', async () => {
+  it('settles cash only after the caregiver AND the customer confirm', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/v1/customer/payments')
       .set(bearer(customerToken));
     const cash = (list.body.items as Array<{ id: string; method: string; status: string }>).find(
       (p) => p.method === 'CASH',
     );
-    const res = await request(app.getHttpServer())
+    const caregiverSide = await request(app.getHttpServer())
       .post(`/api/v1/caregiver/payments/${cash!.id}/confirm-cash`)
       .set(bearer(caregiverToken));
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe('PAID');
+    expect(caregiverSide.status).toBe(201);
+    expect(caregiverSide.body.status).toBe('PENDING');
+
+    // earnings are not credited until both sides have confirmed
+    const early = await request(app.getHttpServer()).get('/api/v1/caregiver/earnings').set(bearer(caregiverToken));
+    expect(early.body.availableAmount).toBe(0);
+
+    const customerSide = await request(app.getHttpServer())
+      .post(`/api/v1/customer/payments/${cash!.id}/confirm-cash`)
+      .set(bearer(customerToken));
+    expect(customerSide.status).toBe(201);
+    expect(customerSide.body.status).toBe('PAID');
   });
 
   it('initiates a card payment and exposes a gateway reference', async () => {

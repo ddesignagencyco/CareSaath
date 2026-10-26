@@ -39,6 +39,8 @@ import {
   BookingStatus,
   CheckMethod,
   OtpPurpose,
+  PaymentMethod,
+  PaymentStatus,
   Prisma,
   UserRole,
   VisitStatus,
@@ -286,6 +288,8 @@ export class VisitsService {
           amount: true,
           caregiverAmount: true,
           paidAt: true,
+          customerConfirmedAt: true,
+          caregiverConfirmedAt: true,
         },
         orderBy: { createdAt: 'desc' as const },
       },
@@ -592,6 +596,40 @@ export class VisitsService {
     });
   }
 
+  /**
+   * A visit cannot be closed until its payment is verified: card settled, or cash
+   * confirmed by BOTH the customer and the caregiver. Tunable with the
+   * visit.requirePaymentBeforeComplete setting (0 turns the check off).
+   */
+  private async assertPaymentVerified(visitId: string): Promise<void> {
+    if ((await this.config.getNumber('visit.requirePaymentBeforeComplete')) === 0) {
+      return;
+    }
+    const payments = await this.prisma.payment.findMany({
+      where: { visitId, status: { in: [PaymentStatus.PAID, PaymentStatus.PENDING] } },
+      select: { status: true, method: true, customerConfirmedAt: true, caregiverConfirmedAt: true },
+    });
+    if (payments.some((p) => p.status === PaymentStatus.PAID)) {
+      return;
+    }
+    const pending = payments[0];
+    let reason: string;
+    if (!pending) {
+      reason = 'no payment has been made for this visit yet';
+    } else if (pending.method !== PaymentMethod.CASH) {
+      reason = 'the card payment has not been completed yet';
+    } else if (!pending.customerConfirmedAt && !pending.caregiverConfirmedAt) {
+      reason = 'neither the customer nor the caregiver has confirmed the cash payment';
+    } else if (!pending.customerConfirmedAt) {
+      reason = 'the customer has not confirmed handing over the cash';
+    } else {
+      reason = 'the caregiver has not confirmed receiving the cash';
+    }
+    throw new BadRequestException(
+      `The visit cannot be completed until payment is verified by both sides: ${reason}`,
+    );
+  }
+
   /** FR-CG8: submit the visit note; CHECKED_OUT -> COMPLETED. */
   async submitNote(user: AuthUser, id: string, dto: VisitNoteDto) {
     const visit = await this.loadForCaregiver(user, id);
@@ -599,6 +637,7 @@ export class VisitsService {
     if (visit.note) {
       throw new BadRequestException('A note has already been submitted for this visit');
     }
+    await this.assertPaymentVerified(id);
     const updated = await this.runCaregiverTransition(user, id, VisitStatus.COMPLETED, {});
     await this.prisma.visitNote.create({
       data: { visitId: id, caregiverId, summary: dto.summary },

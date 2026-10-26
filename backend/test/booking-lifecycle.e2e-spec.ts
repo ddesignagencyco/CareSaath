@@ -98,6 +98,7 @@ describe('Booking & visit lifecycle (e2e)', () => {
     await prisma.visitStatusHistory.deleteMany({
       where: { visit: { booking: { customerId } } },
     });
+    await prisma.payment.deleteMany({ where: { visit: { booking: { customerId } } } });
     await prisma.visit.deleteMany({ where: { booking: { customerId } } });
     await prisma.booking.deleteMany({ where: { customerId } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: customerId } });
@@ -228,6 +229,52 @@ describe('Booking & visit lifecycle (e2e)', () => {
       .send({ method: 'GPS' });
     expect(res.status).toBe(400);
     await prisma.visit.delete({ where: { id: second.id } });
+  });
+
+  it('blocks closing the visit until cash is verified by BOTH sides', async () => {
+    const server = app.getHttpServer();
+    const note = () =>
+      request(server)
+        .post(`/api/v1/caregiver/visits/${visitId}/note`)
+        .set(bearer(caregiverToken))
+        .send({ summary: 'Dressing changed, vitals stable.' });
+
+    // 1. nothing paid yet
+    const none = await note();
+    expect(none.status).toBe(400);
+    expect(none.body.message).toMatch(/no payment has been made/);
+
+    // 2. the customer starts a cash payment: still blocked
+    const started = await request(server)
+      .post('/api/v1/customer/payments')
+      .set(bearer(customerToken))
+      .send({ visitId, method: 'CASH' });
+    expect(started.status).toBe(201);
+    const paymentId = started.body.id as string;
+    expect((await note()).status).toBe(400);
+
+    // 3. the caregiver confirms receiving it: PENDING, still blocked
+    const caregiverSide = await request(server)
+      .post(`/api/v1/caregiver/payments/${paymentId}/confirm-cash`)
+      .set(bearer(caregiverToken))
+      .send({ note: 'Received Rs 1500' });
+    expect(caregiverSide.status).toBe(201);
+    expect(caregiverSide.body.status).toBe('PENDING');
+    expect(caregiverSide.body.caregiverConfirmedAt).toBeTruthy();
+    expect(caregiverSide.body.customerConfirmedAt).toBeNull();
+    const blocked = await note();
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.message).toMatch(/customer has not confirmed handing over/);
+
+    // 4. the customer confirms handing it over: PAID, with both checks stored
+    const customerSide = await request(server)
+      .post(`/api/v1/customer/payments/${paymentId}/confirm-cash`)
+      .set(bearer(customerToken));
+    expect(customerSide.status).toBe(201);
+    expect(customerSide.body.status).toBe('PAID');
+    expect(customerSide.body.customerConfirmedAt).toBeTruthy();
+    expect(customerSide.body.caregiverConfirmedAt).toBeTruthy();
+    expect(customerSide.body.confirmationNote).toBe('Received Rs 1500');
   });
 
   it('completes the visit with a note (FR-CG8)', async () => {
