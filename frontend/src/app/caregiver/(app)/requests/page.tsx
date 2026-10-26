@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { CalendarDays, Check, Clock3, Inbox, MapPin, Repeat, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -26,10 +26,15 @@ const DECLINE_REASONS = ["notAvailable", "tooFar", "outsideSpecialty", "fullyBoo
 function DeclineDialog({ booking, onClose }: { booking: CaregiverBookingListItem; onClose: () => void }) {
   const t = useTranslations("caregiverA.requests.decline");
   const [reason, setReason] = useState("");
+  const qc = useQueryClient();
   const decline = useAction(() => bookingsApi.decline(booking.id, reason.trim() || undefined), {
     invalidate: [keys.bookings, keys.visits],
     success: t("success"),
     onSuccess: onClose,
+    // If the request is already gone (customer cancelled/another caregiver took it), drop the stale card.
+    onError: () => {
+      qc.invalidateQueries({ queryKey: keys.bookings });
+    },
   });
   return (
     <Modal
@@ -78,12 +83,18 @@ function RequestCard({ booking, commissionPct }: { booking: CaregiverBookingList
   const f = useFmt();
   const L = useLabels();
   const [declining, setDeclining] = useState(false);
+  const qc = useQueryClient();
   const accept = useAction(() => bookingsApi.accept(booking.id), {
     invalidate: [keys.bookings, keys.visits],
     success: t("accepted", { count: booking.visits.length }),
+    // If the request is already gone (customer cancelled/another caregiver took it), drop the stale card.
+    onError: () => {
+      qc.invalidateQueries({ queryKey: keys.bookings });
+    },
   });
   const perVisit = booking.rateSnapshot - booking.discountAmount;
-  const youEarn = commissionPct !== null ? Math.round(perVisit * (1 - commissionPct / 100)) : null;
+  // Mirror the backend split exactly (caregiverAmount = amount − round(amount·pct/100)).
+  const youEarn = commissionPct !== null ? perVisit - Math.round((perVisit * commissionPct) / 100) : null;
   const recurring = booking.type === "RECURRING" && booking.recurrenceRule;
 
   return (

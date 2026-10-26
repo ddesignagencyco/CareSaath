@@ -29,9 +29,10 @@ export const BOOKING_TONE: Record<CaregiverBookingStatus, Tone> = {
 export const ACTIVE_VISIT: VisitStatus[] = ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT"];
 
 /**
- * The backend never moves a booking to COMPLETED (no code path sets it), so a
- * CONFIRMED booking whose remaining visits are all completed is shown as
- * completed. Derived from the visits the API returned, never invented.
+ * The backend now sets a booking to COMPLETED when its last open visit completes,
+ * and that status is passed straight through. As a fallback (and for older data),
+ * a still-CONFIRMED booking whose remaining visits are all completed is also shown
+ * as completed. Derived from the visits the API returned, never invented.
  */
 export function bookingDisplayStatus(b: { status: CaregiverBookingStatus; visits: { status: VisitStatus }[] }): CaregiverBookingStatus {
   if (b.status !== "CONFIRMED") return b.status;

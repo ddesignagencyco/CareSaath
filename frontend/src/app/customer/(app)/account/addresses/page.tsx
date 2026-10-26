@@ -9,6 +9,7 @@ import { useAction } from "@shared/api/use-action";
 import { PageHeader } from "@shared/page-header";
 import { Button, IconButton } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
+import { ConfirmDialog } from "@shared/ui/confirm-dialog";
 import { LocationMap } from "@shared/ui/location-map";
 import { EmptyState, ErrorState, Skeleton } from "@shared/ui/misc";
 import type { Address } from "@shared/caregiver-types";
@@ -18,6 +19,7 @@ import { keys } from "@/features/customer/lib/api/keys";
 
 function AddressCard({ a, onEdit }: { a: Address; onEdit: () => void }) {
   const t = useTranslations("customerB.addresses");
+  const [confirming, setConfirming] = useState(false);
   const remove = useAction(() => addressesApi.remove(a.id), {
     invalidate: [keys.addresses],
     success: t("removed"),
@@ -40,9 +42,18 @@ function AddressCard({ a, onEdit }: { a: Address; onEdit: () => void }) {
         <IconButton label={t("editLabel")} onClick={onEdit}>
           <Pencil className="size-4" />
         </IconButton>
-        <IconButton label={t("removeLabel")} onClick={() => remove.mutate(undefined)} disabled={remove.isPending} className="hover:text-danger-600">
+        <IconButton label={t("removeLabel")} onClick={() => setConfirming(true)} disabled={remove.isPending} className="hover:text-danger-600">
           <Trash2 className="size-4" />
         </IconButton>
+        <ConfirmDialog
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => remove.mutate(undefined)}
+          title={t("removeConfirmTitle")}
+          description={t("removeConfirmBody")}
+          confirmLabel={t("removeConfirm")}
+          loading={remove.isPending}
+        />
       </div>
     </Card>
   );

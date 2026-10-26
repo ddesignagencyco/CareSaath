@@ -499,7 +499,8 @@ export async function checkInOtp(id: string): Promise<{ ttlSeconds: number; sent
   await delay(400);
   requireCaregiverToken();
   const v = myVisit(id);
-  if (v.status !== "CONFIRMED" && v.status !== "EN_ROUTE") bad(`A check-in OTP can only be issued for a confirmed or en-route visit (now ${v.status})`);
+  if (!["CONFIRMED", "EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status))
+    bad(`A check-in OTP can only be issued for a confirmed, en-route, checked-in or in-progress visit (now ${v.status})`);
   db().checkinOtps[id] = { code: MOCK_OTP, expiresAt: Date.now() + 600_000, attempts: 0 };
   persist();
   const b = db().bookings.find((x) => x.id === v.bookingId)!;
@@ -541,12 +542,16 @@ export async function checkOut(id: string, dto: CheckInInput): Promise<Visit> {
   await delay(450);
   requireCaregiverToken();
   const v = myVisit(id);
-  if (v.status === "CHECKED_IN") transition(v, "IN_PROGRESS");
   const method = dto.method ?? "GPS";
-  if (method === "GPS" && (dto.lat === undefined || dto.lng === undefined)) {
-    persist();
-    bad("GPS check-out requires lat and lng");
+  if (method === "GPS" && (dto.lat === undefined || dto.lng === undefined)) bad("GPS check-out requires lat and lng");
+  // Non-GPS check-out verifies an arrival OTP, like the backend.
+  if (method === "OTP") {
+    const otp = db().checkinOtps[id];
+    if (!otp || otp.expiresAt < Date.now()) throw new ApiError(401, "Check-in OTP expired or not requested");
+    if (otp.code !== dto.code) throw new ApiError(401, "Invalid check-in OTP");
+    delete db().checkinOtps[id];
   }
+  if (v.status === "CHECKED_IN") transition(v, "IN_PROGRESS");
   transition(v, "CHECKED_OUT");
   v.checkOutAt = nowIso();
   v.checkOutMethod = method;

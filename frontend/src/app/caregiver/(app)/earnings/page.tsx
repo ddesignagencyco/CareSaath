@@ -26,7 +26,8 @@ function RequestPayout({ available, accounts, onClose }: { available: number; ac
   const t = useTranslations("caregiverB.earnings.withdraw");
   const tc = useTranslations("common.actions");
   const L = useLabels();
-  const [rupees, setRupees] = useState(String(Math.floor(available / 100)));
+  // Keep exact paisa: available can be a non-round rupee value (e.g. 46750 → "467.5").
+  const [rupees, setRupees] = useState(String(available / 100));
   const [accountId, setAccountId] = useState<string | null>(accounts[0]?.id ?? null);
   const amount = Math.round(Number(rupees) * 100);
   const error =
@@ -82,7 +83,7 @@ function RequestPayout({ available, accounts, onClose }: { available: number; ac
             <button
               key={f}
               type="button"
-              onClick={() => setRupees(String(Math.floor((available * f) / 100)))}
+              onClick={() => setRupees(String(Math.round(available * f) / 100))}
               className="rounded-full border border-ink-200 px-3 py-1 text-xs font-semibold text-ink-600 hover:bg-ink-50"
             >
               {f === 1 ? t("full") : t("half")}

@@ -10,7 +10,7 @@ import { Card } from "@shared/ui/card";
 import { EmptyState, ErrorState, FilterTabs, Skeleton } from "@shared/ui/misc";
 import { BookingCard } from "@/features/customer/components/booking-card";
 import { useCaregiverMap } from "@/features/customer/components/caregiver-bits";
-import { bookingsApi, patientsApi } from "@/features/customer/lib/api/customer";
+import { bookingsApi, patientsApi, paymentsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 
 type Tab = "active" | "waiting" | "past";
@@ -20,10 +20,16 @@ export default function BookingsPage() {
   const [tab, setTab] = useState<Tab>("active");
   const list = useQuery({ queryKey: [...keys.bookings, "all"], queryFn: () => bookingsApi.list({ limit: 100 }), refetchInterval: 30_000 });
   const patients = useQuery({ queryKey: keys.patients, queryFn: patientsApi.list });
+  const payments = useQuery({ queryKey: [...keys.payments, "list"], queryFn: () => paymentsApi.list({ limit: 100 }) });
   const all = list.data?.items ?? [];
   const caregivers = useCaregiverMap(all.map((b) => b.caregiverId));
 
-  // BookingStatus COMPLETED is never set by the API; a CONFIRMED booking is "past" once all its visits are done.
+  // A booking has payment due if a done visit has no settled payment.
+  const paidVisitIds = new Set((payments.data?.items ?? []).filter((p) => p.status === "PAID").map((p) => p.visitId));
+  const hasPaymentDue = (b: (typeof all)[number]) =>
+    b.visits.some((v) => (v.status === "COMPLETED" || v.status === "CHECKED_OUT") && !paidVisitIds.has(v.id));
+
+  // A booking is "past" once all its visits are done (the backend may also set BookingStatus COMPLETED).
   const finished = (b: (typeof all)[number]) =>
     b.visits.length > 0 && b.visits.every((v) => ["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status));
   const groups: Record<Tab, typeof all> = {
@@ -74,7 +80,7 @@ export default function BookingsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {shown.map((b) => (
-            <BookingCard key={b.id} booking={b} caregiver={caregivers[b.caregiverId]} patient={patients.data?.find((p) => p.id === b.patientId)} />
+            <BookingCard key={b.id} booking={b} caregiver={caregivers[b.caregiverId]} patient={patients.data?.find((p) => p.id === b.patientId)} paymentDue={hasPaymentDue(b)} />
           ))}
         </div>
       )}

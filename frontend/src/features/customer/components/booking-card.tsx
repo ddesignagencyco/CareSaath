@@ -17,10 +17,12 @@ export function BookingCard({
   booking,
   caregiver,
   patient,
+  paymentDue,
 }: {
   booking: CustomerBookingListItem;
   caregiver?: PublicCaregiver;
   patient?: PatientProfile;
+  paymentDue?: boolean;
 }) {
   const t = useTranslations("customerB.bookingCard");
   const f = useFmt();
@@ -44,9 +46,12 @@ export function BookingCard({
             </p>
           </div>
         </div>
-        <Badge tone={BOOKING_TONE[bookingDisplayStatus(booking)]} dot>
-          {L.bookingCustomer(bookingDisplayStatus(booking))}
-        </Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <Badge tone={BOOKING_TONE[bookingDisplayStatus(booking)]} dot>
+            {L.bookingCustomer(bookingDisplayStatus(booking))}
+          </Badge>
+          {paymentDue && <Badge tone="danger">{t("paymentDue")}</Badge>}
+        </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 text-sm text-ink-700 sm:grid-cols-2">
         <p className="flex items-start gap-2">

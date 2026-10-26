@@ -2,12 +2,12 @@
 
 /** Where Stripe Checkout sends the customer back to (PAYMENT_RETURN_URL). */
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { Logo } from "@shared/brand";
 import { LocaleProvider } from "@shared/i18n/provider";
 import { formatMoney } from "@shared/lib/format";
@@ -28,6 +28,13 @@ function ReturnInner() {
     enabled: !!paymentId && !cancelled,
     refetchInterval: (q) => (q.state.data?.status === "PENDING" ? 1500 : false),
   });
+
+  // Once settled, refresh the shared payments caches so bookings/visits drop the "payment due" state.
+  const qc = useQueryClient();
+  const settled = payment.data?.status === "PAID";
+  useEffect(() => {
+    if (settled) qc.invalidateQueries({ queryKey: keys.payments });
+  }, [settled, qc]);
 
   const bookingId = payment.data?.visit.bookingId;
   const bookingHref = bookingId ? `/customer/bookings/${bookingId}` : "/customer/bookings";

@@ -230,7 +230,7 @@ export class PaymentsService {
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
-    if (visit.booking.status !== BookingStatus.CONFIRMED) {
+    if (visit.booking.status !== BookingStatus.CONFIRMED && visit.booking.status !== BookingStatus.COMPLETED) {
       throw new BadRequestException('The booking must be confirmed before paying');
     }
     if (visit.status === VisitStatus.CANCELLED || visit.status === VisitStatus.DECLINED) {

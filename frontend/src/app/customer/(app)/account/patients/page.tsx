@@ -12,6 +12,7 @@ import { useLabels } from "@shared/i18n/use-labels";
 import { PageHeader } from "@shared/page-header";
 import { Button, IconButton } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
+import { ConfirmDialog } from "@shared/ui/confirm-dialog";
 import { Avatar, EmptyState, ErrorState, Skeleton } from "@shared/ui/misc";
 import type { PatientProfile } from "@shared/caregiver-types";
 import { EditPatientForm, PatientForm } from "@/features/customer/components/forms";
@@ -24,6 +25,7 @@ function PatientCard({ p, onEdit }: { p: PatientProfile; onEdit: () => void }) {
   const f = useFmt();
   const L = useLabels();
   const now = useNow(60_000);
+  const [confirming, setConfirming] = useState(false);
   const remove = useAction(() => patientsApi.remove(p.id), {
     invalidate: [keys.patients],
     success: t("removed", { name: p.name }),
@@ -43,9 +45,18 @@ function PatientCard({ p, onEdit }: { p: PatientProfile; onEdit: () => void }) {
         <IconButton label={t("editLabel", { name: p.name })} onClick={onEdit}>
           <Pencil className="size-4" />
         </IconButton>
-        <IconButton label={t("removeLabel", { name: p.name })} onClick={() => remove.mutate(undefined)} disabled={remove.isPending} className="hover:text-danger-600">
+        <IconButton label={t("removeLabel", { name: p.name })} onClick={() => setConfirming(true)} disabled={remove.isPending} className="hover:text-danger-600">
           <Trash2 className="size-4" />
         </IconButton>
+        <ConfirmDialog
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          onConfirm={() => remove.mutate(undefined)}
+          title={t("removeConfirmTitle", { name: p.name })}
+          description={t("removeConfirmBody")}
+          confirmLabel={t("removeConfirm")}
+          loading={remove.isPending}
+        />
       </div>
       <div className="mt-4 flex-1 rounded-xl bg-brand-50/60 p-3">
         <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-brand-800 uppercase">

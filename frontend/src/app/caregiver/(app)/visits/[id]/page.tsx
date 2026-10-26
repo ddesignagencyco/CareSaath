@@ -45,7 +45,12 @@ export default function VisitDetailPage() {
   const f = useFmt();
   const L = useLabels();
   const now = useNow(60_000);
-  const visit = useQuery({ queryKey: ["cg-visit", id], queryFn: () => visitsApi.get(id) });
+  const visit = useQuery({
+    queryKey: ["cg-visit", id],
+    queryFn: () => visitsApi.get(id),
+    // Poll so a customer reschedule/cancel reflects here (faster while the visit is live).
+    refetchInterval: (q) => (["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CONFIRMED"].includes(q.state.data?.status ?? "") ? 15_000 : 30_000),
+  });
   const [rx, setRx] = useState<PrescriptionDocument | null>(null);
   const [dialog, setDialog] = useState<"sos" | "report" | "dispute" | null>(null);
 

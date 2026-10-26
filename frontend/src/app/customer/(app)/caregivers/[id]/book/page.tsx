@@ -113,6 +113,20 @@ export default function BookPage() {
 
   const c = caregiver.data;
   const today = now ? localDayKey(now) : "";
+  const nowHHmm = now ? ((d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`)(new Date(now)) : "";
+
+  /** Pick the start date; when it's today, pre-fill a window starting ~30 min from now. */
+  const pickStartDate = (value: string) => {
+    setStart(value);
+    if (value && value === today && now) {
+      const fmt = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const fromAt = new Date(now + 30 * 60_000);
+      fromAt.setMinutes(Math.ceil(fromAt.getMinutes() / 5) * 5, 0, 0); // round up to the next 5 min
+      const toAt = new Date(fromAt.getTime() + 60 * 60_000);
+      setFrom(fmt(fromAt));
+      setTo(fmt(toAt));
+    }
+  };
   const maxEnd = start ? new Date(new Date(`${start}T00:00:00Z`).getTime() + MAX_RANGE_DAYS * 86_400_000).toISOString().slice(0, 10) : "";
   const dates = countVisits(type, start, end, weekdays);
   const offDays = c && dates.length ? outsideHours(c, dates, from, to) : [];
@@ -123,6 +137,8 @@ export default function BookPage() {
     ? t("errors.chooseDate")
     : start < today
       ? t("errors.past")
+      : start === today && !!nowHHmm && from <= nowHHmm
+        ? t("errors.pastTime")
       : from >= to
         ? t("errors.endTime")
         : type === "RECURRING" && !end
@@ -138,7 +154,9 @@ export default function BookPage() {
                   : null;
   const daysText = type === "RECURRING" ? f.weekdays(weekdays) : start ? f.longDay(start) : "";
   const windowText = f.timeWindow(from, to);
-  const stepOk = [!!patientId, !!addressId, !whenError, true][step];
+  // Block booking a caregiver for an address outside their service area.
+  const addressOutOfArea = !!(c && address && !c.serviceArea.cities.includes(address.city));
+  const stepOk = [!!patientId, !!addressId && !addressOutOfArea, !whenError, true][step];
 
   const book = useAction(
     async () => {
@@ -198,7 +216,7 @@ export default function BookPage() {
   const effectivePerVisit = applied ? applied.perVisitAfterDiscount : perVisit;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 pb-6">
+    <div className="space-y-5 pb-6">
       <Link href={`/customer/caregivers/${id}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900">
         <ArrowLeft className="rtl:-scale-x-100 size-4" /> {t("back")}
       </Link>
@@ -224,8 +242,18 @@ export default function BookPage() {
       <ol className="grid grid-cols-4 gap-2" aria-label={t("stepsLabel")}>
         {STEPS.map((key, i) => (
           <li key={key} aria-current={i === step ? "step" : undefined}>
-            <span className={clsx("block h-1.5 rounded-full transition-colors", i <= step ? "bg-brand-600" : "bg-ink-200")} />
-            <span className={clsx("mt-1.5 block text-xs font-semibold", i <= step ? "text-ink-900" : "text-ink-400")}>{t(`steps.${key}`)}</span>
+            <button
+              type="button"
+              onClick={() => i < step && setStep(i)}
+              disabled={i >= step}
+              aria-label={t(`steps.${key}`)}
+              className={clsx("block w-full text-start", i < step && "cursor-pointer")}
+            >
+              <span className={clsx("block h-1.5 rounded-full transition-colors", i <= step ? "bg-brand-600" : "bg-ink-200")} />
+              <span className={clsx("mt-1.5 block text-xs font-semibold transition-colors", i <= step ? "text-ink-900" : "text-ink-400", i < step && "hover:text-brand-700")}>
+                {t(`steps.${key}`)}
+              </span>
+            </button>
           </li>
         ))}
       </ol>
@@ -311,7 +339,7 @@ export default function BookPage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label={type === "SINGLE" ? t("when.date") : t("when.from")} required>
-                {(fid) => <Input id={fid} type="date" min={today} value={start} onChange={(e) => setStart(e.target.value)} />}
+                {(fid) => <Input id={fid} type="date" min={today} value={start} onChange={(e) => pickStartDate(e.target.value)} />}
               </Field>
               {type === "RECURRING" && (
                 <Field label={t("when.until")} required hint={t("when.upTo", { n: MAX_RANGE_DAYS })}>
@@ -345,7 +373,7 @@ export default function BookPage() {
             )}
             <div className="grid grid-cols-2 gap-4">
               <Field label={t("when.arriveBetween")} required>
-                {(fid) => <Input id={fid} type="time" value={from} onChange={(e) => setFrom(e.target.value)} className="tabular" />}
+                {(fid) => <Input id={fid} type="time" min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={(e) => setFrom(e.target.value)} className="tabular" />}
               </Field>
               <Field label={t("when.and")} required>
                 {(fid) => <Input id={fid} type="time" value={to} onChange={(e) => setTo(e.target.value)} className="tabular" />}

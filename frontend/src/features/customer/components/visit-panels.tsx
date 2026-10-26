@@ -39,6 +39,7 @@ function reachedAt(history: VisitStatusHistory[], statuses: VisitStatus[]) {
 
 export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
   const tr = useTranslations("customerB.tracker");
+  const f = useFmt();
   const current = TRACK.findIndex((t) => t.statuses.includes(visit.status));
   if (current < 0) return null;
   return (
@@ -65,7 +66,11 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
               <span className={clsx("h-0.5 flex-1", i === TRACK.length - 1 ? "invisible" : done ? "bg-brand-400" : "bg-ink-200")} />
             </span>
             <span className={clsx("text-[11px] font-semibold sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{tr(t.key)}</span>
-            {at && <span className="tabular hidden text-[10px] text-ink-400 sm:block">{new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>}
+            {at && (
+              <span className="tabular hidden text-[10px] text-ink-400 sm:block">
+                {f.time(`${new Date(at).getHours()}:${String(new Date(at).getMinutes()).padStart(2, "0")}`)}
+              </span>
+            )}
           </li>
         );
       })}
@@ -116,7 +121,9 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [open, setOpen] = useState(false);
   const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
-  const payable = visit.booking.status === "CONFIRMED" && visit.status !== "CANCELLED" && visit.status !== "DECLINED";
+  // Payment is due during the booking AND after it completes (esp. cash-on-visit),
+  // so keep the pay option until it's paid — not only while CONFIRMED.
+  const payable = (visit.booking.status === "CONFIRMED" || visit.booking.status === "COMPLETED") && visit.status !== "CANCELLED" && visit.status !== "DECLINED";
   const existing = payments.data?.items.find((p) => p.visitId === visit.id && (p.status === "PAID" || p.status === "PENDING"));
 
   const pay = useAction(() => paymentsApi.initiate({ visitId: visit.id, method }), {
@@ -149,7 +156,7 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
           <p className="text-xs font-bold tracking-wide text-ink-500 uppercase">{t("title")}</p>
           <p className="tabular text-lg font-extrabold text-ink-900">{formatMoney(existing?.amount ?? amount)}</p>
         </div>
-        {!payments.data ? null : existing ? (
+        {payments.isLoading && !payments.data ? null : existing ? (
           existing.status === "PAID" ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-3 py-1 text-sm font-semibold text-success-700">
               <Check className="size-4" /> {t("paidWith", { method: L.paymentMethod(existing.method) })}
@@ -297,7 +304,7 @@ export function ReportConcernDialog({ visitId, onClose }: { visitId: string; onC
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<IncidentPriority>("MEDIUM");
   const report = useAction(() => visitsApi.report(visitId, { description: description.trim(), priority }), {
-    invalidate: [],
+    invalidate: [keys.visit],
     success: t("success"),
     onSuccess: onClose,
   });

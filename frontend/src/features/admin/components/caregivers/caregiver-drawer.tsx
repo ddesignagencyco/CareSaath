@@ -71,7 +71,7 @@ export function CaregiverDrawer({
   const reject = useAction((r: string) => caregiversApi.reject(caregiver.id, r), opts(t("toast.rejected", { name })));
   const suspend = useAction((r: string) => caregiversApi.suspend(caregiver.id, r), opts(t("toast.suspended", { name })));
   const reverify = useAction(() => caregiversApi.reverify(caregiver.id, Number(reverifyDays) || 365), opts(t("toast.reverify", { name })));
-  const deactivate = useAction(() => caregiversApi.deactivate(caregiver.id), opts(t("toast.deactivated", { name }), "DEACTIVATED"));
+  const deactivate = useAction((r: string) => caregiversApi.deactivate(caregiver.id, r), opts(t("toast.deactivated", { name }), "DEACTIVATED"));
   const status = caregiver.verificationStatus;
   const auditReason = t("dialogs.reactivate.auditReason");
   // POST /reactivate only re-activates the user account; it leaves a SUSPENDED
@@ -253,7 +253,7 @@ export function CaregiverDrawer({
         confirmLabel={t("dialogs.deactivate.confirm")}
         confirmVariant="danger"
         loading={deactivate.isPending}
-        onConfirm={() => deactivate.mutate(undefined)}
+        onConfirm={(r) => deactivate.mutate(r)}
       />
       {action === "reverify" && (
         <ReasonDialog

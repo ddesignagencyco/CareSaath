@@ -93,6 +93,7 @@
     "checkedInAt": "Checked in {time}",
     "checkOutGps": "Check out with my location",
     "checkOutNoLocation": "Check out without location",
+    "checkOutConfirm": "Check out",
     "completedAt": "Visit completed {time}",
     "yourNote": "Your note",
     "stars": "{rating} out of 5 stars",

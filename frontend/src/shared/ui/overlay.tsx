@@ -3,22 +3,63 @@
 import clsx from "clsx";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "./button";
 
-function useOverlay(open: boolean, onClose: () => void) {
+const FOCUSABLE = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/** Scroll-lock, Escape-to-close, initial focus, focus trap, and focus restore on close. */
+function useOverlay(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
+  // Keep onClose current without re-running the focus effect (it's usually an inline fn),
+  // otherwise that effect would re-apply focus on every render and steal it mid-typing.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const prev = document.body.style.overflow;
+    const container = ref.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    const items = () => (container ? Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null) : []);
+    // Respect a field's own autoFocus: only take focus if it isn't already inside the dialog.
+    if (container && !container.contains(document.activeElement)) {
+      (items()[0] ?? container).focus();
+    }
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !container) return;
+      const list = items();
+      if (list.length === 0) {
+        e.preventDefault();
+        container.focus();
+        return;
+      }
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !container.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !container.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, ref]);
 }
 
 export function Modal({
@@ -38,13 +79,16 @@ export function Modal({
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg";
 }) {
-  useOverlay(open, onClose);
+  const ref = useRef<HTMLDivElement>(null);
+  useOverlay(open, onClose, ref);
   const t = useTranslations("common.actions");
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-ink-900/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
+        ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -89,20 +133,25 @@ export function Drawer({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
-  useOverlay(open, onClose);
+  const ref = useRef<HTMLElement>(null);
+  const titleId = useId();
+  useOverlay(open, onClose, ref);
   const t = useTranslations("common.actions");
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-ink-900/30" onClick={onClose} aria-hidden />
       <aside
+        ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-pop"
       >
         <header className="flex items-start justify-between gap-4 border-b border-ink-100 px-5 py-4">
           <div className="min-w-0">
-            <div className="text-lg font-bold text-ink-900">{title}</div>
+            <div id={titleId} className="text-lg font-bold text-ink-900">{title}</div>
             {subtitle && <div className="mt-0.5 text-sm text-ink-500">{subtitle}</div>}
           </div>
           <IconButton label={t("closePanel")} onClick={onClose} className="-me-2">

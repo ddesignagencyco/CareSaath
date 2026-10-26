@@ -153,6 +153,7 @@
     "errors": {
       "chooseDate": "Choose a date",
       "past": "Date can't be in the past",
+      "pastTime": "Arrival time can't be in the past",
       "endTime": "End time must be after start time",
       "chooseEnd": "Choose an end date",
       "endBefore": "End date must be on or after start date",

@@ -71,6 +71,9 @@ describe("Addresses page", { timeout: 15_000 }, () => {
     renderWithProviders(<AddressesPage />, { storageKey: STORAGE_KEY });
 
     await user.click(await screen.findByRole("button", { name: en.addresses.removeLabel }));
+    // Deletion is now behind a confirmation dialog.
+    const dialog = await screen.findByRole("dialog", { name: en.addresses.removeConfirmTitle });
+    await user.click(within(dialog).getByRole("button", { name: en.addresses.removeConfirm }));
     expect(await screen.findByText(en.addresses.hasBookings)).toBeInTheDocument();
     expect(screen.queryByText(/referenced by existing bookings/)).not.toBeInTheDocument();
     expect(f.calls.filter((c) => c.method === "DELETE").map(apiPath)).toEqual(["/customer/addresses/a1"]);

@@ -93,6 +93,7 @@
     "checkedInAt": "چیک اِن {time}",
     "checkOutGps": "اپنے مقام سے چیک آؤٹ کریں",
     "checkOutNoLocation": "مقام کے بغیر چیک آؤٹ کریں",
+    "checkOutConfirm": "چیک آؤٹ کریں",
     "completedAt": "وزٹ مکمل ہوا {time}",
     "yourNote": "آپ کا نوٹ",
     "stars": "5 میں سے {rating} ستارے",

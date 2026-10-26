@@ -24,7 +24,7 @@ import { RespondCountdown } from "@shared/ui/respond-countdown";
 import type { PrescriptionSummary, Visit } from "@shared/caregiver-types";
 import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
 import { RescheduleDialog } from "@/features/customer/components/reschedule-dialog";
-import { bookingsApi } from "@/features/customer/lib/api/customer";
+import { bookingsApi, paymentsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 import { BOOKING_TONE, bookingDisplayStatus, hasCancellableVisits, VISIT_TONE } from "@/features/customer/lib/labels";
 
@@ -39,7 +39,15 @@ export default function BookingDetailPage() {
   const L = useLabels();
   const now = useNow(60_000);
   const booking = useQuery({ queryKey: [...keys.bookings, "detail", id], queryFn: () => bookingsApi.get(id), refetchInterval: 20_000 });
+  const payments = useQuery({ queryKey: [...keys.payments, "list"], queryFn: () => paymentsApi.list({ limit: 100 }) });
   const b = booking.data;
+  // Per-visit payment state: paid, pending (gateway/cash in progress), or due (visit done, nothing settled).
+  const payItems = payments.data?.items ?? [];
+  const payState = (visitId: string, status: string): "paid" | "pending" | "due" | null => {
+    if (payItems.some((p) => p.visitId === visitId && p.status === "PAID")) return "paid";
+    if (payItems.some((p) => p.visitId === visitId && p.status === "PENDING")) return "pending";
+    return status === "COMPLETED" || status === "CHECKED_OUT" ? "due" : null;
+  };
   const caregiver = useCaregiver(b?.caregiverId);
   const [cancelling, setCancelling] = useState(false);
   const [moving, setMoving] = useState<Visit | null>(null);
@@ -114,6 +122,21 @@ export default function BookingDetailPage() {
             </div>
           )}
 
+          {(() => {
+            const due = b.visits.find((v) => payState(v.id, v.status) === "due");
+            return due ? (
+              <Link
+                href={`/customer/visits/${due.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-50 p-4 ring-1 ring-danger-400/30 hover:bg-danger-100/60"
+              >
+                <p className="text-sm font-semibold text-danger-700">{t("paymentDueBanner")}</p>
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-danger-700">
+                  {t("payNow")} <ChevronRight className="rtl:-scale-x-100 size-4" />
+                </span>
+              </Link>
+            ) : null;
+          })()}
+
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
             <div className="space-y-5">
               <Card>
@@ -131,6 +154,16 @@ export default function BookingDetailPage() {
                           <Badge tone={VISIT_TONE[v.status]} dot>
                             {L.visitCustomer(v.status)}
                           </Badge>
+                          {(() => {
+                            const ps = payState(v.id, v.status);
+                            return ps === "paid" ? (
+                              <Badge tone="success">{t("paid")}</Badge>
+                            ) : ps === "pending" ? (
+                              <Badge tone="accent">{t("paymentPending")}</Badge>
+                            ) : ps === "due" ? (
+                              <Badge tone="danger">{t("paymentDue")}</Badge>
+                            ) : null;
+                          })()}
                         </Link>
                         {canMove ? (
                           <Button size="sm" variant="ghost" onClick={() => setMoving(v)}>

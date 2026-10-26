@@ -234,6 +234,136 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
   );
 }
 
+/** Check-out with GPS, or an arrival OTP when location is unavailable (mirrors CheckIn). */
+function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidate: QueryKey[] }) {
+  const t = useTranslations("caregiverB.flow");
+  const apiError = useApiErrorText();
+  const geoErrorText = useGeoErrorText();
+  const [mode, setMode] = useState<"gps" | "otp">("gps");
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ sentTo: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+
+  const checkOut = useAction((dto: Parameters<typeof visitsApi.checkOut>[1]) => visitsApi.checkOut(visit.id, dto), {
+    invalidate,
+    success: t("checkedOutToast"),
+    onError: (err) => {
+      if (mode === "otp") {
+        setOtpError(apiError(err));
+        setCode("");
+        return true;
+      }
+    },
+  });
+  const sendCode = useAction(() => visitsApi.checkInOtp(visit.id), {
+    invalidate: [],
+    success: null,
+    onSuccess: (r) => {
+      setSent({ sentTo: r.sentTo });
+      setOtpError(null);
+      setCode("");
+    },
+  });
+
+  async function gps() {
+    setGeoError(null);
+    setLocating(true);
+    try {
+      const pos = await getPosition();
+      checkOut.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng });
+    } catch (e) {
+      setGeoError(geoErrorText(e));
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-ink-50 p-1" role="tablist">
+        {(
+          [
+            ["gps", t("tabGps"), LocateFixed],
+            ["otp", t("tabOtp"), KeyRound],
+          ] as const
+        ).map(([value, label, Icon]) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={mode === value}
+            onClick={() => setMode(value)}
+            className={clsx(
+              "flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition-colors",
+              mode === value ? "bg-white text-ink-900 shadow-card" : "text-ink-500",
+            )}
+          >
+            <Icon className="size-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "gps" ? (
+        <div className="space-y-3">
+          <Button size="lg" className="w-full" loading={locating || checkOut.isPending} onClick={gps}>
+            <LogOut className="size-4" /> {t("checkOutGps")}
+          </Button>
+          {geoError && (
+            <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-700">
+              {geoError}{" "}
+              <button className="font-semibold underline" onClick={() => setMode("otp")}>
+                {t("useFamilyCode")}
+              </button>
+            </p>
+          )}
+        </div>
+      ) : !sent ? (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-600">{t("otpIntro")}</p>
+          <Button size="lg" className="w-full" loading={sendCode.isPending} onClick={() => sendCode.mutate(undefined)}>
+            <KeyRound className="size-4" /> {t("sendCode")}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-ink-600">
+            {t.rich("codeSent", {
+              phone: maskPhone(sent.sentTo),
+              b: (c) => (
+                <span dir="ltr" className="tabular font-semibold text-ink-900">
+                  {c}
+                </span>
+              ),
+            })}
+          </p>
+          <OtpInput
+            value={code}
+            onChange={(v) => {
+              setCode(v);
+              setOtpError(null);
+            }}
+            onComplete={(v) => checkOut.mutate({ method: "OTP", code: v })}
+            invalid={!!otpError}
+            disabled={checkOut.isPending}
+            autoFocus
+          />
+          {otpError && <p className="text-sm font-medium text-danger-600">{otpError}</p>}
+          <div className="flex items-center justify-between">
+            <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => sendCode.mutate(undefined)}>
+              {t("newCode")}
+            </button>
+            <Button loading={checkOut.isPending} disabled={code.length !== 6} onClick={() => checkOut.mutate({ method: "OTP", code })}>
+              {t("checkOutConfirm")}
+            </Button>
+          </div>
+          {USE_MOCKS && <p className="text-xs text-accent-700">{t("mockCode", { code: MOCK_OTP })}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Elapsed({ since }: { since: string }) {
   const now = useNow(1000);
   if (!now) return null;
@@ -299,7 +429,6 @@ function NoteForm({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
 export function VisitFlow({ visit }: { visit: CaregiverVisitDetail }) {
   const t = useTranslations("caregiverB.flow");
   const f = useFmt();
-  const geoErrorText = useGeoErrorText();
   const now = useNow(60_000);
   const invalidate: QueryKey[] = [keys.visits, ["cg-visit", visit.id]];
   const current = stepIndex(visit.status);
@@ -308,25 +437,6 @@ export function VisitFlow({ visit }: { visit: CaregiverVisitDetail }) {
     invalidate,
     success: t("enRouteToast"),
   });
-  const [locating, setLocating] = useState(false);
-  const [fallbackMsg, setFallbackMsg] = useState<string | null>(null);
-  const checkOut = useAction((dto: Parameters<typeof visitsApi.checkOut>[1]) => visitsApi.checkOut(visit.id, dto), {
-    invalidate,
-    success: t("checkedOutToast"),
-  });
-
-  async function gpsCheckOut() {
-    setFallbackMsg(null);
-    setLocating(true);
-    try {
-      const pos = await getPosition();
-      checkOut.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng });
-    } catch (e) {
-      setFallbackMsg(geoErrorText(e));
-    } finally {
-      setLocating(false);
-    }
-  }
 
   if (current < 0) return null;
   const startsAt = visitStart(visit.scheduledDate, visit.timeWindowStart);
@@ -368,17 +478,7 @@ export function VisitFlow({ visit }: { visit: CaregiverVisitDetail }) {
             {visit.checkInAt && <Elapsed since={visit.checkInAt} />}
             <p className="text-xs text-ink-500">{t("checkedInAt", { time: f.dateTime(visit.checkInAt) })}</p>
           </div>
-          <Button size="lg" className="w-full" loading={locating || checkOut.isPending} onClick={gpsCheckOut}>
-            <LogOut className="size-4" /> {t("checkOutGps")}
-          </Button>
-          {fallbackMsg && <p className="rounded-lg bg-warning-50 px-3 py-2 text-start text-sm text-warning-700">{fallbackMsg}</p>}
-          <button
-            className="text-sm font-semibold text-ink-500 hover:text-ink-900"
-            onClick={() => checkOut.mutate({ method: "OTP" })}
-            disabled={checkOut.isPending}
-          >
-            {t("checkOutNoLocation")}
-          </button>
+          <CheckOut visit={visit} invalidate={invalidate} />
         </div>
       )}
 

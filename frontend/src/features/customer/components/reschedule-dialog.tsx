@@ -19,10 +19,19 @@ export function RescheduleDialog({ bookingId, visit, onClose, onDone }: { bookin
   const f = useFmt();
   const now = useNow(60_000);
   const today = now ? localDayKey(now) : "";
+  const nowHHmm = now ? ((d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`)(new Date(now)) : "";
   const [date, setDate] = useState(visit.scheduledDate.slice(0, 10));
   const [from, setFrom] = useState(visit.timeWindowStart);
   const [to, setTo] = useState(visit.timeWindowEnd);
-  const error = !date ? t("errNoDate") : date < today ? t("errPast") : from >= to ? t("errEndBeforeStart") : null;
+  const error = !date
+    ? t("errNoDate")
+    : date < today
+      ? t("errPast")
+      : date === today && !!nowHHmm && from <= nowHHmm
+        ? t("errPastTime")
+        : from >= to
+          ? t("errEndBeforeStart")
+          : null;
   const unchanged = date === visit.scheduledDate.slice(0, 10) && from === visit.timeWindowStart && to === visit.timeWindowEnd;
 
   const save = useAction(() => bookingsApi.reschedule(bookingId, { visitId: visit.id, newDate: date, timeWindowStart: from, timeWindowEnd: to }), {
