@@ -139,6 +139,8 @@ enum PayoutAccountType {
 enum PayoutStatus {
   REQUESTED
   PROCESSING
+  /// Admin has sent the money; waiting for the caregiver to confirm they received it.
+  TRANSFERRED
   PAID
   REJECTED
 }
@@ -557,6 +559,12 @@ model PayoutRequest {
   processedAt     DateTime?
   note            String?
   rejectionReason String?
+  transferredAt        DateTime?
+  transferReference    String?
+  /// A payout is PAID only after the caregiver confirms the money arrived.
+  caregiverConfirmedAt DateTime?
+  issueReportedAt      DateTime?
+  issueNote            String?
 
   caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id])
   payoutAccount   PayoutAccount    @relation(fields: [payoutAccountId], references: [id])

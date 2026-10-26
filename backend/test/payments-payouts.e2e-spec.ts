@@ -277,7 +277,7 @@ describe('Payments & payouts (e2e)', () => {
     expect(res.body.status).toBe('REQUESTED');
   });
 
-  it('lets an admin approve then mark the payout paid', async () => {
+  it('lets an admin approve, transfer, and the caregiver confirm the payout', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/v1/admin/payouts?status=REQUESTED')
       .set(bearer(adminToken));
@@ -291,12 +291,49 @@ describe('Payments & payouts (e2e)', () => {
     expect(approve.status).toBe(201);
     expect(approve.body.status).toBe('PROCESSING');
 
-    const paid = await request(app.getHttpServer())
+    // The admin sending the money is not enough: the payout waits for the caregiver.
+    const transferred = await request(app.getHttpServer())
+      .post(`/api/v1/admin/payouts/${payoutId}/mark-transferred`)
+      .set(bearer(adminToken))
+      .send({ reference: 'TXN-E2E-1' });
+    expect(transferred.status).toBe(201);
+    expect(transferred.body.status).toBe('TRANSFERRED');
+    expect(transferred.body.transferReference).toBe('TXN-E2E-1');
+    expect(transferred.body.caregiverConfirmedAt).toBeNull();
+
+    // The admin cannot jump it to PAID by calling the deprecated alias again.
+    const again = await request(app.getHttpServer())
       .post(`/api/v1/admin/payouts/${payoutId}/mark-paid`)
       .set(bearer(adminToken))
       .send({});
-    expect(paid.status).toBe(201);
-    expect(paid.body.status).toBe('PAID');
+    expect(again.status).toBe(400);
+
+    // The caregiver reports it missing: still TRANSFERRED, issue recorded.
+    const missing = await request(app.getHttpServer())
+      .post(`/api/v1/caregiver/payouts/${payoutId}/report-not-received`)
+      .set(bearer(caregiverToken))
+      .send({ note: 'Nothing in my wallet yet' });
+    expect(missing.status).toBe(201);
+    expect(missing.body.status).toBe('TRANSFERRED');
+    expect(missing.body.issueNote).toBe('Nothing in my wallet yet');
+
+    // The admin resends; the issue is cleared.
+    const resent = await request(app.getHttpServer())
+      .post(`/api/v1/admin/payouts/${payoutId}/mark-transferred`)
+      .set(bearer(adminToken))
+      .send({ reference: 'TXN-E2E-2' });
+    expect(resent.status).toBe(201);
+    expect(resent.body.transferReference).toBe('TXN-E2E-2');
+    expect(resent.body.issueReportedAt).toBeNull();
+
+    // Only the caregiver's confirmation completes it.
+    const confirmed = await request(app.getHttpServer())
+      .post(`/api/v1/caregiver/payouts/${payoutId}/confirm-received`)
+      .set(bearer(caregiverToken));
+    expect(confirmed.status).toBe(201);
+    expect(confirmed.body.status).toBe('PAID');
+    expect(confirmed.body.caregiverConfirmedAt).toBeTruthy();
+    expect(confirmed.body.processedAt).toBeTruthy();
   });
 
   it('removes settled earnings from the available pool after payout', async () => {
