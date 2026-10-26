@@ -65,6 +65,9 @@ const GATEWAY_METHODS: PaymentMethod[] = [
 /** A gateway payment still PENDING after this long is abandoned (set to FAILED) on the next attempt. */
 const GATEWAY_PENDING_TTL_MINUTES = Number(process.env['PAYMENT_PENDING_TTL_MINUTES'] ?? 30);
 
+/** Stripe rejects checkouts below ~US$0.50 (about PKR 140); configurable in whole PKR. */
+const STRIPE_MIN_CHARGE_PKR = Number(process.env['STRIPE_MIN_CHARGE_PKR'] ?? 140);
+
 /** Hosted-checkout base; the gateway integration is TBD (TRD §6.5) until merchant credentials exist. */
 function checkoutUrlFor(method: PaymentMethod, gatewayRef: string): string {
   const base = process.env['PAYMENT_CHECKOUT_BASE_URL'] ?? 'https://checkout.caresaath.pk';
@@ -274,6 +277,11 @@ export class PaymentsService {
     const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
     if (amount <= 0) {
       throw new BadRequestException('Payment amount must be positive');
+    }
+    if (this.usesStripe(dto.method) && amount < STRIPE_MIN_CHARGE_PKR * 100) {
+      throw new BadRequestException(
+        `Card payments require a minimum of PKR ${STRIPE_MIN_CHARGE_PKR} (this visit is PKR ${amount / 100})`,
+      );
     }
     const percentage = Number(visit.booking.caregiver.commissionRate.percentage);
     const { commissionAmount, caregiverAmount } = splitCommission(amount, percentage);
