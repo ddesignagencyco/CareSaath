@@ -109,6 +109,9 @@ const METHODS: { value: PaymentMethod; icon: React.ComponentType<{ className?: s
   { value: "EASYPAISA", icon: Smartphone, available: false },
 ];
 
+/** Stripe refuses charges below ~US$0.50; the backend enforces PKR 140 (STRIPE_MIN_CHARGE_PKR). */
+const STRIPE_MIN_PAISA = 14_000;
+
 export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
   const t = useTranslations("customerB.payment");
   const tc = useTranslations("common.actions");
@@ -201,32 +204,39 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
           }
         >
           <div className="space-y-2" role="radiogroup" aria-label={t("methodLabel")}>
-            {METHODS.map(({ value, icon: Icon, available }) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={method === value}
-                aria-disabled={!available}
-                disabled={!available}
-                onClick={() => setMethod(value)}
-                className={clsx(
-                  "flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-start transition-colors",
-                  !available && "cursor-not-allowed opacity-60",
-                  method === value ? "border-brand-500 bg-brand-50/50" : "border-ink-100",
-                  available && method !== value && "hover:border-ink-200",
-                )}
-              >
-                <span className="flex size-10 items-center justify-center rounded-lg bg-white text-brand-600 ring-1 ring-ink-100">
-                  <Icon className="size-5" />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-bold text-ink-900">{methodLabel(value)}</span>
-                  <span className="block text-xs text-ink-500">{available ? methodDescription(value) : t("comingSoon")}</span>
-                </span>
-                <span className={clsx("size-5 rounded-full border-2", method === value ? "border-[6px] border-brand-600" : "border-ink-300")} />
-              </button>
-            ))}
+            {METHODS.map(({ value, icon: Icon, available }) => {
+              // Card needs the Stripe minimum; below it, disable with a hint instead of letting the backend reject.
+              const belowMin = value === "CARD" && amount < STRIPE_MIN_PAISA;
+              const isAvailable = available && !belowMin;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === value}
+                  aria-disabled={!isAvailable}
+                  disabled={!isAvailable}
+                  onClick={() => setMethod(value)}
+                  className={clsx(
+                    "flex w-full items-center gap-3 rounded-xl border-2 p-3.5 text-start transition-colors",
+                    !isAvailable && "cursor-not-allowed opacity-60",
+                    method === value ? "border-brand-500 bg-brand-50/50" : "border-ink-100",
+                    isAvailable && method !== value && "hover:border-ink-200",
+                  )}
+                >
+                  <span className="flex size-10 items-center justify-center rounded-lg bg-white text-brand-600 ring-1 ring-ink-100">
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-bold text-ink-900">{methodLabel(value)}</span>
+                    <span className="block text-xs text-ink-500">
+                      {isAvailable ? methodDescription(value) : belowMin ? t("cardMinimum", { amount: formatMoney(STRIPE_MIN_PAISA) }) : t("comingSoon")}
+                    </span>
+                  </span>
+                  <span className={clsx("size-5 rounded-full border-2", method === value ? "border-[6px] border-brand-600" : "border-ink-300")} />
+                </button>
+              );
+            })}
             <p className="pt-1 text-xs text-ink-500">{t("gatewayNote")}</p>
           </div>
         </Modal>

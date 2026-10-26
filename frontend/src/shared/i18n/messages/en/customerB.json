@@ -123,6 +123,7 @@
     "awaitingGateway": "Awaiting {method} confirmation",
     "pendingToast": "Payment started. It will show as paid once confirmed.",
     "comingSoon": "Coming soon",
+    "cardMinimum": "Minimum {amount} for card",
     "payAnotherWay": "Cancel and pay another way",
     "abandoned": "Payment cancelled. Choose another method.",
     "redirecting": "Opening secure checkout…",
