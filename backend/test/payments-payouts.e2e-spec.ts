@@ -10,6 +10,12 @@ import type { JwtService } from '@nestjs/jwt';
  * Payment -> payout lifecycle: cash settle, gateway webhook idempotency,
  * commission config, caregiver earnings and admin payout approval.
  */
+const binary = (res: NodeJS.ReadableStream, callback: (err: Error | null, body: Buffer) => void) => {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+};
+
 describe('Payments & payouts (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -334,6 +340,65 @@ describe('Payments & payouts (e2e)', () => {
     expect(confirmed.body.status).toBe('PAID');
     expect(confirmed.body.caregiverConfirmedAt).toBeTruthy();
     expect(confirmed.body.processedAt).toBeTruthy();
+  });
+
+  it('downloads the payout transfer receipt as a PDF (caregiver and admin)', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/caregiver/payouts').set(bearer(caregiverToken));
+    const payoutId = (list.body.items as Array<{ id: string }>)[0]!.id;
+    for (const [path, token] of [
+      [`/api/v1/caregiver/payouts/${payoutId}/receipt`, caregiverToken],
+      [`/api/v1/admin/payouts/${payoutId}/receipt`, adminToken],
+    ] as const) {
+      const res = await request(app.getHttpServer()).get(path).set(bearer(token)).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/pdf');
+      expect(res.headers['content-disposition']).toMatch(/^attachment; filename="caresaath-transfer-CS-PO-\d{4}-[0-9A-F]{8}\.pdf"$/);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    }
+    const inline = await request(app.getHttpServer())
+      .get(`/api/v1/caregiver/payouts/${payoutId}/receipt?inline=true`)
+      .set(bearer(caregiverToken))
+      .buffer(true)
+      .parse(binary);
+    expect(inline.headers['content-disposition']).toMatch(/^inline;/);
+  });
+
+  it('downloads the payment receipt as a PDF only for the parties, and only once paid', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/customer/payments').set(bearer(customerToken));
+    const items = list.body.items as Array<{ id: string; method: string; status: string }>;
+    const cash = items.find((p) => p.method === 'CASH' && p.status === 'PAID')!;
+    const unpaid = items.find((p) => p.status !== 'PAID');
+
+    const customerCopy = await request(app.getHttpServer())
+      .get(`/api/v1/customer/payments/${cash.id}/receipt`)
+      .set(bearer(customerToken))
+      .buffer(true)
+      .parse(binary);
+    expect(customerCopy.status).toBe(200);
+    expect(customerCopy.headers['content-type']).toBe('application/pdf');
+    expect(customerCopy.headers['content-disposition']).toMatch(/^attachment; filename="caresaath-receipt-CS-\d{4}-[0-9A-F]{8}\.pdf"$/);
+    expect((customerCopy.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+
+    for (const [path, token] of [
+      [`/api/v1/caregiver/payments/${cash.id}/receipt`, caregiverToken],
+      [`/api/v1/admin/payments/${cash.id}/receipt`, adminToken],
+    ] as const) {
+      const res = await request(app.getHttpServer()).get(path).set(bearer(token)).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    }
+
+    // not available before verification, and not across roles
+    if (unpaid) {
+      const early = await request(app.getHttpServer())
+        .get(`/api/v1/customer/payments/${unpaid.id}/receipt`)
+        .set(bearer(customerToken));
+      expect(early.status).toBe(400);
+    }
+    const wrongRole = await request(app.getHttpServer())
+      .get(`/api/v1/customer/payments/${cash.id}/receipt`)
+      .set(bearer(caregiverToken));
+    expect(wrongRole.status).toBe(403);
   });
 
   it('removes settled earnings from the available pool after payout', async () => {

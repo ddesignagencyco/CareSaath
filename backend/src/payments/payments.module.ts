@@ -17,6 +17,7 @@ import {
   Post,
   Query,
   Req,
+  Res,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -30,7 +31,7 @@ import {
 } from '@nestjs/swagger';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { RawBodyRequest } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import type Stripe from 'stripe';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
@@ -51,6 +52,11 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { paymentReceiptDocument, paymentReceiptNumber } from '../receipts/receipt-data.js';
+import type { ReceiptAudience } from '../receipts/receipt-data.js';
+import { buildReceiptPdf } from '../receipts/receipt-pdf.js';
+import { sendPdf } from '../receipts/send-pdf.js';
+import type { PdfFile } from '../receipts/send-pdf.js';
 import { StripeService } from './stripe.service.js';
 
 /**
@@ -677,6 +683,54 @@ export class PaymentsService {
     return payment;
   }
 
+  /**
+   * PDF receipt for a verified payment. Customers get a receipt without the
+   * platform commission; the caregiver and admins get the full breakdown. Only
+   * the parties on the visit (or an admin) can download it.
+   */
+  async receipt(user: AuthUser, id: string): Promise<PdfFile> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: {
+        visit: {
+          select: {
+            scheduledDate: true,
+            timeWindowStart: true,
+            timeWindowEnd: true,
+            booking: {
+              select: {
+                customerId: true,
+                rateSnapshot: true,
+                discountAmount: true,
+                serviceType: true,
+                patient: { select: { name: true } },
+                customer: { select: { fullName: true, phone: true } },
+                caregiver: { select: { userId: true, specialty: true, user: { select: { fullName: true } } } },
+                promoCode: { select: { code: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    const { booking } = payment?.visit ?? {};
+    let audience: ReceiptAudience | null = null;
+    if (booking) {
+      if (user.role === UserRole.ADMIN) audience = 'admin';
+      else if (user.role === UserRole.CUSTOMER && booking.customerId === user.sub) audience = 'customer';
+      else if (user.role === UserRole.CAREGIVER && booking.caregiver.userId === user.sub) audience = 'caregiver';
+    }
+    if (!payment || !audience) {
+      // Same answer for "missing" and "not yours" so ids cannot be probed.
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status !== PaymentStatus.PAID) {
+      throw new BadRequestException('A receipt is available once the payment has been verified');
+    }
+    const pdf = await buildReceiptPdf(paymentReceiptDocument(payment, audience));
+    return { filename: `caresaath-receipt-${paymentReceiptNumber(payment)}.pdf`, pdf };
+  }
+
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       visit: { booking: { customerId: user.sub } },
@@ -743,6 +797,20 @@ export class CustomerPaymentsController {
     return this.payments.confirmCashAsCustomer(user, id);
   }
 
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary: 'Download the payment receipt (PDF)',
+    description: 'PDF receipt for a verified payment, sent as an attachment (add ?inline=true to view it in the browser). Not available until the payment is PAID.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payments.receipt(user, id), inline === 'true');
+  }
+
   @Patch(':id/cancel')
   @ApiOperation({
     summary: 'Cancel a pending payment',
@@ -769,6 +837,20 @@ export class CustomerPaymentsController {
 export class CaregiverPaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary: 'Download the payment record (PDF)',
+    description: 'PDF record of a verified payment for a visit you were assigned, including commission and your earnings. ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payments.receipt(user, id), inline === 'true');
+  }
+
   @Post(':id/confirm-cash')
   @ApiOperation({
     summary: 'Confirm cash collection on-site',
@@ -781,6 +863,28 @@ export class CaregiverPaymentsController {
     @Body() dto: CashConfirmationDto,
   ) {
     return this.payments.confirmCash(user, id, dto);
+  }
+}
+
+@ApiTags('Admin - Finance & Payouts')
+@ApiBearerAuth()
+@Roles(UserRole.ADMIN)
+@Controller('admin/payments')
+export class AdminPaymentsController {
+  constructor(private readonly payments: PaymentsService) {}
+
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary: 'Download any payment record (PDF)',
+    description: 'Admin copy of the receipt for a verified payment, with the full commission breakdown. ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payments.receipt(user, id), inline === 'true');
   }
 }
 
@@ -850,6 +954,7 @@ export class PaymentWebhookController {
   controllers: [
     CustomerPaymentsController,
     CaregiverPaymentsController,
+    AdminPaymentsController,
     PaymentWebhookController,
   ],
   providers: [PaymentsService, StripeService],

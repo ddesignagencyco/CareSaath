@@ -285,6 +285,38 @@ describe('PayoutsService', () => {
     );
   });
 
+  const receiptPayout = (overrides: Record<string, unknown> = {}) => ({
+    id: '12345678-aaaa-4bbb-8ccc-000000000000',
+    amount: 5000,
+    status: 'PAID',
+    requestedAt: new Date('2026-10-24T08:00:00.000Z'),
+    transferredAt: new Date('2026-10-25T10:00:00.000Z'),
+    transferReference: 'TXN-1',
+    caregiverConfirmedAt: new Date('2026-10-25T12:00:00.000Z'),
+    caregiver: { userId: 'u-cg', user: { fullName: 'Fatima', phone: '+923001234568' } },
+    payoutAccount: { accountNumber: 'not-encrypted', provider: 'JazzCash', accountTitle: 'Fatima' },
+    ...overrides,
+  });
+
+  it('issues a transfer receipt to the caregiver and the admin once the money was sent', async () => {
+    for (const status of ['TRANSFERRED', 'PAID']) {
+      prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout({ status }));
+      for (const who of [caregiver, admin]) {
+        const file = await service.receipt(who, 'pr-1');
+        expect(file.filename).toBe('caresaath-transfer-CS-PO-2026-12345678.pdf');
+        expect(file.pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      }
+    }
+  });
+
+  it('issues no transfer receipt before the money is sent, or to another caregiver', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout({ status: 'PROCESSING' }));
+    await expect(service.receipt(caregiver, 'pr-1')).rejects.toBeInstanceOf(BadRequestException);
+    prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout());
+    const other: AuthUser = { sub: 'u-other', role: 'CAREGIVER', phone: '+923007777777' };
+    await expect(service.receipt(other, 'pr-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('alerts the admins when a caregiver requests a payout', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
     prisma.payoutAccount.findFirst.mockResolvedValue({ id: 'acc-1' });

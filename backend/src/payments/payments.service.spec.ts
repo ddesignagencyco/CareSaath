@@ -285,6 +285,65 @@ describe('PaymentsService', () => {
     visit: { booking: { customer: { id: 'u-cust', phone: null }, caregiver: { userId: 'u-cg' } } },
   });
 
+  const receiptPayment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'abcdef12-0000-4000-8000-000000000000',
+    method: 'CASH',
+    status: 'PAID',
+    amount: 5000,
+    commissionAmount: 1000,
+    caregiverAmount: 4000,
+    gatewayRef: null,
+    paidAt: new Date('2026-10-26T09:30:00.000Z'),
+    customerConfirmedAt: new Date(),
+    caregiverConfirmedAt: new Date(),
+    visit: {
+      scheduledDate: new Date('2026-10-26T00:00:00.000Z'),
+      timeWindowStart: '09:00',
+      timeWindowEnd: '11:00',
+      booking: {
+        customerId: 'u-cust',
+        rateSnapshot: 5000,
+        discountAmount: 0,
+        serviceType: 'NURSING',
+        patient: { name: 'P' },
+        customer: { fullName: 'C', phone: '+923001234567' },
+        caregiver: { userId: 'u-cg', specialty: 'NURSING', user: { fullName: 'G' } },
+        promoCode: null,
+      },
+    },
+    ...overrides,
+  });
+
+  it('gives the customer and the assigned caregiver a PDF receipt for a verified payment', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    for (const who of [customer, caregiver]) {
+      const file = await service.receipt(who, 'pay-4');
+      expect(file.filename).toBe('caresaath-receipt-CS-2026-ABCDEF12.pdf');
+      expect(file.pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    }
+  });
+
+  it('lets an admin download any receipt', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    const file = await service.receipt({ sub: 'u-admin', role: 'ADMIN', phone: '+923000000000' }, 'pay-4');
+    expect(file.pdf.length).toBeGreaterThan(1000);
+  });
+
+  it('hides a receipt from anyone who is not on the visit, the same as a missing payment', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    const stranger: AuthUser = { sub: 'u-other', role: 'CUSTOMER', phone: '+923009999999' };
+    await expect(service.receipt(stranger, 'pay-4')).rejects.toBeInstanceOf(NotFoundException);
+    const otherCaregiver: AuthUser = { sub: 'u-cg2', role: 'CAREGIVER', phone: '+923008888888' };
+    await expect(service.receipt(otherCaregiver, 'pay-4')).rejects.toBeInstanceOf(NotFoundException);
+    prisma.payment.findUnique.mockResolvedValue(null);
+    await expect(service.receipt(customer, 'missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('issues no receipt until the payment is verified', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment({ status: 'PENDING' }));
+    await expect(service.receipt(customer, 'pay-4')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('keeps cash PENDING when only the caregiver has confirmed, and tells the customer', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
     prisma.payment.findFirst.mockResolvedValue(cashPayment());

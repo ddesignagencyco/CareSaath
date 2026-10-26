@@ -14,7 +14,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -44,6 +46,11 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { payoutReceiptDocument, payoutReceiptNumber } from '../receipts/receipt-data.js';
+import type { ReceiptAudience } from '../receipts/receipt-data.js';
+import { buildReceiptPdf } from '../receipts/receipt-pdf.js';
+import { sendPdf } from '../receipts/send-pdf.js';
+import type { PdfFile } from '../receipts/send-pdf.js';
 
 /**
  * ERD §3.5 / TRD §9: payout account numbers are sensitive and must be encrypted
@@ -604,6 +611,37 @@ export class PayoutsService {
     return this.resolve(admin, id, PayoutStatus.REJECTED, dto);
   }
 
+  /**
+   * PDF transfer receipt, available once the admin has sent the money
+   * (TRANSFERRED) and after the caregiver has confirmed (PAID). The caregiver
+   * named on the payout and admins can download it; the account number is masked.
+   */
+  async receipt(user: AuthUser, id: string): Promise<PdfFile> {
+    const payout = await this.prisma.payoutRequest.findUnique({
+      where: { id },
+      include: {
+        caregiver: { select: { userId: true, user: { select: { fullName: true, phone: true } } } },
+        payoutAccount: { select: PAYOUT_ACCOUNT_SELECT },
+      },
+    });
+    let audience: ReceiptAudience | null = null;
+    if (payout) {
+      if (user.role === UserRole.ADMIN) audience = 'admin';
+      else if (user.role === UserRole.CAREGIVER && payout.caregiver.userId === user.sub) audience = 'caregiver';
+    }
+    if (!payout || !audience) {
+      throw new NotFoundException('Payout request not found');
+    }
+    if (payout.status !== PayoutStatus.TRANSFERRED && payout.status !== PayoutStatus.PAID) {
+      throw new BadRequestException('A transfer receipt is available once the payout has been sent');
+    }
+    const { accountNumber } = presentAccount(payout.payoutAccount);
+    const pdf = await buildReceiptPdf(
+      payoutReceiptDocument({ ...payout, maskedAccountNumber: accountNumber ?? '****' }, audience),
+    );
+    return { filename: `caresaath-transfer-${payoutReceiptNumber(payout)}.pdf`, pdf };
+  }
+
   // ---- Caregiver side of the transfer check ---------------------------------
 
   private async ownTransferredPayout(user: AuthUser, id: string) {
@@ -766,6 +804,20 @@ export class CaregiverPayoutsController {
     return this.payouts.listPayoutRequests(user, query);
   }
 
+  @Get('payouts/:id/receipt')
+  @ApiOperation({
+    summary: 'Download the transfer receipt (PDF)',
+    description: 'PDF receipt for a payout the admin has sent (TRANSFERRED or PAID), with the masked account number and transfer reference. ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payouts.receipt(user, id), inline === 'true');
+  }
+
   @Post('payouts/:id/confirm-received')
   @ApiOperation({
     summary: 'Confirm a transferred payout arrived',
@@ -827,6 +879,20 @@ export class AdminPayoutsController {
     @Body() dto: ResolvePayoutDto,
   ) {
     return this.payouts.approve(user, id, dto);
+  }
+
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary: 'Download a payout transfer receipt (PDF)',
+    description: 'Admin copy of the transfer receipt for a payout that has been sent (TRANSFERRED or PAID). ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payouts.receipt(user, id), inline === 'true');
   }
 
   @Post(':id/mark-transferred')
