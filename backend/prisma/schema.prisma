@@ -658,6 +658,10 @@ model Notification {
   event     String
   payload   Json
   status    NotificationStatus @default(QUEUED)
+  title        String?
+  body         String?
+  /** Role of the recipient when sent; feeds only show rows for the caller's current role. */
+  audienceRole UserRole?
   sentAt    DateTime?
   readAt    DateTime?
   createdAt DateTime           @default(now())
@@ -665,6 +669,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([userId, audienceRole, channel, readAt])
 }
 
 model AuditLog {

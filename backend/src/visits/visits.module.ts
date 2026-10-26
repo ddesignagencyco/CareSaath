@@ -52,6 +52,7 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -212,6 +213,7 @@ export class VisitsService {
     private readonly sms: SmsService,
     private readonly config: ConfigService,
     @Optional() private readonly storage?: StorageService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   /** Prescriptions on the booking get a viewable `url` (the storage key stays internal). */
@@ -380,7 +382,14 @@ export class VisitsService {
   ) {
     const visit = await this.prisma.visit.findUnique({
       where: { id: visitId },
-      include: { booking: { include: { customer: { select: { id: true, phone: true } } } } },
+      include: {
+        booking: {
+          include: {
+            customer: { select: { id: true, phone: true } },
+            caregiver: { select: { userId: true } },
+          },
+        },
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
@@ -419,12 +428,39 @@ export class VisitsService {
       entityId: visitId,
       metadata: { from, to },
     });
+    const caregiverUserId = visit.booking.caregiver?.userId;
     if (bookingCompleted) {
       await this.audit.log({
         actorId: actor.sub,
         action: 'booking.completed',
         entityType: 'Booking',
         entityId: visit.bookingId,
+      });
+      for (const userId of [visit.booking.customer.id, caregiverUserId]) {
+        if (userId) {
+          await this.notifications.notify({
+            userId,
+            event: 'booking.completed',
+            payload: { bookingId: visit.bookingId },
+            message: 'All visits in this booking are complete.',
+          });
+        }
+      }
+    }
+    const parties = { users: [visit.booking.customer.id, caregiverUserId] };
+    this.realtime?.entityUpdated(parties, {
+      type: 'visit',
+      id: visitId,
+      action: to.toLowerCase(),
+      status: to,
+      data: { bookingId: visit.bookingId },
+    });
+    if (bookingCompleted) {
+      this.realtime?.entityUpdated(parties, {
+        type: 'booking',
+        id: visit.bookingId,
+        action: 'completed',
+        status: BookingStatus.COMPLETED,
       });
     }
     await this.notifications.notify({

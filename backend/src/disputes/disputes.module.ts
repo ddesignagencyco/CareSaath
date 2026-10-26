@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -28,6 +29,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 export class RaiseDisputeDto {
@@ -79,6 +81,7 @@ export class DisputesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   /**
@@ -139,7 +142,17 @@ export class DisputesService {
       userId: againstUserId,
       event: 'dispute.raised',
       payload: { disputeId: dispute.id, visitId: visit.id },
+      message: 'A dispute was raised on one of your visits. An admin will review it.',
     });
+    await this.notifications.notifyAdmins({
+      event: 'dispute.raised.admin',
+      payload: { disputeId: dispute.id, visitId: visit.id },
+      message: 'A new visit dispute is waiting for review.',
+    });
+    this.realtime?.entityUpdated(
+      { users: [user.sub, againstUserId], roles: ['ADMIN'] },
+      { type: 'dispute', id: dispute.id, action: 'raised', status: dispute.status },
+    );
     return dispute;
   }
 
@@ -200,6 +213,18 @@ export class DisputesService {
       entityId: id,
       metadata: { resolutionNote: dto.resolutionNote },
     });
+    for (const userId of [dispute.againstUserId]) {
+      await this.notifications.notify({
+        userId,
+        event: 'dispute.resolved',
+        payload: { disputeId: id },
+        message: 'A dispute involving you was resolved by an admin.',
+      });
+    }
+    this.realtime?.entityUpdated(
+      { users: [dispute.raisedById, dispute.againstUserId], roles: ['ADMIN'] },
+      { type: 'dispute', id, action: 'resolved', status: DisputeStatus.RESOLVED },
+    );
     await this.notifications.notify({
       userId: dispute.raisedById,
       event: 'dispute.resolved',

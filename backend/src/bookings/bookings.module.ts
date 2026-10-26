@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -52,6 +53,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -237,7 +239,22 @@ export class BookingsService {
     private readonly promos: PromosService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  /** Tell both parties' open screens a booking changed, so no reload is needed. */
+  private bookingChanged(
+    id: string,
+    action: string,
+    status: string,
+    customerId: string,
+    caregiverUserId: string | null | undefined,
+  ) {
+    this.realtime?.entityUpdated(
+      { users: [customerId, caregiverUserId] },
+      { type: 'booking', id, action, status },
+    );
+  }
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
@@ -362,7 +379,9 @@ export class BookingsService {
       userId: caregiver.userId,
       event: 'booking.requested',
       payload: { bookingId: booking.id, visits: occurrences.length },
+      message: 'You have a new booking request. Please respond before it expires.',
     });
+    this.bookingChanged(booking.id, 'created', BookingStatus.REQUESTED, user.sub, caregiver.userId);
     return this.getBooking(booking.id);
   }
 
@@ -496,6 +515,7 @@ export class BookingsService {
       event: 'booking.prescription.uploaded',
       payload: { bookingId, documentId: doc.id },
     });
+    this.bookingChanged(bookingId, 'prescription_uploaded', booking.status, user.sub, booking.caregiver.userId);
     return {
       id: doc.id,
       bookingId: doc.bookingId,
@@ -582,6 +602,7 @@ export class BookingsService {
     await this.notifyCustomer(booking.customerId, 'booking.confirmed', {
       bookingId: id,
     });
+    this.bookingChanged(id, 'accepted', BookingStatus.CONFIRMED, booking.customerId, user.sub);
     return this.getBooking(id);
   }
 
@@ -617,6 +638,7 @@ export class BookingsService {
       metadata: { reason: dto.reason ?? null },
     });
     await this.notifyCustomer(booking.customerId, 'booking.declined', { bookingId: id });
+    this.bookingChanged(id, 'declined', BookingStatus.DECLINED, booking.customerId, user.sub);
     return this.getBooking(id);
   }
 
@@ -664,6 +686,7 @@ export class BookingsService {
         payload: { bookingId: id },
       });
     }
+    this.bookingChanged(id, 'cancelled', BookingStatus.CANCELLED, user.sub, profile?.userId);
     return this.getBooking(id);
   }
 
@@ -743,6 +766,10 @@ export class BookingsService {
         scheduledDate: dto.newDate,
       },
     });
+    this.realtime?.entityUpdated(
+      { users: [user.sub, booking.caregiver.userId] },
+      { type: 'visit', id: replacement.id, action: 'rescheduled', status: replacement.status, data: { bookingId, originalVisitId: visit.id } },
+    );
     return replacement;
   }
 

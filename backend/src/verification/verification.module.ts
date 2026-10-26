@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -31,6 +32,7 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -97,7 +99,24 @@ export class VerificationService {
     private readonly storage: StorageService,
     private readonly redis: RedisService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  /** Load the presented caregiver and tell that caregiver and the admins their status changed. */
+  private async finish(id: string, action: string) {
+    const profile = await this.loadPresented(id);
+    this.realtime?.entityUpdated(
+      { users: [profile.userId], roles: ['ADMIN'] },
+      {
+        type: 'caregiver',
+        id,
+        action,
+        status: profile.verificationStatus,
+        data: { userStatus: profile.user.status },
+      },
+    );
+    return profile;
+  }
 
   /** Public search results are cached in Redis; any visibility change must drop them. */
   private async invalidateSearchCache(): Promise<void> {
@@ -217,7 +236,7 @@ export class VerificationService {
     });
     await this.invalidateSearchCache();
     await this.notifyCaregiver(id, 'caregiver.verification.approved', 'Your CareSaath profile has been verified. You are now visible to families.');
-    return this.loadPresented(id);
+    return this.finish(id, 'approved');
   }
 
   async reject(admin: AuthUser, id: string, dto: DecisionDto) {
@@ -250,7 +269,7 @@ export class VerificationService {
     });
     await this.invalidateSearchCache();
     await this.notifyCaregiver(id, 'caregiver.verification.rejected', `Your CareSaath verification was not approved${dto.reason ? `: ${dto.reason}` : '.'}`);
-    return this.loadPresented(id);
+    return this.finish(id, 'rejected');
   }
 
   /** FR-A2: periodic re-verification. */
@@ -285,7 +304,7 @@ export class VerificationService {
       metadata: { reverifyInDays: days },
     });
     await this.invalidateSearchCache();
-    return this.loadPresented(profile.id);
+    return this.finish(profile.id, 'reverify_requested');
   }
 
   /** FR-A3: suspend (temporary) — profile disappears from search. */
@@ -303,7 +322,7 @@ export class VerificationService {
       metadata: { reason: dto.reason ?? null },
     });
     await this.invalidateSearchCache();
-    return this.loadPresented(id);
+    return this.finish(id, 'suspended');
   }
 
   /** FR-A3: deactivate — user-level block. */
@@ -321,7 +340,7 @@ export class VerificationService {
       metadata: { reason: dto.reason ?? null },
     });
     await this.invalidateSearchCache();
-    return this.loadPresented(id);
+    return this.finish(id, 'deactivated');
   }
 
   async reactivate(admin: AuthUser, id: string) {
@@ -348,7 +367,7 @@ export class VerificationService {
       metadata: { suspensionLifted: liftSuspension },
     });
     await this.invalidateSearchCache();
-    return this.loadPresented(id);
+    return this.finish(id, 'reactivated');
   }
 
   async documentUrl(id: string, documentId: string) {

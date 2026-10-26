@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -31,6 +32,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 export class UpdateIncidentDto {
@@ -95,6 +97,7 @@ export class AdminSafetyService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async list(query: ListIncidentsQueryDto): Promise<Paginated<unknown>> {
@@ -160,7 +163,12 @@ export class AdminSafetyService {
       userId: incident.reportedById,
       event: 'safety_incident.updated',
       payload: { incidentId: id, status: updated.status, priority: updated.priority },
+      message: `Your safety report is now ${updated.status.replace(/_/g, ' ').toLowerCase()}.`,
     });
+    this.realtime?.entityUpdated(
+      { users: [incident.reportedById], roles: ['ADMIN'] },
+      { type: 'incident', id, action: 'updated', status: updated.status, data: { priority: updated.priority } },
+    );
     return updated;
   }
 }
