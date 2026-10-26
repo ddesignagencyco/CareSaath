@@ -10,16 +10,22 @@ import { useLabels } from "@shared/i18n/use-labels";
 import { formatBytes } from "@shared/lib/format";
 import type { CaregiverDocument } from "@shared/types";
 
-export function DocumentList({ documents }: { documents: CaregiverDocument[] }) {
+/** `pending` = the caregiver is still awaiting review, so missing docs block approval. */
+export function DocumentList({ documents, pending = false }: { documents: CaregiverDocument[]; pending?: boolean }) {
   const t = useTranslations("adminA.documents");
   const f = useFmt();
   const L = useLabels();
   const [open, setOpen] = useState<CaregiverDocument | null>(null);
 
   if (documents.length === 0) {
-    return (
+    // "can't be approved" only applies while pending; an already-approved caregiver just has none on file.
+    return pending ? (
       <p className="rounded-xl border border-dashed border-warning-600/40 bg-warning-50 px-4 py-3 text-sm text-warning-700">
         {t("none")}
+      </p>
+    ) : (
+      <p className="rounded-xl border border-dashed border-ink-200 bg-ink-25 px-4 py-3 text-sm text-ink-500">
+        {t("noneOnFile")}
       </p>
     );
   }

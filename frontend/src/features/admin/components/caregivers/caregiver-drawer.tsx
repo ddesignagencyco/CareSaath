@@ -174,7 +174,7 @@ export function CaregiverDrawer({
           </Section>
 
           <Section title={t("sections.documents")}>
-            <DocumentList documents={caregiver.documents} />
+            <DocumentList documents={caregiver.documents} pending={status === "PENDING"} />
           </Section>
 
           <Section title={t("sections.profile")}>

@@ -227,6 +227,7 @@
   },
   "documents": {
     "none": "No documents uploaded. The caregiver can't be approved until a license or certificate is provided.",
+    "noneOnFile": "No documents on file.",
     "meta": "{type} · {size}",
     "viewerDescription": "{size} · uploaded {date}"
   },
