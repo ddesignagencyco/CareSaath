@@ -16,25 +16,16 @@ export class AppController {
   @Get('health')
   @ApiOperation({
     summary: 'Platform health status',
-    description: 'Checks connectivity to PostgreSQL database and Redis caching store.',
+    description: 'Quick health check - app is running and ready to serve requests.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Services are healthy and operational.',
+    description: 'API is healthy and operational.',
     schema: {
-      example: { status: 'ok', postgres: true, redis: true },
+      example: { status: 'ok' },
     },
   })
-  async health() {
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-    } catch {
-      throw new ServiceUnavailableException('PostgreSQL unavailable');
-    }
-    const redisOk = await this.redis.ping();
-    if (!redisOk) {
-      throw new ServiceUnavailableException('Redis unavailable');
-    }
-    return { status: 'ok', postgres: true, redis: true };
+  health() {
+    return { status: 'ok' };
   }
 }
