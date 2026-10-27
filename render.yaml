@@ -1,0 +1,80 @@
+# Render Blueprint: backend only (NestJS API + Postgres + Redis).
+# Secrets marked `sync: false` are prompted for in the Render dashboard on first
+# deploy; never commit real values here.
+databases:
+  - name: caresaath-db
+    plan: basic-256mb
+    region: singapore
+    databaseName: caresaath
+    user: caresaath
+
+services:
+  - type: keyvalue
+    name: caresaath-redis
+    plan: starter
+    region: singapore
+    ipAllowList: [] # internal connections only
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: caresaath-api
+    runtime: node
+    region: singapore
+    plan: starter # paid: free tier sleeps and breaks Socket.IO / background jobs
+    rootDir: backend
+    buildCommand: npm ci && npx prisma generate --config prisma7.config.ts && npm run build
+    preDeployCommand: npm run prisma:migrate
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: caresaath-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: caresaath-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL_SECONDS
+        value: 900
+      - key: JWT_REFRESH_TTL_SECONDS
+        value: 2592000
+      - key: PAYOUT_ENCRYPTION_KEY
+        generateValue: true
+      - key: CNIC_ENCRYPTION_KEY
+        generateValue: true
+      - key: MEDICAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: PAYMENT_WEBHOOK_SECRET
+        generateValue: true
+      - key: RETENTION_ENABLED
+        value: true
+      - key: WHATSAPP_ENABLED
+        value: false
+      # Supplied by the client; set in the dashboard.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: caresaath
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYMENT_RETURN_URL
+        sync: false
