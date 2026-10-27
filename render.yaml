@@ -22,7 +22,7 @@ services:
     region: singapore
     plan: starter # paid: free tier sleeps and breaks Socket.IO / background jobs
     rootDir: backend
-    buildCommand: npm ci --include=dev && npx prisma generate --config prisma7.config.ts && npm run build
+    buildCommand: npm ci && npx prisma generate --config prisma7.config.ts && npm run build
     preDeployCommand: npm run prisma:migrate
     startCommand: npm run start:prod
     healthCheckPath: /health
