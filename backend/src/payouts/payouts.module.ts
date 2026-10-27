@@ -8,12 +8,15 @@ import {
   ConflictException,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -42,6 +45,12 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
+import { payoutReceiptDocument, payoutReceiptNumber } from '../receipts/receipt-data.js';
+import type { ReceiptAudience } from '../receipts/receipt-data.js';
+import { buildReceiptPdf } from '../receipts/receipt-pdf.js';
+import { sendPdf } from '../receipts/send-pdf.js';
+import type { PdfFile } from '../receipts/send-pdf.js';
 
 /**
  * ERD §3.5 / TRD §9: payout account numbers are sensitive and must be encrypted
@@ -125,7 +134,21 @@ export class CreatePayoutRequestDto {
   amount!: number;
 }
 
+export class ReportPayoutIssueDto {
+  @ApiProperty({ example: 'Nothing has arrived in my JazzCash account yet.', description: 'What the caregiver sees' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  note!: string;
+}
+
 export class ResolvePayoutDto {
+  @ApiPropertyOptional({ example: 'TXN-2026-104455', description: 'Bank / wallet transfer reference the caregiver can look up (mark-transferred)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  reference?: string;
+
   @ApiPropertyOptional({ example: 'Approved by admin', description: 'Rejection or settlement reason' })
   @IsOptional()
   @IsString()
@@ -188,7 +211,15 @@ export class PayoutsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  private payoutChanged(payoutId: string, caregiverUserId: string, action: string, status: string) {
+    this.realtime?.entityUpdated(
+      { users: [caregiverUserId], roles: ['ADMIN'] },
+      { type: 'payout', id: payoutId, action, status },
+    );
+  }
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
@@ -273,7 +304,10 @@ export class PayoutsService {
       throw new NotFoundException('Payout account not found');
     }
     const inUse = await this.prisma.payoutRequest.count({
-      where: { payoutAccountId: id, status: { in: [PayoutStatus.REQUESTED, PayoutStatus.PROCESSING] } },
+      where: {
+        payoutAccountId: id,
+        status: { in: [PayoutStatus.REQUESTED, PayoutStatus.PROCESSING, PayoutStatus.TRANSFERRED] },
+      },
     });
     if (inUse > 0) {
       throw new BadRequestException('Cannot remove an account with an in-progress payout');
@@ -318,7 +352,9 @@ export class PayoutsService {
         where: {
           visit: { booking: { caregiverId } },
           status: PaymentStatus.PAID,
-          payoutRequest: { status: { in: [PayoutStatus.REQUESTED, PayoutStatus.PROCESSING] } },
+          payoutRequest: {
+            status: { in: [PayoutStatus.REQUESTED, PayoutStatus.PROCESSING, PayoutStatus.TRANSFERRED] },
+          },
         },
         _sum: { caregiverAmount: true },
         _count: { _all: true },
@@ -402,6 +438,12 @@ export class PayoutsService {
       entityId: payout.id,
       metadata: { amount: dto.amount, payments: chosen.length },
     });
+    await this.notifications.notifyAdmins({
+      event: 'payout.requested',
+      payload: { payoutRequestId: payout.id, amount: dto.amount },
+      message: `A caregiver requested a payout of Rs ${dto.amount / 100}.`,
+    });
+    this.payoutChanged(payout.id, user.sub, 'requested', PayoutStatus.REQUESTED);
     return payout;
   }
 
@@ -464,6 +506,7 @@ export class PayoutsService {
       where: { id },
       include: {
         caregiver: { select: { userId: true, user: { select: { phone: true } } } },
+        payoutAccount: { select: { provider: true } },
       },
     });
     if (!payout) {
@@ -471,11 +514,18 @@ export class PayoutsService {
     }
     const allowed: Record<PayoutStatus, PayoutStatus[]> = {
       REQUESTED: [PayoutStatus.PROCESSING, PayoutStatus.REJECTED],
-      PROCESSING: [PayoutStatus.PAID, PayoutStatus.REJECTED],
+      PROCESSING: [PayoutStatus.TRANSFERRED, PayoutStatus.REJECTED],
+      // The caregiver, not the admin, moves a transferred payout to PAID (confirmReceived).
+      TRANSFERRED: [],
       PAID: [],
       REJECTED: [],
     };
-    if (!allowed[payout.status].includes(to)) {
+    // After the caregiver reports the money missing, the admin may send it again.
+    const retransfer =
+      to === PayoutStatus.TRANSFERRED &&
+      payout.status === PayoutStatus.TRANSFERRED &&
+      payout.issueReportedAt !== null;
+    if (!allowed[payout.status].includes(to) && !retransfer) {
       throw new BadRequestException(`Cannot move a payout from ${payout.status} to ${to}`);
     }
     if (to === PayoutStatus.REJECTED && !dto.reason) {
@@ -486,7 +536,15 @@ export class PayoutsService {
         where: { id },
         data: {
           status: to,
-          processedAt: to === PayoutStatus.PAID || to === PayoutStatus.REJECTED ? new Date() : null,
+          ...(to === PayoutStatus.REJECTED ? { processedAt: new Date() } : {}),
+          ...(to === PayoutStatus.TRANSFERRED
+            ? {
+                transferredAt: new Date(),
+                transferReference: dto.reference ?? dto.note ?? null,
+                issueReportedAt: null,
+                issueNote: null,
+              }
+            : {}),
           ...(dto.note !== undefined ? { note: dto.note } : {}),
           ...(to === PayoutStatus.REJECTED ? { rejectionReason: dto.reason } : {}),
         },
@@ -521,10 +579,16 @@ export class PayoutsService {
       phone: payout.caregiver.user.phone,
       event: `payout.${to.toLowerCase()}`,
       payload: { payoutRequestId: id, amount: payout.amount, status: to },
-      message: `Your payout request is now ${to.replace(/_/g, ' ').toLowerCase()}.${
-        to === PayoutStatus.REJECTED && dto.reason ? ` Reason: ${dto.reason}` : ''
-      }`,
+      message:
+        to === PayoutStatus.TRANSFERRED
+          ? `Rs ${payout.amount / 100} was sent to your ${payout.payoutAccount?.provider ?? 'payout'} account${
+              dto.reference ?? dto.note ? ` (ref ${dto.reference ?? dto.note})` : ''
+            }. Please confirm once you have received it.`
+          : `Your payout request is now ${to.replace(/_/g, ' ').toLowerCase()}.${
+              to === PayoutStatus.REJECTED && dto.reason ? ` Reason: ${dto.reason}` : ''
+            }`,
     });
+    this.payoutChanged(id, payout.caregiver.userId, to.toLowerCase(), to);
     // Same shape as the admin list so clients can swap the row in place.
     return { ...detailed, payoutAccount: presentAccount(detailed.payoutAccount) };
   }
@@ -533,12 +597,137 @@ export class PayoutsService {
     return this.resolve(admin, id, PayoutStatus.PROCESSING, dto);
   }
 
+  /** Admin has sent the money; the payout waits for the caregiver to confirm receipt. */
+  markTransferred(admin: AuthUser, id: string, dto: ResolvePayoutDto) {
+    return this.resolve(admin, id, PayoutStatus.TRANSFERRED, dto);
+  }
+
+  /** @deprecated Same as markTransferred; a payout is only PAID after the caregiver confirms. */
   markPaid(admin: AuthUser, id: string, dto: ResolvePayoutDto) {
-    return this.resolve(admin, id, PayoutStatus.PAID, dto);
+    return this.markTransferred(admin, id, dto);
   }
 
   reject(admin: AuthUser, id: string, dto: ResolvePayoutDto) {
     return this.resolve(admin, id, PayoutStatus.REJECTED, dto);
+  }
+
+  /**
+   * PDF transfer receipt, available once the admin has sent the money
+   * (TRANSFERRED) and after the caregiver has confirmed (PAID). The caregiver
+   * named on the payout and admins can download it; the account number is masked.
+   */
+  async receipt(user: AuthUser, id: string): Promise<PdfFile> {
+    const payout = await this.prisma.payoutRequest.findUnique({
+      where: { id },
+      include: {
+        caregiver: { select: { userId: true, user: { select: { fullName: true, phone: true } } } },
+        payoutAccount: { select: PAYOUT_ACCOUNT_SELECT },
+      },
+    });
+    let audience: ReceiptAudience | null = null;
+    if (payout) {
+      if (user.role === UserRole.ADMIN) audience = 'admin';
+      else if (user.role === UserRole.CAREGIVER && payout.caregiver.userId === user.sub) audience = 'caregiver';
+    }
+    if (!payout || !audience) {
+      throw new NotFoundException('Payout request not found');
+    }
+    if (payout.status !== PayoutStatus.TRANSFERRED && payout.status !== PayoutStatus.PAID) {
+      throw new BadRequestException('A transfer receipt is available once the payout has been sent');
+    }
+    const { accountNumber } = presentAccount(payout.payoutAccount);
+    const pdf = await buildReceiptPdf(
+      payoutReceiptDocument({ ...payout, maskedAccountNumber: accountNumber ?? '****' }, audience),
+    );
+    return { filename: `caresaath-transfer-${payoutReceiptNumber(payout)}.pdf`, pdf };
+  }
+
+  // ---- Caregiver side of the transfer check ---------------------------------
+
+  private async ownTransferredPayout(user: AuthUser, id: string) {
+    const caregiverId = await this.caregiverProfileId(user);
+    const payout = await this.prisma.payoutRequest.findFirst({ where: { id, caregiverId } });
+    if (!payout) {
+      throw new NotFoundException('Payout request not found');
+    }
+    return payout;
+  }
+
+  private async ownPayoutDetail(id: string) {
+    const detail = await this.prisma.payoutRequest.findUniqueOrThrow({
+      where: { id },
+      include: { payoutAccount: { select: PAYOUT_ACCOUNT_SELECT } },
+    });
+    return { ...detail, payoutAccount: presentAccount(detail.payoutAccount) };
+  }
+
+  /**
+   * The caregiver confirms the transferred money arrived. Only then is the payout
+   * PAID (and counted as paid out). Confirming again is a no-op.
+   */
+  async confirmReceived(user: AuthUser, id: string) {
+    const payout = await this.ownTransferredPayout(user, id);
+    if (payout.status === PayoutStatus.PAID) {
+      return this.ownPayoutDetail(id);
+    }
+    if (payout.status !== PayoutStatus.TRANSFERRED) {
+      throw new BadRequestException(
+        `Nothing to confirm yet: this payout is ${payout.status}, it must be TRANSFERRED by the admin first`,
+      );
+    }
+    const now = new Date();
+    await this.prisma.payoutRequest.update({
+      where: { id },
+      data: {
+        status: PayoutStatus.PAID,
+        caregiverConfirmedAt: now,
+        processedAt: now,
+        issueReportedAt: null,
+        issueNote: null,
+      },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'payout_request.confirmed',
+      entityType: 'PayoutRequest',
+      entityId: id,
+      metadata: { amount: payout.amount },
+    });
+    await this.notifications.notifyAdmins({
+      event: 'payout.confirmed',
+      payload: { payoutRequestId: id, amount: payout.amount },
+      message: `The caregiver confirmed receiving the Rs ${payout.amount / 100} payout.`,
+    });
+    this.payoutChanged(id, user.sub, 'confirmed', PayoutStatus.PAID);
+    return this.ownPayoutDetail(id);
+  }
+
+  /** The caregiver says the transferred money did not arrive; admins are alerted to resend or investigate. */
+  async reportNotReceived(user: AuthUser, id: string, dto: ReportPayoutIssueDto) {
+    const payout = await this.ownTransferredPayout(user, id);
+    if (payout.status !== PayoutStatus.TRANSFERRED) {
+      throw new BadRequestException(
+        `Only a transferred payout can be reported as not received (this one is ${payout.status})`,
+      );
+    }
+    await this.prisma.payoutRequest.update({
+      where: { id },
+      data: { issueReportedAt: new Date(), issueNote: dto.note },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'payout_request.issue_reported',
+      entityType: 'PayoutRequest',
+      entityId: id,
+      metadata: { note: dto.note },
+    });
+    await this.notifications.notifyAdmins({
+      event: 'payout.issue_reported',
+      payload: { payoutRequestId: id, amount: payout.amount, note: dto.note },
+      message: `A caregiver reports the Rs ${payout.amount / 100} payout has not arrived: ${dto.note}`,
+    });
+    this.payoutChanged(id, user.sub, 'issue_reported', PayoutStatus.TRANSFERRED);
+    return this.ownPayoutDetail(id);
   }
 }
 
@@ -615,6 +804,44 @@ export class CaregiverPayoutsController {
     return this.payouts.listPayoutRequests(user, query);
   }
 
+  @Get('payouts/:id/receipt')
+  @ApiOperation({
+    summary: 'Download the transfer receipt (PDF)',
+    description: 'PDF receipt for a payout the admin has sent (TRANSFERRED or PAID), with the masked account number and transfer reference. ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payouts.receipt(user, id), inline === 'true');
+  }
+
+  @Post('payouts/:id/confirm-received')
+  @ApiOperation({
+    summary: 'Confirm a transferred payout arrived',
+    description:
+      'Caregiver side of the transfer check. After the admin marks a payout TRANSFERRED, confirm here once the money is in your account; only then does it become PAID. Idempotent.',
+  })
+  confirmReceived(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payouts.confirmReceived(user, id);
+  }
+
+  @Post('payouts/:id/report-not-received')
+  @ApiOperation({
+    summary: 'Report a transferred payout as not received',
+    description:
+      'Tell the admins a TRANSFERRED payout has not arrived. The payout stays TRANSFERRED with the issue recorded; the admin can then resend it (mark-transferred again) or investigate.',
+  })
+  reportNotReceived(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReportPayoutIssueDto,
+  ) {
+    return this.payouts.reportNotReceived(user, id, dto);
+  }
+
   @Post('payouts')
   @ApiOperation({
     summary: 'Request earnings payout',
@@ -654,10 +881,38 @@ export class AdminPayoutsController {
     return this.payouts.approve(user, id, dto);
   }
 
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary: 'Download a payout transfer receipt (PDF)',
+    description: 'Admin copy of the transfer receipt for a payout that has been sent (TRANSFERRED or PAID). ?inline=true views it in the browser.',
+  })
+  async receipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.payouts.receipt(user, id), inline === 'true');
+  }
+
+  @Post(':id/mark-transferred')
+  @ApiOperation({
+    summary: 'Mark payout as transferred',
+    description:
+      'Admin records that the funds were sent to the caregiver (optionally with a transfer reference). The caregiver is notified and must confirm receipt; only then is the payout PAID. If the caregiver reported it missing, call this again to resend.',
+  })
+  markTransferred(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolvePayoutDto,
+  ) {
+    return this.payouts.markTransferred(user, id, dto);
+  }
+
   @Post(':id/mark-paid')
   @ApiOperation({
-    summary: 'Mark payout as settled / paid',
-    description: 'Admin records that funds have been transferred to the caregiver account.',
+    summary: 'Mark payout as transferred (deprecated alias)',
+    description: 'Deprecated: identical to mark-transferred. The payout becomes TRANSFERRED, and PAID only after the caregiver confirms receipt.',
   })
   markPaid(
     @CurrentUser() user: AuthUser,

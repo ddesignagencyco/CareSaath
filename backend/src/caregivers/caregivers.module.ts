@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -58,6 +59,8 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AuthService } from '../auth/auth.service.js';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -211,6 +214,8 @@ export class CaregiversService {
     private readonly redis: RedisService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async register(user: AuthUser, dto: RegisterCaregiverDto) {
@@ -257,6 +262,15 @@ export class CaregiversService {
       metadata: { status: VerificationStatus.PENDING },
     });
     // The account's role just changed; hand back tokens that carry CAREGIVER so no refresh round-trip is needed.
+    await this.notifications?.notifyAdmins({
+      event: 'caregiver.registered',
+      payload: { caregiverId: profile.id, specialty: dto.specialty },
+      message: 'A new caregiver registered and is waiting for verification.',
+    });
+    this.realtime?.entityUpdated(
+      { users: [user.sub], roles: ['ADMIN'] },
+      { type: 'caregiver', id: profile.id, action: 'registered', status: VerificationStatus.PENDING },
+    );
     const tokens = await this.auth.issueTokens(user.sub, 'CAREGIVER', user.phone);
     return { ...profile, ...tokens };
   }
@@ -362,6 +376,15 @@ export class CaregiversService {
       entityId: doc.id,
       metadata: { type: doc.type },
     });
+    await this.notifications?.notifyAdmins({
+      event: 'caregiver.document.uploaded',
+      payload: { caregiverId: profile.id, documentId: doc.id, type: doc.type },
+      message: 'A caregiver uploaded a credential document for review.',
+    });
+    this.realtime?.entityUpdated(
+      { users: [user.sub], roles: ['ADMIN'] },
+      { type: 'caregiver', id: profile.id, action: 'document_uploaded', data: { documentId: doc.id, type: doc.type } },
+    );
     return withFileUrl(this.storage, doc);
   }
 
@@ -651,7 +674,7 @@ export class PublicCaregiverController {
 }
 
 @Module({
-  imports: [PlatformConfigModule, AuthModule],
+  imports: [PlatformConfigModule, AuthModule, NotificationsModule],
   controllers: [CaregiverController, PublicCaregiverController],
   providers: [CaregiversService],
 })

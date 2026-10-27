@@ -60,7 +60,10 @@ export function createAuditMock() {
 }
 
 export function createNotificationsMock() {
-  return { notify: vi.fn().mockResolvedValue(undefined) };
+  return {
+    notify: vi.fn().mockResolvedValue(undefined),
+    notifyAdmins: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 /** Config mock resolving every key to a fixed value unless overridden. */

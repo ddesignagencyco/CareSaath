@@ -31,6 +31,7 @@ import { AdminAnalyticsModule } from './admin/analytics.module.js';
 import { AdminSafetyModule } from './admin/safety.module.js';
 import { PlatformConfigModule } from './config/platform-config.module.js';
 import { RetentionModule } from './common/retention/retention.module.js';
+import { RealtimeModule } from './realtime/realtime.module.js';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RetentionModule } from './common/retention/retention.module.js';
     RedisModule,
     AuditModule,
     StorageModule,
+    RealtimeModule,
     AuthModule,
     UsersModule,
     PatientsModule,

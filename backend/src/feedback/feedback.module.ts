@@ -6,6 +6,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -46,6 +47,7 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 
 export class CreateReviewDto {
@@ -125,6 +127,7 @@ export class FeedbackService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   /** FR-C12: rate and review a caregiver after a completed visit. */
@@ -174,6 +177,22 @@ export class FeedbackService {
       entityId: review.id,
       metadata: { rating: dto.rating },
     });
+    const reviewed = await this.prisma.caregiverProfile.findUnique({
+      where: { id: visit.booking.caregiverId },
+      select: { userId: true },
+    });
+    if (reviewed) {
+      await this.notifications.notify({
+        userId: reviewed.userId,
+        event: 'review.received',
+        payload: { visitId, reviewId: review.id, rating: dto.rating },
+        message: `You received a ${dto.rating}-star review.`,
+      });
+    }
+    this.realtime?.entityUpdated(
+      { users: [user.sub, reviewed?.userId] },
+      { type: 'review', id: review.id, action: 'created', data: { visitId, rating: dto.rating } },
+    );
     return review;
   }
 
@@ -228,6 +247,15 @@ export class FeedbackService {
       entityId: incident.id,
       metadata: { visitId, source, priority: incident.priority },
     });
+    await this.notifications.notifyAdmins({
+      event: 'safety_incident.reported',
+      payload: { incidentId: incident.id, visitId, priority: incident.priority },
+      message: `New ${incident.priority.toLowerCase()}-priority safety report.`,
+    });
+    this.realtime?.entityUpdated(
+      { users: [user.sub], roles: ['ADMIN'] },
+      { type: 'incident', id: incident.id, action: 'reported', status: incident.status, data: { priority: incident.priority } },
+    );
     return incident;
   }
 
@@ -345,6 +373,10 @@ export class FeedbackService {
       });
     }
 
+    this.realtime?.entityUpdated(
+      { users: [user.sub, visit.booking.customerId], roles: ['ADMIN'] },
+      { type: 'incident', id: incident.id, action: 'sos', status: incident.status, data: { priority: 'CRITICAL', visitId: visit.id } },
+    );
     return {
       incident,
       notifiedAdmins: admins.length,

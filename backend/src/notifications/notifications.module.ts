@@ -4,7 +4,9 @@ import {
   Get,
   HttpCode,
   Injectable,
+  Logger,
   Module,
+  Optional,
   Post,
   Query,
 } from '@nestjs/common';
@@ -31,11 +33,15 @@ import {
   NotificationChannel,
   NotificationStatus,
   Prisma,
+  UserRole,
+  UserStatus,
 } from '../generated/prisma/client.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
+import { eventDefinition } from './events.js';
 import {
   NotificationChannelAdapter,
   PushChannelAdapter,
@@ -46,13 +52,18 @@ import {
 export interface NotifyInput {
   userId: string;
   phone?: string | null;
+  /** Must be declared in NOTIFICATION_EVENTS (src/notifications/events.ts). */
   event: string;
   payload: Prisma.InputJsonObject;
   message?: string;
+  /** Overrides the catalogue title for this one notification. */
+  title?: string;
 }
 
+export type NotifyAdminsInput = Omit<NotifyInput, 'userId' | 'phone'>;
+
 export class ListNotificationsQueryDto {
-  @ApiPropertyOptional({ enum: NotificationChannel, description: 'Only notifications delivered over this channel (e.g. PUSH for the in-app feed)' })
+  @ApiPropertyOptional({ enum: NotificationChannel, description: 'Delivery channel. Defaults to PUSH, the in-app feed (one row per notification). SMS / WHATSAPP rows are delivery logs.' })
   @IsOptional()
   @IsEnum(NotificationChannel)
   channel?: NotificationChannel;
@@ -100,6 +111,7 @@ export class MarkNotificationsReadDto {
  */
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   private readonly adapters: NotificationChannelAdapter[];
 
   constructor(
@@ -107,13 +119,38 @@ export class NotificationsService {
     smsAdapter: SmsChannelAdapter,
     whatsappAdapter: WhatsAppChannelAdapter,
     pushAdapter: PushChannelAdapter,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {
     this.adapters = [pushAdapter, smsAdapter, whatsappAdapter];
   }
 
-  /** Persist + dispatch one notification. Never throws into the request path. */
+  /**
+   * Persist + dispatch one notification, and push it live to the recipient's
+   * open sessions. The event is checked against the catalogue: an unknown event,
+   * or one addressed to a user whose role it is not meant for, is dropped and
+   * logged instead of leaking into the wrong feed. Never throws into the request path.
+   */
   async notify(input: NotifyInput): Promise<void> {
     try {
+      const definition = eventDefinition(input.event);
+      if (!definition) {
+        this.logger.warn(`Dropped notification with undeclared event "${input.event}"`);
+        return;
+      }
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { role: true },
+      });
+      if (!recipient) {
+        return;
+      }
+      if (!definition.audience.includes(recipient.role)) {
+        this.logger.warn(
+          `Dropped "${input.event}" for user ${input.userId}: it is for ${definition.audience.join('/')}, not ${recipient.role}`,
+        );
+        return;
+      }
+      const title = input.title ?? definition.title;
       for (const adapter of this.adapters) {
         if (!adapter.enabled()) {
           continue;
@@ -130,6 +167,9 @@ export class NotificationsService {
             event: input.event,
             payload: input.payload,
             status: NotificationStatus.QUEUED,
+            title,
+            body: input.message ?? null,
+            audienceRole: recipient.role,
           },
         });
         try {
@@ -138,10 +178,18 @@ export class NotificationsService {
             message: input.message,
             event: input.event,
           });
-          await this.prisma.notification.update({
+          const sent = await this.prisma.notification.update({
             where: { id: created.id },
             data: { status: NotificationStatus.SENT, sentAt: new Date() },
           });
+          if (adapter.channel === NotificationChannel.PUSH) {
+            // The PUSH row is the in-app feed entry: deliver it live to this user's sessions.
+            this.realtime?.emit(
+              { users: [input.userId] },
+              RealtimeEvents.notificationCreated,
+              { ...created, ...sent, readAt: null },
+            );
+          }
         } catch {
           await this.prisma.notification.update({
             where: { id: created.id },
@@ -154,10 +202,38 @@ export class NotificationsService {
     }
   }
 
+  /** Notify every active admin (in-app only; admins are not texted for routine events). */
+  async notifyAdmins(input: NotifyAdminsInput): Promise<void> {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: { role: UserRole.ADMIN, status: UserStatus.ACTIVE },
+        select: { id: true },
+      });
+      await Promise.all(admins.map((admin) => this.notify({ ...input, userId: admin.id })));
+    } catch {
+      // Never fail the originating action over an alert.
+    }
+  }
+
+  /** The caller's feed: only their current role's rows, one row per notification (in-app channel). */
+  private feedWhere(user: AuthUser, channel?: NotificationChannel): Prisma.NotificationWhereInput {
+    return {
+      userId: user.sub,
+      audienceRole: user.role as UserRole,
+      channel: channel ?? NotificationChannel.PUSH,
+    };
+  }
+
+  async unreadCount(user: AuthUser): Promise<{ unread: number }> {
+    const unread = await this.prisma.notification.count({
+      where: { ...this.feedWhere(user), readAt: null },
+    });
+    return { unread };
+  }
+
   async listForUser(user: AuthUser, query: ListNotificationsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.NotificationWhereInput = {
-      userId: user.sub,
-      ...(query.channel ? { channel: query.channel } : {}),
+      ...this.feedWhere(user, query.channel),
       ...(query.unread === undefined ? {} : { readAt: query.unread ? null : { not: null } }),
     };
     const [total, items] = await this.prisma.$transaction([
@@ -175,13 +251,20 @@ export class NotificationsService {
   async markRead(user: AuthUser, dto: MarkNotificationsReadDto): Promise<{ updated: number }> {
     const result = await this.prisma.notification.updateMany({
       where: {
-        userId: user.sub,
+        ...this.feedWhere(user),
         readAt: null,
         ...(dto.ids ? { id: { in: dto.ids } } : {}),
         ...(dto.before ? { createdAt: { lte: new Date(dto.before) } } : {}),
       },
       data: { readAt: new Date() },
     });
+    if (result.count > 0) {
+      // Keep the user's other open tabs/devices in sync.
+      this.realtime?.emit({ users: [user.sub] }, RealtimeEvents.notificationRead, {
+        ids: dto.ids ?? null,
+        before: dto.before ?? null,
+      });
+    }
     return { updated: result.count };
   }
 }
@@ -195,10 +278,19 @@ export class NotificationsController {
   @Get()
   @ApiOperation({
     summary: 'List user notifications',
-    description: 'Retrieves notification history (SMS, Push, WhatsApp) sent to the authenticated user, newest first. Each row has readAt (null while unread). Filter with ?channel=PUSH and ?unread=true.',
+    description: 'In-app notification feed for the caller, newest first. Only notifications meant for the caller\'s role are returned, one row per notification. Each row has title, body and readAt (null while unread). New ones arrive live as notification.created over the socket. Filter with ?unread=true; ?channel=SMS|WHATSAPP shows the delivery log instead.',
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListNotificationsQueryDto) {
     return this.notifications.listForUser(user, query);
+  }
+
+  @Get('unread-count')
+  @ApiOperation({
+    summary: 'Count unread notifications',
+    description: 'Unread in-app notifications for the caller\'s current role. Kept live by the notification.created / notification.read socket events.',
+  })
+  unreadCount(@CurrentUser() user: AuthUser) {
+    return this.notifications.unreadCount(user);
   }
 
   @Post('read')

@@ -77,6 +77,12 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     description: 'Maximum distance (metres) between a GPS check-in/check-out and the visit address; 0 disables the check.',
   },
   {
+    key: 'visit.requirePaymentBeforeComplete',
+    envVar: 'VISIT_REQUIRE_PAYMENT_BEFORE_COMPLETE',
+    envDefault: 1,
+    description: 'When 1, a visit cannot be completed until its payment is verified (cash: confirmed by both customer and caregiver; card: settled). 0 disables the check.',
+  },
+  {
     key: 'search.cacheTtlSeconds',
     envVar: 'SEARCH_CACHE_TTL_SECONDS',
     envDefault: 30,

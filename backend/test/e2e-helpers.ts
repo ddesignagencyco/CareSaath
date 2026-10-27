@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/common/prisma/prisma.service.js';
 import { RedisService } from '../src/common/redis/redis.module.js';
 import { AllExceptionsFilter } from '../src/common/filters/http-exception.filter.js';
+import { NOTIFICATION_EVENTS } from '../src/notifications/events.js';
 
 /**
  * A valid 1x1 PNG. The storage service accepts the MIME type, and a real
@@ -35,6 +36,11 @@ export const VALID_PDF = Buffer.from(
  * to an in-memory driver when credentials are unset). E2E tests require the
  * Docker services to be running and the schema migrated.
  */
+/** Events only admins receive; test runs trigger them for every admin in the database. */
+const ADMIN_ONLY_EVENTS = Object.entries(NOTIFICATION_EVENTS)
+  .filter(([, def]) => def.audience.length === 1 && def.audience[0] === 'ADMIN')
+  .map(([event]) => event);
+
 export async function createTestApp(): Promise<{
   app: INestApplication<App>;
   prisma: PrismaService;
@@ -66,6 +72,7 @@ export async function createTestApp(): Promise<{
   );
   app.useGlobalFilters(new AllExceptionsFilter());
   await app.init();
+  const startedAt = new Date();
 
   const prisma = app.get(PrismaService);
   const redis = app.get(RedisService);
@@ -77,6 +84,10 @@ export async function createTestApp(): Promise<{
     redis,
     jwt,
     close: async () => {
+      // Alerts a run sends to every admin would otherwise pile up in the seeded admin's real feed.
+      await prisma.notification.deleteMany({
+        where: { createdAt: { gte: startedAt }, event: { in: ADMIN_ONLY_EVENTS } },
+      });
       await app.close();
     },
   };

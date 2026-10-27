@@ -311,6 +311,7 @@ performance under a throttled 3G profile.
 - [Root README](../Readme.md): project overview, status, local ports
 - [SRS](../docs/Caresaath-SRS.md): functional requirements (FR-C/CG/A)
 - [ERD](../docs/CARESAATH_ERD.md): data model per entity
+- [Realtime, notifications, payment verification and receipts](../docs/realtime-and-payment-verification.md): socket contract and the Phase 15 flows
 - [TRD](../docs/CARESAATH_TRD.md): architecture, module/API design, security, infrastructure
 
 Swagger UI (`/docs`) is the authoritative reference for request/response shapes.

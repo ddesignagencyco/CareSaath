@@ -39,6 +39,8 @@ import {
   BookingStatus,
   CheckMethod,
   OtpPurpose,
+  PaymentMethod,
+  PaymentStatus,
   Prisma,
   UserRole,
   VisitStatus,
@@ -52,6 +54,7 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
@@ -212,6 +215,7 @@ export class VisitsService {
     private readonly sms: SmsService,
     private readonly config: ConfigService,
     @Optional() private readonly storage?: StorageService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   /** Prescriptions on the booking get a viewable `url` (the storage key stays internal). */
@@ -284,6 +288,8 @@ export class VisitsService {
           amount: true,
           caregiverAmount: true,
           paidAt: true,
+          customerConfirmedAt: true,
+          caregiverConfirmedAt: true,
         },
         orderBy: { createdAt: 'desc' as const },
       },
@@ -380,7 +386,14 @@ export class VisitsService {
   ) {
     const visit = await this.prisma.visit.findUnique({
       where: { id: visitId },
-      include: { booking: { include: { customer: { select: { id: true, phone: true } } } } },
+      include: {
+        booking: {
+          include: {
+            customer: { select: { id: true, phone: true } },
+            caregiver: { select: { userId: true } },
+          },
+        },
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
@@ -419,12 +432,39 @@ export class VisitsService {
       entityId: visitId,
       metadata: { from, to },
     });
+    const caregiverUserId = visit.booking.caregiver?.userId;
     if (bookingCompleted) {
       await this.audit.log({
         actorId: actor.sub,
         action: 'booking.completed',
         entityType: 'Booking',
         entityId: visit.bookingId,
+      });
+      for (const userId of [visit.booking.customer.id, caregiverUserId]) {
+        if (userId) {
+          await this.notifications.notify({
+            userId,
+            event: 'booking.completed',
+            payload: { bookingId: visit.bookingId },
+            message: 'All visits in this booking are complete.',
+          });
+        }
+      }
+    }
+    const parties = { users: [visit.booking.customer.id, caregiverUserId] };
+    this.realtime?.entityUpdated(parties, {
+      type: 'visit',
+      id: visitId,
+      action: to.toLowerCase(),
+      status: to,
+      data: { bookingId: visit.bookingId },
+    });
+    if (bookingCompleted) {
+      this.realtime?.entityUpdated(parties, {
+        type: 'booking',
+        id: visit.bookingId,
+        action: 'completed',
+        status: BookingStatus.COMPLETED,
       });
     }
     await this.notifications.notify({
@@ -556,6 +596,40 @@ export class VisitsService {
     });
   }
 
+  /**
+   * A visit cannot be closed until its payment is verified: card settled, or cash
+   * confirmed by BOTH the customer and the caregiver. Tunable with the
+   * visit.requirePaymentBeforeComplete setting (0 turns the check off).
+   */
+  private async assertPaymentVerified(visitId: string): Promise<void> {
+    if ((await this.config.getNumber('visit.requirePaymentBeforeComplete')) === 0) {
+      return;
+    }
+    const payments = await this.prisma.payment.findMany({
+      where: { visitId, status: { in: [PaymentStatus.PAID, PaymentStatus.PENDING] } },
+      select: { status: true, method: true, customerConfirmedAt: true, caregiverConfirmedAt: true },
+    });
+    if (payments.some((p) => p.status === PaymentStatus.PAID)) {
+      return;
+    }
+    const pending = payments[0];
+    let reason: string;
+    if (!pending) {
+      reason = 'no payment has been made for this visit yet';
+    } else if (pending.method !== PaymentMethod.CASH) {
+      reason = 'the card payment has not been completed yet';
+    } else if (!pending.customerConfirmedAt && !pending.caregiverConfirmedAt) {
+      reason = 'neither the customer nor the caregiver has confirmed the cash payment';
+    } else if (!pending.customerConfirmedAt) {
+      reason = 'the customer has not confirmed handing over the cash';
+    } else {
+      reason = 'the caregiver has not confirmed receiving the cash';
+    }
+    throw new BadRequestException(
+      `The visit cannot be completed until payment is verified by both sides: ${reason}`,
+    );
+  }
+
   /** FR-CG8: submit the visit note; CHECKED_OUT -> COMPLETED. */
   async submitNote(user: AuthUser, id: string, dto: VisitNoteDto) {
     const visit = await this.loadForCaregiver(user, id);
@@ -563,6 +637,7 @@ export class VisitsService {
     if (visit.note) {
       throw new BadRequestException('A note has already been submitted for this visit');
     }
+    await this.assertPaymentVerified(id);
     const updated = await this.runCaregiverTransition(user, id, VisitStatus.COMPLETED, {});
     await this.prisma.visitNote.create({
       data: { visitId: id, caregiverId, summary: dto.summary },

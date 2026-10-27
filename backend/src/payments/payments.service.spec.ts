@@ -130,7 +130,7 @@ describe('PaymentsService', () => {
   it('initiates a cash payment with a commission split', async () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
-    prisma.payment.create.mockImplementation(async ({ data }: never) => ({ id: 'pay-1', ...data }));
+    prisma.payment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'pay-1', ...data }));
 
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'CASH' as never });
 
@@ -148,7 +148,7 @@ describe('PaymentsService', () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-2' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({
       id: where.id,
       ...data,
     }));
@@ -164,7 +164,7 @@ describe('PaymentsService', () => {
   it('always charges the booking rate minus discount, ignoring any client amount', async () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
-    prisma.payment.create.mockImplementation(async ({ data }: never) => ({ id: 'pay-1', ...data }));
+    prisma.payment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'pay-1', ...data }));
 
     const result = await service.initiate(customer, {
       visitId: 'v-1',
@@ -262,20 +262,170 @@ describe('PaymentsService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('lets the assigned caregiver confirm a cash payment', async () => {
+  const cashPayment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'pay-4',
+    method: 'CASH',
+    status: 'PENDING',
+    amount: 5000,
+    visitId: 'v-1',
+    customerConfirmedAt: null,
+    caregiverConfirmedAt: null,
+    visit: {
+      status: 'CHECKED_OUT',
+      booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } },
+    },
+    ...overrides,
+  });
+  const settleFixture = () => ({
+    id: 'pay-4',
+    status: 'PENDING',
+    amount: 5000,
+    caregiverAmount: 4000,
+    visitId: 'v-1',
+    visit: { booking: { customer: { id: 'u-cust', phone: null }, caregiver: { userId: 'u-cg' } } },
+  });
+
+  const receiptPayment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'abcdef12-0000-4000-8000-000000000000',
+    method: 'CASH',
+    status: 'PAID',
+    amount: 5000,
+    commissionAmount: 1000,
+    caregiverAmount: 4000,
+    gatewayRef: null,
+    paidAt: new Date('2026-10-26T09:30:00.000Z'),
+    customerConfirmedAt: new Date(),
+    caregiverConfirmedAt: new Date(),
+    visit: {
+      scheduledDate: new Date('2026-10-26T00:00:00.000Z'),
+      timeWindowStart: '09:00',
+      timeWindowEnd: '11:00',
+      booking: {
+        customerId: 'u-cust',
+        rateSnapshot: 5000,
+        discountAmount: 0,
+        serviceType: 'NURSING',
+        patient: { name: 'P' },
+        customer: { fullName: 'C', phone: '+923001234567' },
+        caregiver: { userId: 'u-cg', specialty: 'NURSING', user: { fullName: 'G' } },
+        promoCode: null,
+      },
+    },
+    ...overrides,
+  });
+
+  it('gives the customer and the assigned caregiver a PDF receipt for a verified payment', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    for (const who of [customer, caregiver]) {
+      const file = await service.receipt(who, 'pay-4');
+      expect(file.filename).toBe('caresaath-receipt-CS-2026-ABCDEF12.pdf');
+      expect(file.pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    }
+  });
+
+  it('lets an admin download any receipt', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    const file = await service.receipt({ sub: 'u-admin', role: 'ADMIN', phone: '+923000000000' }, 'pay-4');
+    expect(file.pdf.length).toBeGreaterThan(1000);
+  });
+
+  it('hides a receipt from anyone who is not on the visit, the same as a missing payment', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment());
+    const stranger: AuthUser = { sub: 'u-other', role: 'CUSTOMER', phone: '+923009999999' };
+    await expect(service.receipt(stranger, 'pay-4')).rejects.toBeInstanceOf(NotFoundException);
+    const otherCaregiver: AuthUser = { sub: 'u-cg2', role: 'CAREGIVER', phone: '+923008888888' };
+    await expect(service.receipt(otherCaregiver, 'pay-4')).rejects.toBeInstanceOf(NotFoundException);
+    prisma.payment.findUnique.mockResolvedValue(null);
+    await expect(service.receipt(customer, 'missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('issues no receipt until the payment is verified', async () => {
+    prisma.payment.findUnique.mockResolvedValue(receiptPayment({ status: 'PENDING' }));
+    await expect(service.receipt(customer, 'pay-4')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('keeps cash PENDING when only the caregiver has confirmed, and tells the customer', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
-    prisma.payment.findFirst.mockResolvedValue({ id: 'pay-4', method: 'CASH', status: 'PENDING' });
-    prisma.payment.findUnique.mockResolvedValue({
-      id: 'pay-4',
-      status: 'PENDING',
-      amount: 5000,
-      visitId: 'v-1',
-      visit: { booking: { customer: { id: 'u-cust', phone: null } } },
+    prisma.payment.findFirst.mockResolvedValue(cashPayment());
+    prisma.payment.update.mockResolvedValue(cashPayment({ caregiverConfirmedAt: new Date() }));
+
+    const result = await service.confirmCash(caregiver, 'pay-4', { note: 'Received Rs 50' });
+
+    expect(result).toMatchObject({ status: 'PENDING' });
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: 'pay-4' },
+      data: { caregiverConfirmedAt: expect.any(Date), confirmationNote: 'Received Rs 50' },
     });
-    prisma.payment.update.mockResolvedValue({ id: 'pay-4', status: 'PAID' });
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u-cust', event: 'payment.cash.caregiver_confirmed' }),
+    );
+    expect(prisma.payment.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ include: expect.anything() }),
+    );
+  });
+
+  it('keeps cash PENDING when only the customer has confirmed, and tells the caregiver', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment());
+    prisma.payment.update.mockResolvedValue(cashPayment({ customerConfirmedAt: new Date() }));
+
+    const result = await service.confirmCashAsCustomer(customer, 'pay-4');
+
+    expect(result).toMatchObject({ status: 'PENDING' });
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u-cg', event: 'payment.cash.customer_confirmed' }),
+    );
+  });
+
+  it('settles cash as PAID once the second side confirms, notifying both', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ customerConfirmedAt: new Date() }));
+    prisma.payment.update
+      .mockResolvedValueOnce(
+        cashPayment({ customerConfirmedAt: new Date(), caregiverConfirmedAt: new Date() }),
+      )
+      .mockResolvedValueOnce({ id: 'pay-4', status: 'PAID' });
+    prisma.payment.findUnique.mockResolvedValue(settleFixture());
 
     const result = await service.confirmCash(caregiver, 'pay-4');
+
     expect(result).toMatchObject({ status: 'PAID' });
+    expect(prisma.payment.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'PAID' }) }),
+    );
+    const paidTo = (notifications.notify.mock.calls as unknown[][])
+      .map((call) => call[0] as { userId: string; event: string })
+      .filter((n) => n.event === 'payment.paid')
+      .map((n) => [n.userId, n.event]);
+    expect(paidTo).toEqual([
+      ['u-cust', 'payment.paid'],
+      ['u-cg', 'payment.paid'],
+    ]);
+  });
+
+  it('is a no-op when the same side confirms twice', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ caregiverConfirmedAt: new Date() }));
+    await service.confirmCash(caregiver, 'pay-4');
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(notifications.notify).not.toHaveBeenCalled();
+  });
+
+  it('refuses to confirm cash before the caregiver has arrived', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ visit: { status: 'CONFIRMED', booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } } } }));
+    await expect(service.confirmCashAsCustomer(customer, 'pay-4')).rejects.toThrow(/caregiver has arrived/);
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to confirm a payment that already failed', async () => {
+    prisma.payment.findFirst.mockResolvedValue(cashPayment({ status: 'FAILED' }));
+    await expect(service.confirmCashAsCustomer(customer, 'pay-4')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not let the customer cancel cash the caregiver already confirmed', async () => {
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'pay-4', status: 'PENDING', method: 'CASH', caregiverConfirmedAt: new Date(),
+    });
+    await expect(service.cancel(customer, 'pay-4')).rejects.toThrow(/already confirmed/);
   });
 
   it('rejects confirming a non-cash payment', async () => {
@@ -335,7 +485,7 @@ describe('PaymentsService with Stripe', () => {
     prisma.visit.findFirst.mockResolvedValue(cardVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data }));
 
     const result = await service.initiate(customer, { visitId: 'v-1', method: 'CARD' as never });
 
@@ -365,7 +515,7 @@ describe('PaymentsService with Stripe', () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);
     prisma.payment.create.mockResolvedValue({ id: 'pay-1' });
-    prisma.payment.update.mockImplementation(async ({ where, data }: never) => ({ id: where.id, ...data }));
+    prisma.payment.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => ({ id: where.id, ...data }));
     await service.initiate(customer, { visitId: 'v-1', method: 'JAZZCASH' as never });
     expect(stripe.createCheckoutSession).not.toHaveBeenCalled();
   });

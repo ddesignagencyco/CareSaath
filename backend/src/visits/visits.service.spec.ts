@@ -182,6 +182,7 @@ describe('VisitsService transitions', () => {
     prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'COMPLETED' });
     prisma.visit.count.mockResolvedValue(0);
     prisma.booking.updateMany.mockResolvedValue({ count: 1 });
+    prisma.payment.findMany.mockResolvedValue([{ status: 'PAID', method: 'CASH' }]);
 
     await service.submitNote(caregiver, 'v-1', { summary: 'done' });
 
@@ -191,11 +192,70 @@ describe('VisitsService transitions', () => {
     });
   });
 
+  describe('payment gate on completion', () => {
+    const completable = () => {
+      prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+      prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
+      prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'COMPLETED' });
+      prisma.visit.count.mockResolvedValue(1);
+    };
+
+    it('blocks completion when no payment exists', async () => {
+      completable();
+      prisma.payment.findMany.mockResolvedValue([]);
+      await expect(service.submitNote(caregiver, 'v-1', { summary: 'done' })).rejects.toThrow(
+        /no payment has been made/,
+      );
+      expect(prisma.visit.update).not.toHaveBeenCalled();
+      expect(prisma.visitNote.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ customerConfirmedAt: null, caregiverConfirmedAt: null }, /neither the customer nor the caregiver/],
+      [{ customerConfirmedAt: new Date(), caregiverConfirmedAt: null }, /caregiver has not confirmed receiving/],
+      [{ customerConfirmedAt: null, caregiverConfirmedAt: new Date() }, /customer has not confirmed handing over/],
+    ])('blocks completion while cash is only confirmed by one side', async (confirmations, message) => {
+      completable();
+      prisma.payment.findMany.mockResolvedValue([{ status: 'PENDING', method: 'CASH', ...confirmations }]);
+      await expect(service.submitNote(caregiver, 'v-1', { summary: 'done' })).rejects.toThrow(message);
+      expect(prisma.visit.update).not.toHaveBeenCalled();
+    });
+
+    it('blocks completion while a card payment is unsettled', async () => {
+      completable();
+      prisma.payment.findMany.mockResolvedValue([{ status: 'PENDING', method: 'CARD' }]);
+      await expect(service.submitNote(caregiver, 'v-1', { summary: 'done' })).rejects.toThrow(
+        /card payment has not been completed/,
+      );
+    });
+
+    it('allows completion once the payment is PAID', async () => {
+      completable();
+      prisma.payment.findMany.mockResolvedValue([{ status: 'PAID', method: 'CASH' }]);
+      await expect(service.submitNote(caregiver, 'v-1', { summary: 'done' })).resolves.toBeDefined();
+    });
+
+    it('can be switched off with visit.requirePaymentBeforeComplete = 0', async () => {
+      completable();
+      const lenient = new VisitsService(
+        prisma as never,
+        createAuditMock() as never,
+        notifications as never,
+        redis as never,
+        sms as never,
+        { getNumber: () => Promise.resolve(0) } as never,
+      );
+      await expect(lenient.submitNote(caregiver, 'v-1', { summary: 'done' })).resolves.toBeDefined();
+      expect(prisma.payment.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   it('keeps the booking open while other visits are still pending', async () => {
     prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
     prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
     prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'COMPLETED' });
     prisma.visit.count.mockResolvedValue(2);
+    prisma.payment.findMany.mockResolvedValue([{ status: 'PAID', method: 'CARD' }]);
 
     await service.submitNote(caregiver, 'v-1', { summary: 'done' });
 

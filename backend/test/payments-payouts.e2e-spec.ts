@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
+import type { Response as SuperResponse } from 'superagent';
 import { bearer, createTestApp, signAccessToken, uniquePhone } from './e2e-helpers.js';
 import type { PrismaService } from '../src/common/prisma/prisma.service.js';
 import type { JwtService } from '@nestjs/jwt';
@@ -10,6 +11,14 @@ import type { JwtService } from '@nestjs/jwt';
  * Payment -> payout lifecycle: cash settle, gateway webhook idempotency,
  * commission config, caregiver earnings and admin payout approval.
  */
+/** supertest parser that keeps a binary (PDF) body as a Buffer. */
+const binary = (res: SuperResponse, callback: (err: Error | null, body: Buffer) => void) => {
+  const stream = res as unknown as NodeJS.ReadableStream;
+  const chunks: Buffer[] = [];
+  stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+  stream.on('end', () => callback(null, Buffer.concat(chunks)));
+};
+
 describe('Payments & payouts (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -101,7 +110,7 @@ describe('Payments & payouts (e2e)', () => {
         scheduledDate: new Date('2026-03-02T00:00:00.000Z'),
         timeWindowStart: '09:00',
         timeWindowEnd: '11:00',
-        status: 'CONFIRMED',
+        status: 'CHECKED_OUT',
       },
     });
     const cardVisit = await prisma.visit.create({
@@ -167,18 +176,28 @@ describe('Payments & payouts (e2e)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('lets the caregiver confirm the cash payment', async () => {
+  it('settles cash only after the caregiver AND the customer confirm', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/v1/customer/payments')
       .set(bearer(customerToken));
     const cash = (list.body.items as Array<{ id: string; method: string; status: string }>).find(
       (p) => p.method === 'CASH',
     );
-    const res = await request(app.getHttpServer())
+    const caregiverSide = await request(app.getHttpServer())
       .post(`/api/v1/caregiver/payments/${cash!.id}/confirm-cash`)
       .set(bearer(caregiverToken));
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe('PAID');
+    expect(caregiverSide.status).toBe(201);
+    expect(caregiverSide.body.status).toBe('PENDING');
+
+    // earnings are not credited until both sides have confirmed
+    const early = await request(app.getHttpServer()).get('/api/v1/caregiver/earnings').set(bearer(caregiverToken));
+    expect(early.body.availableAmount).toBe(0);
+
+    const customerSide = await request(app.getHttpServer())
+      .post(`/api/v1/customer/payments/${cash!.id}/confirm-cash`)
+      .set(bearer(customerToken));
+    expect(customerSide.status).toBe(201);
+    expect(customerSide.body.status).toBe('PAID');
   });
 
   it('initiates a card payment and exposes a gateway reference', async () => {
@@ -267,7 +286,7 @@ describe('Payments & payouts (e2e)', () => {
     expect(res.body.status).toBe('REQUESTED');
   });
 
-  it('lets an admin approve then mark the payout paid', async () => {
+  it('lets an admin approve, transfer, and the caregiver confirm the payout', async () => {
     const list = await request(app.getHttpServer())
       .get('/api/v1/admin/payouts?status=REQUESTED')
       .set(bearer(adminToken));
@@ -281,12 +300,108 @@ describe('Payments & payouts (e2e)', () => {
     expect(approve.status).toBe(201);
     expect(approve.body.status).toBe('PROCESSING');
 
-    const paid = await request(app.getHttpServer())
+    // The admin sending the money is not enough: the payout waits for the caregiver.
+    const transferred = await request(app.getHttpServer())
+      .post(`/api/v1/admin/payouts/${payoutId}/mark-transferred`)
+      .set(bearer(adminToken))
+      .send({ reference: 'TXN-E2E-1' });
+    expect(transferred.status).toBe(201);
+    expect(transferred.body.status).toBe('TRANSFERRED');
+    expect(transferred.body.transferReference).toBe('TXN-E2E-1');
+    expect(transferred.body.caregiverConfirmedAt).toBeNull();
+
+    // The admin cannot jump it to PAID by calling the deprecated alias again.
+    const again = await request(app.getHttpServer())
       .post(`/api/v1/admin/payouts/${payoutId}/mark-paid`)
       .set(bearer(adminToken))
       .send({});
-    expect(paid.status).toBe(201);
-    expect(paid.body.status).toBe('PAID');
+    expect(again.status).toBe(400);
+
+    // The caregiver reports it missing: still TRANSFERRED, issue recorded.
+    const missing = await request(app.getHttpServer())
+      .post(`/api/v1/caregiver/payouts/${payoutId}/report-not-received`)
+      .set(bearer(caregiverToken))
+      .send({ note: 'Nothing in my wallet yet' });
+    expect(missing.status).toBe(201);
+    expect(missing.body.status).toBe('TRANSFERRED');
+    expect(missing.body.issueNote).toBe('Nothing in my wallet yet');
+
+    // The admin resends; the issue is cleared.
+    const resent = await request(app.getHttpServer())
+      .post(`/api/v1/admin/payouts/${payoutId}/mark-transferred`)
+      .set(bearer(adminToken))
+      .send({ reference: 'TXN-E2E-2' });
+    expect(resent.status).toBe(201);
+    expect(resent.body.transferReference).toBe('TXN-E2E-2');
+    expect(resent.body.issueReportedAt).toBeNull();
+
+    // Only the caregiver's confirmation completes it.
+    const confirmed = await request(app.getHttpServer())
+      .post(`/api/v1/caregiver/payouts/${payoutId}/confirm-received`)
+      .set(bearer(caregiverToken));
+    expect(confirmed.status).toBe(201);
+    expect(confirmed.body.status).toBe('PAID');
+    expect(confirmed.body.caregiverConfirmedAt).toBeTruthy();
+    expect(confirmed.body.processedAt).toBeTruthy();
+  });
+
+  it('downloads the payout transfer receipt as a PDF (caregiver and admin)', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/caregiver/payouts').set(bearer(caregiverToken));
+    const payoutId = (list.body.items as Array<{ id: string }>)[0]!.id;
+    for (const [path, token] of [
+      [`/api/v1/caregiver/payouts/${payoutId}/receipt`, caregiverToken],
+      [`/api/v1/admin/payouts/${payoutId}/receipt`, adminToken],
+    ] as const) {
+      const res = await request(app.getHttpServer()).get(path).set(bearer(token)).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/pdf');
+      expect(res.headers['content-disposition']).toMatch(/^attachment; filename="caresaath-transfer-CS-PO-\d{4}-[0-9A-F]{8}\.pdf"$/);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    }
+    const inline = await request(app.getHttpServer())
+      .get(`/api/v1/caregiver/payouts/${payoutId}/receipt?inline=true`)
+      .set(bearer(caregiverToken))
+      .buffer(true)
+      .parse(binary);
+    expect(inline.headers['content-disposition']).toMatch(/^inline;/);
+  });
+
+  it('downloads the payment receipt as a PDF only for the parties, and only once paid', async () => {
+    const list = await request(app.getHttpServer()).get('/api/v1/customer/payments').set(bearer(customerToken));
+    const items = list.body.items as Array<{ id: string; method: string; status: string }>;
+    const cash = items.find((p) => p.method === 'CASH' && p.status === 'PAID')!;
+    const unpaid = items.find((p) => p.status !== 'PAID');
+
+    const customerCopy = await request(app.getHttpServer())
+      .get(`/api/v1/customer/payments/${cash.id}/receipt`)
+      .set(bearer(customerToken))
+      .buffer(true)
+      .parse(binary);
+    expect(customerCopy.status).toBe(200);
+    expect(customerCopy.headers['content-type']).toBe('application/pdf');
+    expect(customerCopy.headers['content-disposition']).toMatch(/^attachment; filename="caresaath-receipt-CS-\d{4}-[0-9A-F]{8}\.pdf"$/);
+    expect((customerCopy.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+
+    for (const [path, token] of [
+      [`/api/v1/caregiver/payments/${cash.id}/receipt`, caregiverToken],
+      [`/api/v1/admin/payments/${cash.id}/receipt`, adminToken],
+    ] as const) {
+      const res = await request(app.getHttpServer()).get(path).set(bearer(token)).buffer(true).parse(binary);
+      expect(res.status).toBe(200);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    }
+
+    // not available before verification, and not across roles
+    if (unpaid) {
+      const early = await request(app.getHttpServer())
+        .get(`/api/v1/customer/payments/${unpaid.id}/receipt`)
+        .set(bearer(customerToken));
+      expect(early.status).toBe(400);
+    }
+    const wrongRole = await request(app.getHttpServer())
+      .get(`/api/v1/customer/payments/${cash.id}/receipt`)
+      .set(bearer(caregiverToken));
+    expect(wrongRole.status).toBe(403);
   });
 
   it('removes settled earnings from the available pool after payout', async () => {

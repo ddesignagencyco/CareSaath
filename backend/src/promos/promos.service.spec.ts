@@ -32,7 +32,7 @@ describe('PromosService', () => {
 
   it('uppercases the code when creating a promo', async () => {
     prisma.promoCode.findUnique.mockResolvedValue(null);
-    prisma.promoCode.create.mockImplementation(async ({ data }: never) => ({ id: 'p-1', ...data }));
+    prisma.promoCode.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'p-1', ...data }));
     const result = await service.create(admin, {
       code: 'welcome10',
       discountType: 'PERCENT' as never,

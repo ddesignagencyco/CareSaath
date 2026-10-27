@@ -76,7 +76,7 @@ describe('PayoutsService', () => {
 
   it('creates a payout account with an encrypted number', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
-    prisma.payoutAccount.create.mockImplementation(async ({ data }: never) => ({
+    prisma.payoutAccount.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       id: 'acct-1',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -156,6 +156,176 @@ describe('PayoutsService', () => {
     expect(result).toMatchObject({ status: 'PROCESSING' });
     expect(notifications.notify).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'payout.processing' }),
+    );
+  });
+
+  const transferredPayout = (overrides: Record<string, unknown> = {}) => ({
+    id: 'pr-1',
+    status: 'TRANSFERRED',
+    amount: 5000,
+    issueReportedAt: null,
+    caregiver: { userId: 'u-cg', user: { phone: '+923001234568' } },
+    payoutAccount: { provider: 'JazzCash' },
+    ...overrides,
+  });
+  const detail = (status: string) => ({
+    id: 'pr-1',
+    status,
+    payoutAccount: { accountNumber: 'not-encrypted' },
+  });
+
+  it('moves an approved payout to TRANSFERRED (not PAID) and asks the caregiver to confirm', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(transferredPayout({ status: 'PROCESSING' }));
+    prisma.payoutRequest.update.mockResolvedValue({});
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('TRANSFERRED'));
+
+    const result = await service.markTransferred(admin, 'pr-1', { reference: 'TXN-1' });
+
+    expect(result).toMatchObject({ status: 'TRANSFERRED' });
+    expect(prisma.payoutRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'TRANSFERRED',
+          transferReference: 'TXN-1',
+          transferredAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect((prisma.payoutRequest.update.mock.calls[0]![0] as { data: Record<string, unknown> }).data).not.toHaveProperty('processedAt');
+    expect(notifications.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-cg',
+        event: 'payout.transferred',
+        message: expect.stringContaining('Please confirm once you have received it'),
+      }),
+    );
+  });
+
+  it('keeps the deprecated mark-paid alias from skipping the caregiver confirmation', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(transferredPayout({ status: 'PROCESSING' }));
+    prisma.payoutRequest.update.mockResolvedValue({});
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('TRANSFERRED'));
+    await expect(service.markPaid(admin, 'pr-1', {})).resolves.toMatchObject({ status: 'TRANSFERRED' });
+  });
+
+  it('does not let an admin re-transfer unless the caregiver reported a problem', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(transferredPayout());
+    await expect(service.markTransferred(admin, 'pr-1', {})).rejects.toBeInstanceOf(BadRequestException);
+
+    prisma.payoutRequest.findUnique.mockResolvedValue(transferredPayout({ issueReportedAt: new Date() }));
+    prisma.payoutRequest.update.mockResolvedValue({});
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('TRANSFERRED'));
+    await expect(service.markTransferred(admin, 'pr-1', { reference: 'TXN-2' })).resolves.toBeDefined();
+    expect(prisma.payoutRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ issueReportedAt: null, issueNote: null }),
+      }),
+    );
+  });
+
+  it('cannot reject money that was already transferred', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(transferredPayout());
+    await expect(service.reject(admin, 'pr-1', { reason: 'x' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('marks a payout PAID only when the caregiver confirms, and tells the admins', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payoutRequest.findFirst.mockResolvedValue(transferredPayout());
+    prisma.payoutRequest.update.mockResolvedValue({});
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('PAID'));
+
+    const result = await service.confirmReceived(caregiver, 'pr-1');
+
+    expect(result).toMatchObject({ status: 'PAID' });
+    expect(prisma.payoutRequest.update).toHaveBeenCalledWith({
+      where: { id: 'pr-1' },
+      data: expect.objectContaining({
+        status: 'PAID',
+        caregiverConfirmedAt: expect.any(Date),
+        processedAt: expect.any(Date),
+      }),
+    });
+    expect(notifications.notifyAdmins).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'payout.confirmed' }),
+    );
+  });
+
+  it('refuses to confirm a payout the admin has not transferred, and is idempotent once paid', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payoutRequest.findFirst.mockResolvedValue(transferredPayout({ status: 'PROCESSING' }));
+    await expect(service.confirmReceived(caregiver, 'pr-1')).rejects.toBeInstanceOf(BadRequestException);
+
+    prisma.payoutRequest.findFirst.mockResolvedValue(transferredPayout({ status: 'PAID' }));
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('PAID'));
+    prisma.payoutRequest.update.mockClear();
+    await service.confirmReceived(caregiver, 'pr-1');
+    expect(prisma.payoutRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('lets only the owning caregiver confirm', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-other' });
+    prisma.payoutRequest.findFirst.mockResolvedValue(null);
+    await expect(service.confirmReceived(caregiver, 'pr-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('records a not-received report and alerts the admins without changing the status', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payoutRequest.findFirst.mockResolvedValue(transferredPayout());
+    prisma.payoutRequest.update.mockResolvedValue({});
+    prisma.payoutRequest.findUniqueOrThrow.mockResolvedValue(detail('TRANSFERRED'));
+
+    await service.reportNotReceived(caregiver, 'pr-1', { note: 'not here' });
+
+    expect(prisma.payoutRequest.update).toHaveBeenCalledWith({
+      where: { id: 'pr-1' },
+      data: { issueReportedAt: expect.any(Date), issueNote: 'not here' },
+    });
+    expect(notifications.notifyAdmins).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'payout.issue_reported' }),
+    );
+  });
+
+  const receiptPayout = (overrides: Record<string, unknown> = {}) => ({
+    id: '12345678-aaaa-4bbb-8ccc-000000000000',
+    amount: 5000,
+    status: 'PAID',
+    requestedAt: new Date('2026-10-24T08:00:00.000Z'),
+    transferredAt: new Date('2026-10-25T10:00:00.000Z'),
+    transferReference: 'TXN-1',
+    caregiverConfirmedAt: new Date('2026-10-25T12:00:00.000Z'),
+    caregiver: { userId: 'u-cg', user: { fullName: 'Fatima', phone: '+923001234568' } },
+    payoutAccount: { accountNumber: 'not-encrypted', provider: 'JazzCash', accountTitle: 'Fatima' },
+    ...overrides,
+  });
+
+  it('issues a transfer receipt to the caregiver and the admin once the money was sent', async () => {
+    for (const status of ['TRANSFERRED', 'PAID']) {
+      prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout({ status }));
+      for (const who of [caregiver, admin]) {
+        const file = await service.receipt(who, 'pr-1');
+        expect(file.filename).toBe('caresaath-transfer-CS-PO-2026-12345678.pdf');
+        expect(file.pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      }
+    }
+  });
+
+  it('issues no transfer receipt before the money is sent, or to another caregiver', async () => {
+    prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout({ status: 'PROCESSING' }));
+    await expect(service.receipt(caregiver, 'pr-1')).rejects.toBeInstanceOf(BadRequestException);
+    prisma.payoutRequest.findUnique.mockResolvedValue(receiptPayout());
+    const other: AuthUser = { sub: 'u-other', role: 'CAREGIVER', phone: '+923007777777' };
+    await expect(service.receipt(other, 'pr-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('alerts the admins when a caregiver requests a payout', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payoutAccount.findFirst.mockResolvedValue({ id: 'acc-1' });
+    prisma.payment.findMany.mockResolvedValue([{ id: 'pay-1', caregiverAmount: 5000 }]);
+    prisma.payoutRequest.create.mockResolvedValue({ id: 'pr-9', amount: 5000 });
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+    await service.createPayoutRequest(caregiver, { payoutAccountId: 'acc-1', amount: 5000 });
+    expect(notifications.notifyAdmins).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'payout.requested' }),
     );
   });
 
