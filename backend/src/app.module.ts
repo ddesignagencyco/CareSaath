@@ -32,6 +32,7 @@ import { AdminSafetyModule } from './admin/safety.module.js';
 import { PlatformConfigModule } from './config/platform-config.module.js';
 import { RetentionModule } from './common/retention/retention.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
+import { EmailModule } from './email/email.module.js';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { RealtimeModule } from './realtime/realtime.module.js';
     AdminSafetyModule,
     PlatformConfigModule,
     RetentionModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [
