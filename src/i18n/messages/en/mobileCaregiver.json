@@ -1,0 +1,118 @@
+{
+  "pickers": {
+    "chooseTime": "Choose time",
+    "chooseDate": "Choose date",
+    "setTime": "Set {time}",
+    "hour": "Hour",
+    "minute": "Minutes",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month"
+  },
+  "today": {
+    "stepOf": "Step {step} of {total}",
+    "nextStep": {
+      "CONFIRMED": "Start travel",
+      "EN_ROUTE": "Check in",
+      "CHECKED_IN": "Check out",
+      "IN_PROGRESS": "Check out",
+      "CHECKED_OUT": "Write visit note"
+    },
+    "liveLabel": {
+      "EN_ROUTE": "On the way",
+      "CHECKED_IN": "With the patient",
+      "IN_PROGRESS": "With the patient",
+      "CHECKED_OUT": "Note pending"
+    },
+    "requestsCta": "Review",
+    "withdraw": "Withdraw",
+    "stats": {
+      "requests": "Requests",
+      "visitsToday": "Visits today",
+      "balance": "To withdraw"
+    }
+  },
+  "visit": {
+    "visitSteps": "Visit steps",
+    "safety": "Safety",
+    "noteCount": "{count}/4000",
+    "familyCodeTitle": "Family's arrival code",
+    "gpsUsing": "Using the patient's address as your location"
+  },
+  "more": {
+    "title": "More",
+    "sectionWork": "Your work",
+    "sectionProfile": "Profile & safety",
+    "visitsHint": "Upcoming and past visits",
+    "earningsHint": "Balance, payouts and accounts",
+    "availabilityHint": "Weekly hours and time off",
+    "profileHint": "Details, credentials and documents",
+    "reportsHint": "Safety reports and disputes"
+  },
+  "availability": {
+    "windowLabel": "Window {n}",
+    "from": "From",
+    "until": "Until"
+  },
+  "profile": {
+    "photo": "Profile photo",
+    "editProfile": "Edit profile",
+    "title": "My profile",
+    "edit": "Edit",
+    "notAdded": "Not added",
+    "yearsValue": "{n, plural, one {# year} other {# years}}",
+    "perVisit": "{amount} per visit",
+    "editTitle": "Edit profile details"
+  },
+  "status": {
+    "settings": "Settings",
+    "steps": "Review steps"
+  },
+  "onboarding": {
+    "back": "Back"
+  },
+  "requests": {
+    "youEarn": "You earn per visit",
+    "afterCommission": "after {pct}% commission",
+    "familyPays": "Family pays {amount}"
+  },
+  "notifications": {
+    "newLabel": "New",
+    "events": {
+      "cashInitiated": {
+        "title": "Cash payment coming",
+        "body": "The family will pay {amount} in cash. Confirm once you receive it."
+      },
+      "cashCustomerConfirmed": {
+        "title": "Family handed over the cash",
+        "body": "Confirm you received {amount} to close the visit."
+      },
+      "paymentPaid": {
+        "title": "Payment verified",
+        "body": "{amount} is now part of your earnings."
+      },
+      "bookingCompleted": {
+        "title": "Booking completed",
+        "body": "All visits in this booking are done."
+      },
+      "reviewReceived": {
+        "title": "New review",
+        "body": "A family rated your visit."
+      },
+      "payoutTransferred": {
+        "title": "Payout sent",
+        "body": "Confirm once {amount} reaches your account."
+      },
+      "verificationApproved": {
+        "title": "Verification approved",
+        "body": "You can now receive booking requests."
+      },
+      "verificationRejected": {
+        "title": "Verification needs changes",
+        "body": "Open your status to see what to fix."
+      }
+    }
+  },
+  "cash": {
+    "waitingFamily": "You confirmed receiving the cash. Waiting for the family to confirm handing it over; then you can complete the visit."
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "specialty": {
+    "NURSING": "Nursing",
+    "PHYSIOTHERAPY": "Physiotherapy",
+    "POST_SURGERY_CARE": "Post-surgery care",
+    "ELDERLY_CARE": "Elderly care"
+  },
+  "specialtyHint": {
+    "NURSING": "Injections, IV, wound care, vitals",
+    "PHYSIOTHERAPY": "Rehab, mobility, post-stroke therapy",
+    "POST_SURGERY_CARE": "Dressings, drains, recovery support",
+    "ELDERLY_CARE": "Daily care and companionship"
+  },
+  "licenseBody": {
+    "PNC": "Pakistan Nursing Council",
+    "PMDC": "Pakistan Medical & Dental Council",
+    "OTHER": "Other body"
+  },
+  "licenseBodyOption": {
+    "PNC": "Pakistan Nursing Council",
+    "PMDC": "Pakistan Medical & Dental Council",
+    "OTHER": "Other professional body"
+  },
+  "licenseBodyHint": {
+    "PNC": "Nurses",
+    "PMDC": "Doctors and some allied health",
+    "OTHER": "e.g. physiotherapy association"
+  },
+  "docType": {
+    "LICENSE": "Professional license",
+    "CERTIFICATE": "Certificate",
+    "CNIC_COPY": "CNIC copy",
+    "OTHER": "Other document"
+  },
+  "visitCaregiver": {
+    "REQUESTED": "Awaiting your response",
+    "CONFIRMED": "Scheduled",
+    "EN_ROUTE": "On the way",
+    "CHECKED_IN": "Checked in",
+    "IN_PROGRESS": "In progress",
+    "CHECKED_OUT": "Note pending",
+    "COMPLETED": "Completed",
+    "DECLINED": "Declined",
+    "CANCELLED": "Cancelled"
+  },
+  "visitCustomer": {
+    "REQUESTED": "Waiting for caregiver",
+    "CONFIRMED": "Confirmed",
+    "EN_ROUTE": "Caregiver on the way",
+    "CHECKED_IN": "Caregiver has arrived",
+    "IN_PROGRESS": "Care in progress",
+    "CHECKED_OUT": "Finishing up",
+    "COMPLETED": "Completed",
+    "DECLINED": "Declined",
+    "CANCELLED": "Cancelled"
+  },
+  "timeline": {
+    "REQUESTED": "Requested",
+    "CONFIRMED": "Confirmed",
+    "EN_ROUTE": "Started travel",
+    "CHECKED_IN": "Checked in",
+    "IN_PROGRESS": "Care started",
+    "CHECKED_OUT": "Checked out",
+    "COMPLETED": "Visit note submitted",
+    "DECLINED": "Declined",
+    "CANCELLED": "Cancelled"
+  },
+  "bookingCustomer": {
+    "REQUESTED": "Waiting for caregiver",
+    "CONFIRMED": "Confirmed",
+    "DECLINED": "Declined",
+    "CANCELLED": "Cancelled",
+    "COMPLETED": "Completed"
+  },
+  "bookingCaregiver": {
+    "REQUESTED": "Requested",
+    "CONFIRMED": "Accepted",
+    "DECLINED": "Declined",
+    "CANCELLED": "Cancelled",
+    "COMPLETED": "Completed"
+  },
+  "payout": {
+    "REQUESTED": "Requested",
+    "PROCESSING": "Processing",
+    "PAID": "Paid",
+    "REJECTED": "Rejected",
+    "TRANSFERRED": "Transferred"
+  },
+  "payoutAccount": {
+    "BANK": "Bank account",
+    "MOBILE_WALLET": "Mobile wallet"
+  },
+  "priority": {
+    "LOW": "Low",
+    "MEDIUM": "Medium",
+    "HIGH": "High",
+    "CRITICAL": "Critical"
+  },
+  "incidentStatus": {
+    "OPEN": "Open",
+    "IN_REVIEW": "In review",
+    "RESOLVED": "Resolved"
+  },
+  "incidentSource": {
+    "CUSTOMER_COMPLAINT": "Customer complaint",
+    "CAREGIVER_REPORT": "Caregiver report",
+    "SOS": "SOS alert"
+  },
+  "dispute": {
+    "OPEN": "Open",
+    "RESOLVED": "Resolved"
+  },
+  "paymentMethod": {
+    "CASH": "Cash",
+    "CARD": "Card",
+    "JAZZCASH": "JazzCash",
+    "EASYPAISA": "Easypaisa"
+  },
+  "paymentStatus": {
+    "PENDING": "Pending",
+    "PAID": "Paid",
+    "FAILED": "Failed",
+    "REFUNDED": "Refunded"
+  },
+  "relation": {
+    "SELF": "Myself",
+    "FAMILY_MEMBER": "Family member"
+  },
+  "gender": {
+    "Female": "Female",
+    "Male": "Male",
+    "Other": "Other"
+  },
+  "role": {
+    "CUSTOMER": "Customer",
+    "CAREGIVER": "Caregiver",
+    "ADMIN": "Admin"
+  },
+  "time": {
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "yesterday": "Yesterday",
+    "everyDay": "Every day",
+    "weekdays": "Weekdays",
+    "ageYears": "{n} yrs",
+    "justNow": "just now"
+  },
+  "patient": {
+    "self": "Booked by self",
+    "family": "Family member"
+  },
+  "verification": {
+    "PENDING": "Pending",
+    "APPROVED": "Approved",
+    "REJECTED": "Rejected",
+    "SUSPENDED": "Suspended"
+  },
+  "userStatus": {
+    "ACTIVE": "Account active",
+    "SUSPENDED": "Account suspended",
+    "DEACTIVATED": "Account deactivated"
+  },
+  "visitAdmin": {
+    "REQUESTED": "Visit requested",
+    "CONFIRMED": "Visit confirmed",
+    "EN_ROUTE": "Visit en route",
+    "CHECKED_IN": "Visit checked in",
+    "IN_PROGRESS": "Visit in progress",
+    "CHECKED_OUT": "Visit checked out",
+    "COMPLETED": "Visit completed",
+    "DECLINED": "Visit declined",
+    "CANCELLED": "Visit cancelled"
+  },
+  "licenseBodyShort": {
+    "PNC": "PNC",
+    "PMDC": "PMDC",
+    "OTHER": "Other"
+  }
+}

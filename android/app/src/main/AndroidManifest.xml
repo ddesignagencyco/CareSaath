@@ -1,6 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Short tick when a swiped chat message snaps to reply. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Saving chat photos/videos to the gallery; Android 10+ needs no permission for that. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Address pin, GPS check-in/out (FR-CG7) and SOS location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
       android:name=".MainApplication"

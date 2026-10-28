@@ -1,0 +1,118 @@
+{
+  "pickers": {
+    "chooseTime": "وقت منتخب کریں",
+    "chooseDate": "تاریخ منتخب کریں",
+    "setTime": "{time} مقرر کریں",
+    "hour": "گھنٹہ",
+    "minute": "منٹ",
+    "prevMonth": "پچھلا مہینہ",
+    "nextMonth": "اگلا مہینہ"
+  },
+  "today": {
+    "stepOf": "مرحلہ {step} از {total}",
+    "nextStep": {
+      "CONFIRMED": "روانہ ہوں",
+      "EN_ROUTE": "چیک اِن کریں",
+      "CHECKED_IN": "چیک آؤٹ کریں",
+      "IN_PROGRESS": "چیک آؤٹ کریں",
+      "CHECKED_OUT": "وزٹ نوٹ لکھیں"
+    },
+    "liveLabel": {
+      "EN_ROUTE": "راستے میں",
+      "CHECKED_IN": "مریض کے پاس",
+      "IN_PROGRESS": "مریض کے پاس",
+      "CHECKED_OUT": "نوٹ باقی ہے"
+    },
+    "requestsCta": "دیکھیں",
+    "withdraw": "رقم نکالیں",
+    "stats": {
+      "requests": "درخواستیں",
+      "visitsToday": "آج کے وزٹ",
+      "balance": "نکلوانے کے لیے"
+    }
+  },
+  "visit": {
+    "visitSteps": "وزٹ کے مراحل",
+    "safety": "حفاظت",
+    "noteCount": "{count}/4000",
+    "familyCodeTitle": "گھر والوں کا آمد کا کوڈ",
+    "gpsUsing": "مریض کا پتہ آپ کی لوکیشن کے طور پر استعمال ہو رہا ہے"
+  },
+  "more": {
+    "title": "مزید",
+    "sectionWork": "آپ کا کام",
+    "sectionProfile": "پروفائل اور حفاظت",
+    "visitsHint": "آنے والے اور گزشتہ وزٹ",
+    "earningsHint": "بیلنس، ادائیگیاں اور اکاؤنٹس",
+    "availabilityHint": "ہفتہ وار اوقات اور چھٹی",
+    "profileHint": "تفصیلات، اسناد اور دستاویزات",
+    "reportsHint": "حفاظتی رپورٹس اور تنازعات"
+  },
+  "availability": {
+    "windowLabel": "وقت {n}",
+    "from": "سے",
+    "until": "تک"
+  },
+  "profile": {
+    "photo": "پروفائل تصویر",
+    "editProfile": "پروفائل میں ترمیم کریں",
+    "title": "میری پروفائل",
+    "edit": "ترمیم",
+    "notAdded": "شامل نہیں",
+    "yearsValue": "{n} سال",
+    "perVisit": "فی وزٹ {amount}",
+    "editTitle": "پروفائل کی تفصیلات میں ترمیم"
+  },
+  "status": {
+    "settings": "سیٹنگز",
+    "steps": "جانچ کے مراحل"
+  },
+  "onboarding": {
+    "back": "واپس"
+  },
+  "requests": {
+    "youEarn": "فی وزٹ آپ کی آمدنی",
+    "afterCommission": "{pct}% کمیشن کے بعد",
+    "familyPays": "خاندان {amount} ادا کرے گا"
+  },
+  "notifications": {
+    "newLabel": "نیا",
+    "events": {
+      "cashInitiated": {
+        "title": "نقد ادائیگی آنے والی ہے",
+        "body": "فیملی {amount} نقد ادا کرے گی۔ رقم ملنے پر تصدیق کریں۔"
+      },
+      "cashCustomerConfirmed": {
+        "title": "فیملی نے نقد رقم دے دی",
+        "body": "وزٹ مکمل کرنے کے لیے {amount} وصول ہونے کی تصدیق کریں۔"
+      },
+      "paymentPaid": {
+        "title": "ادائیگی کی تصدیق ہو گئی",
+        "body": "{amount} آپ کی آمدنی میں شامل ہو گئے۔"
+      },
+      "bookingCompleted": {
+        "title": "بکنگ مکمل",
+        "body": "اس بکنگ کے تمام وزٹ مکمل ہو گئے۔"
+      },
+      "reviewReceived": {
+        "title": "نیا ریویو",
+        "body": "ایک فیملی نے آپ کے وزٹ کو ریٹ کیا۔"
+      },
+      "payoutTransferred": {
+        "title": "ادائیگی بھیج دی گئی",
+        "body": "{amount} آپ کے اکاؤنٹ میں پہنچنے پر تصدیق کریں۔"
+      },
+      "verificationApproved": {
+        "title": "تصدیق منظور",
+        "body": "اب آپ کو بکنگ کی درخواستیں مل سکتی ہیں۔"
+      },
+      "verificationRejected": {
+        "title": "تصدیق میں تبدیلی درکار",
+        "body": "کیا درست کرنا ہے دیکھنے کے لیے اپنا اسٹیٹس کھولیں۔"
+      }
+    }
+  },
+  "cash": {
+    "waitingFamily": "آپ نے رقم وصول ہونے کی تصدیق کر دی۔ فیملی کی تصدیق کا انتظار ہے، اس کے بعد آپ وزٹ مکمل کر سکتے ہیں۔"
+  }
+}

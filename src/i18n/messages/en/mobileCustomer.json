@@ -1,0 +1,72 @@
+{
+  "find": {
+    "loadMore": "Show more"
+  },
+  "viewer": {
+    "openFile": "Open file"
+  },
+  "profile": {
+    "title": "Edit profile",
+    "button": "Edit profile",
+    "phone": "Mobile number",
+    "phoneHint": "Your number is how you sign in. Contact support to change it.",
+    "nameHint": "Shown to caregivers on your bookings.",
+    "aboutTitle": "About",
+    "yearsLabel": "{n, plural, one {year of experience} other {years of experience}}",
+    "verifiedBy": "Licence verified by {body}"
+  },
+  "home": {
+    "searchTitle": "Find a nurse or physio",
+    "searchHint": "Search by service and city",
+    "servicesTitle": "Browse by service",
+    "upcomingEmpty": "No visits planned yet",
+    "upcomingEmptyText": "Book a verified caregiver and your visits show up here."
+  },
+  "account": {
+    "careGroup": "Care for your family",
+    "accountGroup": "Your account"
+  },
+  "book": {
+    "stepOf": "Step {step} of {total}"
+  },
+  "notifications": {
+    "emptyText": "Booking replies, visit updates and payments will show here.",
+    "events": {
+      "cashCaregiverConfirmed": {
+        "title": "Caregiver received your cash",
+        "body": "Confirm {amount} on your side to finish the payment."
+      },
+      "bookingCompleted": {
+        "title": "Booking completed",
+        "body": "All visits in this booking are done. Rate your caregiver."
+      },
+      "paymentFailed": {
+        "title": "Payment failed",
+        "body": "Try again or pay another way."
+      }
+    }
+  },
+  "payment": {
+    "cashHint": "After you hand the cash to the caregiver, confirm it here. The visit closes once you both confirm.",
+    "confirmCash": "I've handed over the cash",
+    "confirmCashTitle": "Confirm you paid in cash?",
+    "confirmCashBody": "You handed {amount} in cash to the caregiver for this visit.",
+    "confirmCashNote": "The caregiver confirms receiving it too. This can't be undone.",
+    "confirmCashYes": "Yes, I paid",
+    "cashConfirmedToast": "Thanks, cash payment confirmed",
+    "waitingCaregiver": "You confirmed paying. Waiting for the caregiver to confirm receiving the cash."
+  },
+  "dob": {
+    "placeholder": "Choose date of birth",
+    "chooseYear": "Year of birth",
+    "chooseMonth": "Month",
+    "chooseDay": "Day",
+    "year": "Year",
+    "month": "Month",
+    "day": "Day",
+    "clear": "Clear date of birth"
+  },
+  "visit": {
+    "checkId": "Check their ID when they arrive: <b>{name}</b>, a {body}-verified caregiver."
+  }
+}

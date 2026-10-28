@@ -52,12 +52,18 @@ react {
 
     /* Autolinking */
     autolinkLibrariesWithApp()
+
+    // `-PbundleDebugJs` packs the JS into the debug APK so it runs on any phone
+    // without Metro (a shareable test build); without it, debug loads from Metro.
+    if (project.hasProperty("bundleDebugJs")) {
+        debuggableVariants = []
+    }
 }
 
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = false
+def enableProguardInReleaseBuilds = true
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -102,7 +108,18 @@ android {
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
+            // R8 removes unused code; this then drops resources nothing references.
+            shrinkResources enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+    // One APK per CPU type: each phone gets only its own native libraries.
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a", "armeabi-v7a"
+            universalApk false
         }
     }
 }

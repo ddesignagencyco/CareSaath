@@ -8,3 +8,14 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# Native modules looked up by name from JS/C++ (R8 can't see those uses).
+-keep class com.margelo.nitro.** { *; }
+-keep class com.ReactNativeBlobUtil.** { *; }
+-keep class com.reactnativecommunity.clipboard.** { *; }
+-keep class com.reactnativecommunity.cameraroll.** { *; }
+-keep class com.brentvatne.** { *; }
+-keep class com.reactnativecommunity.geolocation.** { *; }
+-keep class com.imagepicker.** { *; }
+-keep class com.reactnativedocumentpicker.** { *; }
+-dontwarn com.facebook.react.**
