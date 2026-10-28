@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private transporter: nodemailer.Transporter;
+  private readonly logger = new Logger(EmailService.name);
+  private transporter!: ReturnType<typeof nodemailer.createTransport>;
 
   constructor(private configService: ConfigService) {
     this.initializeTransporter();
@@ -32,7 +33,7 @@ export class EmailService {
       });
       return result;
     } catch (error) {
-      console.error('Email send error:', error);
+      this.logger.error(`Failed to send email to ${to}: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -42,7 +43,7 @@ export class EmailService {
       await this.transporter.verify();
       return { success: true, message: 'SMTP connection successful' };
     } catch (error) {
-      return { success: false, message: error.message };
+      return { success: false, message: (error as Error).message };
     }
   }
 }

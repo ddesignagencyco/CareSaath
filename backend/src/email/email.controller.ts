@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Get } from '@nestjs/common';
-import { EmailService } from './email.service';
+import { EmailService } from './email.service.js';
 
 @Controller('api/v1/email')
 export class EmailController {

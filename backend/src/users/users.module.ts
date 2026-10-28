@@ -12,13 +12,16 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Language } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { EmailModule } from '../email/email.module.js';
+import { EmailService } from '../email/email.service.js';
+import { renderWelcomeEmail } from '../email/templates.js';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'Ayesha Khan', description: 'User full display name' })
@@ -32,6 +35,11 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsEnum(Language)
   preferredLanguage?: Language;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Email for account updates (booking, payment, verification notifications)' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 }
 
 export class EmergencyContactDto {
@@ -54,6 +62,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly email?: EmailService,
   ) {}
 
   async getMe(user: AuthUser) {
@@ -62,6 +71,7 @@ export class UsersService {
       select: {
         id: true,
         phone: true,
+        email: true,
         role: true,
         fullName: true,
         preferredLanguage: true,
@@ -78,6 +88,10 @@ export class UsersService {
   }
 
   async updateMe(user: AuthUser, dto: UpdateProfileDto) {
+    const before =
+      dto.email !== undefined
+        ? await this.prisma.user.findUnique({ where: { id: user.sub }, select: { email: true } })
+        : null;
     const updated = await this.prisma.user.update({
       where: { id: user.sub },
       data: {
@@ -85,8 +99,9 @@ export class UsersService {
         ...(dto.preferredLanguage !== undefined
           ? { preferredLanguage: dto.preferredLanguage }
           : {}),
+        ...(dto.email !== undefined ? { email: dto.email } : {}),
       },
-      select: { id: true, phone: true, fullName: true, preferredLanguage: true },
+      select: { id: true, phone: true, email: true, fullName: true, preferredLanguage: true, role: true },
     });
     await this.audit.log({
       actorId: user.sub,
@@ -94,6 +109,18 @@ export class UsersService {
       entityType: 'User',
       entityId: user.sub,
     });
+    // First time this account gets an email on file: welcome them there too.
+    if (dto.email && !before?.email && updated.email) {
+      this.email
+        ?.sendEmail(
+          updated.email,
+          'Welcome to CareSaath',
+          renderWelcomeEmail({ name: updated.fullName, role: updated.role }),
+        )
+        .catch(() => {
+          // Never fail the profile update over a welcome email.
+        });
+    }
     return updated;
   }
 
@@ -185,6 +212,7 @@ export class UsersController {
 }
 
 @Module({
+  imports: [EmailModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -9,15 +9,21 @@ import {
 
 const user: AuthUser = { sub: 'u-1', role: 'CUSTOMER', phone: '+923001234567' };
 
+function emailServiceMock() {
+  return { sendEmail: vi.fn().mockResolvedValue(undefined) };
+}
+
 describe('UsersService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let audit: ReturnType<typeof createAuditMock>;
+  let email: ReturnType<typeof emailServiceMock>;
   let service: UsersService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     audit = createAuditMock();
-    service = new UsersService(prisma as never, audit as never);
+    email = emailServiceMock();
+    service = new UsersService(prisma as never, audit as never, email as never);
   });
 
   it('throws when the user record is missing', async () => {
@@ -37,6 +43,35 @@ describe('UsersService', () => {
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.profile.updated' }),
     );
+    expect(email.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('sends a welcome email the first time an email is added', async () => {
+    prisma.user.findUnique.mockResolvedValue({ email: null });
+    prisma.user.update.mockResolvedValue({
+      id: 'u-1',
+      fullName: 'Ali',
+      email: 'ali@example.com',
+      role: 'CUSTOMER',
+    });
+    await service.updateMe(user, { email: 'ali@example.com' });
+    expect(email.sendEmail).toHaveBeenCalledWith(
+      'ali@example.com',
+      'Welcome to CareSaath',
+      expect.stringContaining('Welcome to CareSaath'),
+    );
+  });
+
+  it('does not re-send the welcome email when the address is already on file', async () => {
+    prisma.user.findUnique.mockResolvedValue({ email: 'ali@example.com' });
+    prisma.user.update.mockResolvedValue({
+      id: 'u-1',
+      fullName: 'Ali',
+      email: 'ali@example.com',
+      role: 'CUSTOMER',
+    });
+    await service.updateMe(user, { email: 'ali@example.com' });
+    expect(email.sendEmail).not.toHaveBeenCalled();
   });
 
   it('refuses to delete an emergency contact owned by another user', async () => {

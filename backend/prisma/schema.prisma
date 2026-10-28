@@ -101,6 +101,7 @@ enum NotificationChannel {
   SMS
   WHATSAPP
   PUSH
+  EMAIL
 }
 
 enum NotificationStatus {
@@ -181,6 +182,7 @@ enum DisputeStatus {
 model User {
   id                String       @id @default(uuid())
   phone             String       @unique
+  email             String?      @unique
   role              UserRole     @default(CUSTOMER)
   fullName          String       @default("")
   preferredLanguage Language     @default(EN)
