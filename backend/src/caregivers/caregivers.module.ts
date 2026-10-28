@@ -45,6 +45,7 @@ import {
   LicenseBody,
   Prisma,
   Specialty,
+  StrikeReason,
   VerificationStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
@@ -650,6 +651,65 @@ export class CaregiversService {
     });
     return { ok: true as const };
   }
+
+  /**
+   * Record a decline / late-arrival / no-show strike. Crossing
+   * caregiver.strikeThreshold auto-suspends the caregiver (reuses
+   * VerificationStatus.SUSPENDED) and alerts both the caregiver and admins.
+   */
+  async recordStrike(caregiverId: string, reason: StrikeReason, bookingId?: string): Promise<void> {
+    await this.prisma.caregiverStrike.create({
+      data: { caregiverId, bookingId: bookingId ?? null, reason },
+    });
+    const profile = await this.prisma.caregiverProfile.update({
+      where: { id: caregiverId },
+      data: { strikeCount: { increment: 1 } },
+    });
+    await this.audit.log({
+      actorId: null,
+      action: 'caregiver.strike.recorded',
+      entityType: 'CaregiverProfile',
+      entityId: caregiverId,
+      metadata: { reason, bookingId: bookingId ?? null, strikeCount: profile.strikeCount },
+    });
+    await this.notifications?.notify({
+      userId: profile.userId,
+      event: 'caregiver.strike.recorded',
+      payload: { reason, strikeCount: profile.strikeCount },
+      message: `A strike (${reason.replace(/_/g, ' ').toLowerCase()}) was recorded on your account.`,
+    });
+
+    const threshold = await this.config.getNumber('caregiver.strikeThreshold');
+    if (profile.strikeCount < threshold || profile.verificationStatus === VerificationStatus.SUSPENDED) {
+      return;
+    }
+    await this.prisma.caregiverProfile.update({
+      where: { id: caregiverId },
+      data: { verificationStatus: VerificationStatus.SUSPENDED },
+    });
+    await this.audit.log({
+      actorId: null,
+      action: 'caregiver.auto_suspended',
+      entityType: 'CaregiverProfile',
+      entityId: caregiverId,
+      metadata: { strikeCount: profile.strikeCount, threshold },
+    });
+    await this.notifications?.notify({
+      userId: profile.userId,
+      event: 'caregiver.suspended',
+      payload: { strikeCount: profile.strikeCount },
+      message: `Your account was suspended after reaching ${profile.strikeCount} strikes.`,
+    });
+    await this.notifications?.notifyAdmins({
+      event: 'caregiver.suspended.admin',
+      payload: { caregiverId, strikeCount: profile.strikeCount },
+      message: `A caregiver was auto-suspended after ${profile.strikeCount} strikes.`,
+    });
+    this.realtime?.entityUpdated(
+      { users: [profile.userId], roles: ['ADMIN'] },
+      { type: 'caregiver', id: caregiverId, action: 'suspended', status: VerificationStatus.SUSPENDED },
+    );
+  }
 }
 
 @ApiTags('Caregiver - Profile')
@@ -811,5 +871,6 @@ export class PublicCaregiverController {
   imports: [PlatformConfigModule, AuthModule, NotificationsModule],
   controllers: [CaregiverController, PublicCaregiverController],
   providers: [CaregiversService],
+  exports: [CaregiversService],
 })
 export class CaregiversModule {}

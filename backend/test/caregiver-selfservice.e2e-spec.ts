@@ -43,6 +43,7 @@ describe('Caregiver availability & profile (e2e)', () => {
   afterAll(async () => {
     await prisma.availabilityRule.deleteMany({ where: { caregiverId: profileId } });
     await prisma.availabilityBlock.deleteMany({ where: { caregiverId: profileId } });
+    await prisma.caregiverStrike.deleteMany({ where: { caregiverId: profileId } });
     await prisma.caregiverProfile.deleteMany({ where: { id: profileId } });
     await prisma.user.deleteMany({ where: { id: userId } });
     await close();

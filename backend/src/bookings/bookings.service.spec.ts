@@ -38,6 +38,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const promos = { quote: vi.fn(), redeem: vi.fn() };
   const storage = { validateUpload: vi.fn(), put: vi.fn(), presignedGet: vi.fn() };
   const config = { getNumber: vi.fn().mockResolvedValue(60) };
+  const caregivers = { recordStrike: vi.fn().mockResolvedValue(undefined) };
   const service = new BookingsService(
     prisma as never,
     audit as never,
@@ -45,8 +46,9 @@ function makeService(overrides: Record<string, unknown> = {}) {
     promos as never,
     storage as never,
     config as never,
+    caregivers as never,
   );
-  return { service, prisma, audit, notifications, promos, storage, config };
+  return { service, prisma, audit, notifications, promos, storage, config, caregivers };
 }
 
 describe('BookingsService.accept', () => {
@@ -125,6 +127,29 @@ describe('BookingsService.accept', () => {
         booking: { customerId: 'cust-1', caregiverId: 'cg-1', id: { not: 'b-1' } },
       },
     });
+  });
+});
+
+describe('BookingsService.decline', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('records a DECLINED strike on the caregiver', async () => {
+    const { service, prisma, caregivers } = makeService();
+    prisma.booking.findFirst.mockResolvedValue({ id: 'b-1', status: BookingStatus.REQUESTED, customerId: 'cust-1' });
+    prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
+    );
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'b-1',
+      status: BookingStatus.DECLINED,
+      customerId: 'cust-1',
+      caregiverId: 'cg-1',
+      prescriptions: [],
+    });
+
+    await service.decline(caregiverUser, 'b-1', {});
+
+    expect(caregivers.recordStrike).toHaveBeenCalledWith('cg-1', 'DECLINED', 'b-1');
   });
 });
 

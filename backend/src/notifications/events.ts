@@ -68,6 +68,11 @@ export const NOTIFICATION_EVENTS: Record<string, NotificationEventDefinition> = 
   'caregiver.document.uploaded': { audience: ADMIN, title: 'Caregiver uploaded a document' },
   'caregiver.verification.approved': { audience: CAREGIVER, title: 'Verification approved' },
   'caregiver.verification.rejected': { audience: CAREGIVER, title: 'Verification rejected' },
+
+  // ---- Caregiver strikes (declined bookings / late arrivals / no-shows)
+  'caregiver.strike.recorded': { audience: CAREGIVER, title: 'A strike was recorded on your account' },
+  'caregiver.suspended': { audience: CAREGIVER, title: 'Your account has been suspended' },
+  'caregiver.suspended.admin': { audience: ADMIN, title: 'Caregiver auto-suspended for repeated strikes' },
 };
 
 export function eventDefinition(event: string): NotificationEventDefinition | undefined {

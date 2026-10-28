@@ -111,6 +111,7 @@ describe('Phase 9 completions (e2e)', () => {
     await prisma.emergencyContact.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.caregiverDocument.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.credentialReview.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
+    await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.caregiverProfile.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await flushOtpKeys(redis);

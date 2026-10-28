@@ -58,6 +58,7 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
 
 /** FR-CG7 check-in OTP verification limits. */
 const CHECKIN_OTP_MAX_ATTEMPTS = 5;
@@ -77,6 +78,14 @@ const OPEN_VISIT_STATUSES: VisitStatus[] = [
   VisitStatus.IN_PROGRESS,
   VisitStatus.CHECKED_OUT,
 ];
+
+/** Combine a visit's scheduled date with its time-window start into one instant (UTC). */
+export function scheduledStartAt(visit: { scheduledDate: Date; timeWindowStart: string }): Date {
+  const [hours, minutes] = visit.timeWindowStart.split(':').map(Number);
+  const start = new Date(visit.scheduledDate);
+  start.setUTCHours(hours, minutes, 0, 0);
+  return start;
+}
 
 /** Great-circle distance in metres between two WGS84 points. */
 export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -214,6 +223,7 @@ export class VisitsService {
     private readonly redis: RedisService,
     private readonly sms: SmsService,
     private readonly config: ConfigService,
+    private readonly caregivers: CaregiversService,
     @Optional() private readonly storage?: StorageService,
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
@@ -562,12 +572,29 @@ export class VisitsService {
     } else {
       await this.verifyCheckInOtp(id, dto.code);
     }
-    return this.runCaregiverTransition(user, id, VisitStatus.CHECKED_IN, {
-      checkInAt: new Date(),
+    const checkInAt = new Date();
+    const result = await this.runCaregiverTransition(user, id, VisitStatus.CHECKED_IN, {
+      checkInAt,
       checkInMethod: method,
       checkInLat: dto.lat ?? null,
       checkInLng: dto.lng ?? null,
     });
+    await this.assertNotLate(visit, checkInAt);
+    return result;
+  }
+
+  /** A caregiver who checks in well past their window start gets a strike. */
+  private async assertNotLate(
+    visit: { booking: { caregiver: { id: string } | null }; bookingId: string; scheduledDate: Date; timeWindowStart: string },
+    checkInAt: Date,
+  ): Promise<void> {
+    const caregiverId = visit.booking.caregiver?.id;
+    if (!caregiverId) return;
+    const graceMinutes = await this.config.getNumber('visit.lateArrivalGraceMinutes');
+    const deadline = new Date(scheduledStartAt(visit).getTime() + graceMinutes * 60 * 1000);
+    if (checkInAt > deadline) {
+      await this.caregivers.recordStrike(caregiverId, 'LATE_ARRIVAL', visit.bookingId);
+    }
   }
 
   /** FR-CG7: check out; care moves to IN_PROGRESS then CHECKED_OUT. */
@@ -766,7 +793,7 @@ export class CustomerVisitsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PlatformConfigModule],
+  imports: [NotificationsModule, PlatformConfigModule, CaregiversModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
   providers: [VisitsService, SmsService],
   exports: [VisitsService],

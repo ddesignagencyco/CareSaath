@@ -60,6 +60,7 @@ import { NotificationsModule, NotificationsService } from '../notifications/noti
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 import { distanceMeters } from '../visits/visits.module.js';
+import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -259,6 +260,7 @@ export class BookingsService {
     private readonly promos: PromosService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly caregivers: CaregiversService,
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
@@ -724,6 +726,7 @@ export class BookingsService {
     });
     await this.notifyCustomer(booking.customerId, 'booking.declined', { bookingId: id });
     this.bookingChanged(id, 'declined', BookingStatus.DECLINED, booking.customerId, user.sub);
+    await this.caregivers.recordStrike(caregiverId, 'DECLINED', id);
     return this.getBooking(id);
   }
 
@@ -1017,7 +1020,7 @@ export class CaregiverBookingsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PromosModule, PlatformConfigModule],
+  imports: [NotificationsModule, PromosModule, PlatformConfigModule, CaregiversModule],
   controllers: [CustomerBookingsController, CaregiverBookingsController],
   providers: [BookingsService],
   exports: [BookingsService],

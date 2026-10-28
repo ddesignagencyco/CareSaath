@@ -53,6 +53,7 @@ describe('Caregiver onboarding -> verification (e2e)', () => {
       });
       await prisma.caregiverDocument.deleteMany({ where: { caregiverId: { in: profileIds } } });
       await prisma.notification.deleteMany({ where: { userId: caregiverUserId } });
+      await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: caregiverUserId } } });
       await prisma.caregiverProfile.deleteMany({ where: { userId: caregiverUserId } });
       await prisma.user.deleteMany({ where: { id: caregiverUserId } });
     }
