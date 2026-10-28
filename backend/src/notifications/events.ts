@@ -73,6 +73,9 @@ export const NOTIFICATION_EVENTS: Record<string, NotificationEventDefinition> = 
   'caregiver.strike.recorded': { audience: CAREGIVER, title: 'A strike was recorded on your account' },
   'caregiver.suspended': { audience: CAREGIVER, title: 'Your account has been suspended' },
   'caregiver.suspended.admin': { audience: ADMIN, title: 'Caregiver auto-suspended for repeated strikes' },
+
+  // ---- Doctor-authored medical orders (diagnosis / medicines / lab tests)
+  'medical_order.created': { audience: CUSTOMER, title: 'New prescription from your visit' },
 };
 
 export function eventDefinition(event: string): NotificationEventDefinition | undefined {

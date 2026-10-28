@@ -23,6 +23,7 @@ import { BookingsModule } from './bookings/bookings.module.js';
 import { BookingExpiryModule } from './bookings/booking-expiry.service.js';
 import { VisitsModule } from './visits/visits.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
+import { MedicalOrdersModule } from './medical-orders/medical-orders.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { PayoutsModule } from './payouts/payouts.module.js';
 import { CommissionsModule } from './commissions/commissions.module.js';
@@ -55,6 +56,7 @@ import { EmailModule } from './email/email.module.js';
     BookingExpiryModule,
     VisitsModule,
     FeedbackModule,
+    MedicalOrdersModule,
     PaymentsModule,
     PayoutsModule,
     CommissionsModule,

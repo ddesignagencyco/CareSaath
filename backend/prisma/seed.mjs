@@ -163,6 +163,36 @@ const CAREGIVERS = [
     ratingAverage: '0.00',
     ratingCount: 0,
   },
+  {
+    phone: '+923001110021',
+    fullName: 'Dr. Hira Siddiqui',
+    cnicPlain: '35201-5555555-5',
+    licenseNumber: 'PMDC-500005',
+    licenseBody: 'PMDC',
+    specialty: Specialty.DOCTOR,
+    experienceYears: 12,
+    bio: 'General physician; house calls for diagnosis, prescriptions, and lab-test orders.',
+    ratePerVisit: 150000,
+    cities: ['Lahore'],
+    verificationStatus: 'APPROVED',
+    ratingAverage: '4.90',
+    ratingCount: 30,
+  },
+  {
+    phone: '+923001110022',
+    fullName: 'Dr. Usman Tariq',
+    cnicPlain: '35201-6666666-6',
+    licenseNumber: 'PMDC-600006',
+    licenseBody: 'PMDC',
+    specialty: Specialty.DOCTOR,
+    experienceYears: 6,
+    bio: 'Internal medicine; post-operative follow-up and chronic care visits.',
+    ratePerVisit: 120000,
+    cities: ['Lahore'],
+    verificationStatus: 'APPROVED',
+    ratingAverage: '4.60',
+    ratingCount: 14,
+  },
 ];
 
 const customers = [];
@@ -715,6 +745,8 @@ console.log(`  CAREGIVER ${CAREGIVERS[0].phone}  (${CAREGIVERS[0].fullName}, NUR
 console.log(`  CAREGIVER ${CAREGIVERS[1].phone}  (${CAREGIVERS[1].fullName}, PHYSIOTHERAPY, APPROVED)`);
 console.log(`  CAREGIVER ${CAREGIVERS[2].phone}  (${CAREGIVERS[2].fullName}, ELDERLY_CARE, APPROVED)`);
 console.log(`  CAREGIVER ${CAREGIVERS[3].phone}  (${CAREGIVERS[3].fullName}, POST_SURGERY_CARE, PENDING)`);
+console.log(`  DOCTOR    ${CAREGIVERS[4].phone}  (${CAREGIVERS[4].fullName}, DOCTOR, APPROVED)`);
+console.log(`  DOCTOR    ${CAREGIVERS[5].phone}  (${CAREGIVERS[5].fullName}, DOCTOR, APPROVED)`);
 console.log('=====================================================================\n');
 
 await prisma.$disconnect();

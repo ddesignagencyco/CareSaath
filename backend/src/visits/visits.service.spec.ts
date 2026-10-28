@@ -220,7 +220,9 @@ describe('VisitsService transitions', () => {
         caregivers as never,
       );
       const now = new Date();
-      const fixture = makeLateCheckFixture(now, `${now.getUTCHours().toString().padStart(2, '0')}:00`);
+      // Scheduled start == this instant's own hour:minute, so "now" is always on time.
+      const timeWindowStart = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
+      const fixture = makeLateCheckFixture(now, timeWindowStart);
       prisma.visit.findFirst.mockResolvedValue(fixture);
       prisma.visit.findUnique.mockResolvedValue(fixture);
       prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
