@@ -11,7 +11,8 @@ export type RealtimeEntityType =
   | 'dispute'
   | 'incident'
   | 'caregiver'
-  | 'review';
+  | 'review'
+  | 'chat_message';
 
 /** Who receives an event: specific users and/or everyone holding a role. */
 export interface Audience {
