@@ -18,10 +18,12 @@ describe('Health (e2e)', () => {
     await close();
   });
 
-  it('GET /api/v1/health reports postgres and redis up', async () => {
+  it('GET /api/v1/health responds immediately without checking dependencies', async () => {
+    // Deliberately dependency-free (see commit 01021ce): Render's load balancer
+    // hits this on a tight timeout before Postgres/Redis are necessarily ready.
     const res = await request(app.getHttpServer()).get('/api/v1/health');
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: 'ok', postgres: true, redis: true });
+    expect(res.body).toMatchObject({ status: 'ok' });
   });
 
   it('returns a consistent error shape for unknown routes', async () => {
