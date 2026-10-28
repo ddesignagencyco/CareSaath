@@ -14,6 +14,7 @@ import { Table, Td, Th, Tr } from "@shared/ui/table";
 import { payoutsApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import { USE_MOCKS } from "@/features/admin/lib/api/http";
+import { saveBlob } from "@shared/api/http";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import type { AdminPayoutRequest, PayoutStatus } from "@shared/types";
@@ -40,8 +41,15 @@ export default function PayoutsPage() {
     onSuccess: () => setAct(null),
   });
   const approve = useAction(({ id, note }: { id: string; note: string }) => payoutsApi.approve(id, { note: note || undefined }), opts(t("approved")));
-  const pay = useAction(({ id, note }: { id: string; note: string }) => payoutsApi.markPaid(id, { note: note || undefined }), opts(t("paid")));
+  const pay = useAction(({ id, note }: { id: string; note: string }) => payoutsApi.markTransferred(id, { note: note || undefined }), opts(t("transferred")));
   const reject = useAction(({ id, reason }: { id: string; reason: string }) => payoutsApi.reject(id, { reason }), opts(t("rejected")));
+  const receipt = useAction(
+    async (id: string) => {
+      const { blob, filename } = await payoutsApi.receipt(id);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
 
   const name = act?.payout.caregiver.user.fullName;
   const amount = act ? f.money(act.payout.amount) : "";
@@ -63,6 +71,7 @@ export default function PayoutsPage() {
           options={[
             { value: "REQUESTED", label: L.payout("REQUESTED") },
             { value: "PROCESSING", label: L.payout("PROCESSING") },
+            { value: "TRANSFERRED", label: L.payout("TRANSFERRED") },
             { value: "PAID", label: L.payout("PAID") },
             { value: "REJECTED", label: L.payout("REJECTED") },
           ]}
@@ -86,7 +95,7 @@ export default function PayoutsPage() {
                   <Th>{t("colAmount")}</Th>
                   <Th className="hidden sm:table-cell">{t("colRequested")}</Th>
                   <Th>{t("colStatus")}</Th>
-                  {(status === "REQUESTED" || status === "PROCESSING") && <Th>{t("colAction")}</Th>}
+                  {(status === "REQUESTED" || status === "PROCESSING" || status === "TRANSFERRED") && <Th>{t("colAction")}</Th>}
                 </tr>
               </thead>
               <tbody>
@@ -124,8 +133,29 @@ export default function PayoutsPage() {
                         <p className="text-xs text-ink-500">{f.relativeTime(p.requestedAt)}</p>
                       </Td>
                       <Td>
-                        <PayoutStatusBadge status={p.status} />
+                        <div className="flex items-center gap-2">
+                          <PayoutStatusBadge status={p.status} />
+                          {!USE_MOCKS && (p.status === "TRANSFERRED" || p.status === "PAID") && (
+                            <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
+                              {t("receipt")}
+                            </Button>
+                          )}
+                        </div>
                       </Td>
+                      {status === "TRANSFERRED" && (
+                        <Td>
+                          {p.issueReportedAt ? (
+                            <div className="flex flex-col items-start gap-1">
+                              <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
+                                {t("resend")}
+                              </Button>
+                              {p.issueNote && <span className="max-w-48 truncate text-xs text-danger-600" title={p.issueNote}>{p.issueNote}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-ink-400">{t("awaitingConfirm")}</span>
+                          )}
+                        </Td>
+                      )}
                       {(status === "REQUESTED" || status === "PROCESSING") && (
                         <Td>
                           <div className="flex gap-2">
@@ -138,7 +168,7 @@ export default function PayoutsPage() {
                               </Button>
                             ) : (
                               <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
-                                {t("markPaid")}
+                                {t("markTransferred")}
                               </Button>
                             )}
                           </div>

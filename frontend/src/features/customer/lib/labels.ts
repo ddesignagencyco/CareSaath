@@ -78,6 +78,8 @@ export function useDescribe(): (n: AppNotification) => NotificationView {
           return { title: t("bookingConfirmed.title"), body: t("bookingConfirmed.body"), href: booking, tone: "success" };
         case "booking.declined":
           return { title: t("bookingDeclined.title"), body: t("bookingDeclined.body"), href: booking, tone: "neutral" };
+        case "visit.confirmed":
+          return { title: t("visitConfirmed.title"), body: t("visitConfirmed.body"), href: visit, tone: "brand" };
         case "visit.en_route":
           return { title: t("enRoute.title"), body: t("enRoute.body"), href: visit, tone: "brand" };
         case "visit.checked_in":
@@ -88,6 +90,12 @@ export function useDescribe(): (n: AppNotification) => NotificationView {
           return { title: t("checkedOut.title"), body: t("checkedOut.body"), href: visit, tone: "brand" };
         case "visit.completed":
           return { title: t("completed.title"), body: t("completed.body"), href: visit, tone: "success" };
+        case "visit.declined":
+          return { title: t("visitDeclined.title"), body: t("visitDeclined.body"), href: booking, tone: "neutral" };
+        case "visit.cancelled":
+          return { title: t("visitCancelled.title"), body: t("visitCancelled.body"), href: visit, tone: "neutral" };
+        case "booking.completed":
+          return { title: t("bookingCompleted.title"), body: t("bookingCompleted.body"), href: booking, tone: "success" };
         case "visit.rescheduled":
           return { title: t("rescheduled.title"), body: "", href: visit, tone: "brand" };
         case "payment.paid":
@@ -97,6 +105,10 @@ export function useDescribe(): (n: AppNotification) => NotificationView {
             href: "/customer/account/payments",
             tone: "success",
           };
+        case "payment.cash.caregiver_confirmed":
+          return { title: t("cashCaregiverConfirmed.title"), body: t("cashCaregiverConfirmed.body"), href: visit, tone: "accent" };
+        case "payment.failed":
+          return { title: t("paymentFailed.title"), body: t("paymentFailed.body"), href: "/customer/account/payments", tone: "danger" };
         case "dispute.raised":
           return { title: t("disputeRaised.title"), body: t("disputeRaised.body"), href: null, tone: "danger" };
         case "dispute.resolved":

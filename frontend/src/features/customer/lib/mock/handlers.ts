@@ -687,6 +687,23 @@ export async function cancelPayment(id: string): Promise<CustomerPayment> {
   return clone(p);
 }
 
+/** Phase 15: customer confirms they handed over the cash; PAID once the caregiver has too. */
+export async function confirmCashCustomer(id: string): Promise<CustomerPayment> {
+  await delay(200);
+  const d = db();
+  const p = d.payments.find((x) => x.id === id) ?? notFound("Payment not found");
+  if (p.method !== "CASH") bad("Only cash payments are confirmed this way");
+  if (p.status === "PAID") return clone(p);
+  p.customerConfirmedAt = nowIso();
+  if (p.caregiverConfirmedAt) {
+    p.status = "PAID";
+    p.paidAt = nowIso();
+  }
+  p.updatedAt = nowIso();
+  persist();
+  return clone(p);
+}
+
 /* ---- Disputes & notifications ---------------------------------------------------- */
 
 export async function listDisputes(): Promise<DisputeRow[]> {
@@ -715,6 +732,14 @@ export async function listNotifications(q: PageQuery): Promise<Paginated<AppNoti
   simulate();
   const user = currentUser();
   return paginate(db().notifications.filter((n) => n.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), q);
+}
+
+/** Phase 15: GET /notifications/unread-count. */
+export async function unreadCount(): Promise<{ unread: number }> {
+  await delay(100);
+  simulate();
+  const user = currentUser();
+  return { unread: db().notifications.filter((n) => n.userId === user.id && n.channel === "PUSH" && !n.readAt).length };
 }
 
 export async function markNotifsRead(dto: { ids?: string[]; before?: string }): Promise<{ updated: number }> {

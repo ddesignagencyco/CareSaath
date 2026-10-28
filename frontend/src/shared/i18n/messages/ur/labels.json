@@ -82,6 +82,7 @@
   "payout": {
     "REQUESTED": "درخواست دی گئی",
     "PROCESSING": "کارروائی جاری",
+    "TRANSFERRED": "منتقل ہو گیا",
     "PAID": "ادا ہو گیا",
     "REJECTED": "مسترد"
   },

@@ -21,7 +21,7 @@ export type VisitStatus =
   | "IN_PROGRESS"
   | "CHECKED_OUT"
   | "COMPLETED";
-export type PayoutStatus = "REQUESTED" | "PROCESSING" | "PAID" | "REJECTED";
+export type PayoutStatus = "REQUESTED" | "PROCESSING" | "TRANSFERRED" | "PAID" | "REJECTED";
 export type PayoutAccountType = "BANK" | "MOBILE_WALLET";
 export type PromoDiscountType = "PERCENT" | "FIXED";
 export type IncidentSource = "CUSTOMER_COMPLAINT" | "CAREGIVER_REPORT" | "SOS";
@@ -204,6 +204,12 @@ export interface AdminPayoutRequest {
   processedAt: string | null;
   caregiver: { id: string; specialty: Specialty; user: { fullName: string; phone: string } };
   payoutAccount: PayoutAccount;
+  /** Phase 15: two-sided payouts. */
+  transferredAt?: string | null;
+  transferReference?: string | null;
+  caregiverConfirmedAt?: string | null;
+  issueReportedAt?: string | null;
+  issueNote?: string | null;
 }
 
 /** POST /admin/payouts/:id/(approve|mark-paid|reject) return the bare row. */

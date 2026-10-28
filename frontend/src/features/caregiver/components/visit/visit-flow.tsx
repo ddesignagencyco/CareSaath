@@ -383,6 +383,8 @@ const NOTE_PROMPTS = ["vitals", "medication", "care", "observations", "advice"] 
 function NoteForm({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidate: QueryKey[] }) {
   const t = useTranslations("caregiverB.flow");
   const [summary, setSummary] = useState("");
+  // Phase 15: a visit can't be completed until its payment is verified (PAID).
+  const paid = visit.payments?.some((p) => p.status === "PAID") ?? false;
   const submit = useAction(() => visitsApi.note(visit.id, summary.trim()), {
     invalidate: [...invalidate, keys.earnings],
     success: t("completedToast"),
@@ -393,6 +395,7 @@ function NoteForm({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
         <h3 className="text-lg font-extrabold text-ink-900">{t("noteTitle")}</h3>
         <p className="text-sm text-ink-500">{t("noteDesc")}</p>
       </div>
+      {!paid && <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm font-semibold text-accent-700">{t("paymentRequired")}</p>}
       <div className="flex flex-wrap gap-2">
         {NOTE_PROMPTS.map((k) => {
           const p = t(`prompts.${k}.prefix`);

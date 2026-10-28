@@ -54,6 +54,7 @@ const cases: Case[] = [
   ["payouts.approve", () => payoutsApi.approve("p1", { note: "ok" }), "POST", "/admin/payouts/p1/approve", { note: "ok" }],
   ["payouts.approve (no dto)", () => payoutsApi.approve("p1"), "POST", "/admin/payouts/p1/approve", {}],
   ["payouts.markPaid", () => payoutsApi.markPaid("p1", { note: "TRX-1" }), "POST", "/admin/payouts/p1/mark-paid", { note: "TRX-1" }],
+  ["payouts.markTransferred", () => payoutsApi.markTransferred("p1", { note: "TRX-1" }), "POST", "/admin/payouts/p1/mark-transferred", { note: "TRX-1" }],
   ["payouts.reject", () => payoutsApi.reject("p1", { reason: "Wrong IBAN" }), "POST", "/admin/payouts/p1/reject", { reason: "Wrong IBAN" }],
   ["commissions.list", () => commissionsApi.list(), "GET", "/admin/commissions", undefined, {}],
   ["commissions.update", () => commissionsApi.update("NURSING", 17.5), "PUT", "/admin/commissions/NURSING", { percentage: 17.5 }],
@@ -197,7 +198,7 @@ describe("admin API (mock mode)", () => {
     await expect(settle(api.payoutsApi.markPaid(p.id))).rejects.toMatchObject({ status: 400 });
     await expect(settle(api.payoutsApi.reject(p.id, {}))).rejects.toMatchObject({ message: "A reason is required to reject a payout" });
     expect((await settle(api.payoutsApi.approve(p.id))).status).toBe("PROCESSING");
-    expect((await settle(api.payoutsApi.markPaid(p.id))).status).toBe("PAID");
+    expect((await settle(api.payoutsApi.markTransferred(p.id))).status).toBe("TRANSFERRED");
   });
 
   it("exportCsv returns CSV with the report filename", async () => {

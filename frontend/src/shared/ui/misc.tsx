@@ -133,7 +133,7 @@ export function FilterTabs<T extends string>({
   return (
     <div
       role="tablist"
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-ink-100 bg-white p-1 shadow-card"
+      className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-card"
     >
       {options.map((o) => {
         const active = o.value === value;

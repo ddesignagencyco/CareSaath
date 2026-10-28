@@ -18,8 +18,10 @@
     "next": "16.4.2",
     "next-intl": "^4.14.9",
     "react": "19.3.0",
+    "react-day-picker": "^9.8.0",
     "react-dom": "19.3.0",
-    "react-select": "^5.10.2"
+    "react-select": "^5.10.2",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@formatjs/icu-messageformat-parser": "^3.5.22",

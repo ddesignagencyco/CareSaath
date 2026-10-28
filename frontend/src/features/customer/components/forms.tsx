@@ -8,6 +8,7 @@ import { useAction } from "@shared/api/use-action";
 import { useLabels } from "@shared/i18n/use-labels";
 import { Button } from "@shared/ui/button";
 import { Field, Input, Textarea } from "@shared/ui/field";
+import { DatePicker } from "@shared/ui/date-picker";
 import { LocationMap } from "@shared/ui/location-map";
 import { ErrorState, Skeleton } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
@@ -114,7 +115,7 @@ export function PatientForm({
           {(id) => <Input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={t("fullNamePlaceholder")} />}
         </Field>
         <Field label={t("dob")} error={dob && dob > today ? t("dobFuture") : null}>
-          {(id) => <Input id={id} type="date" max={today} value={dob} onChange={(e) => setDob(e.target.value)} />}
+          {(id) => <DatePicker id={id} max={today} value={dob} onChange={setDob} />}
         </Field>
         <Field label={t("gender")}>
           {(id) => <Select inputId={id} value={gender} onChange={setGender} options={genderOptions} placeholder={t("choose")} isClearable />}

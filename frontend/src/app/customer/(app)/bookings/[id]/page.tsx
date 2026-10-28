@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, CalendarClock, ChevronRight, FileText, ImageIcon, Navigation, Repeat, UploadCloud, XCircle } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, Navigation, NotebookPen, Repeat, UploadCloud, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
@@ -127,10 +127,11 @@ export default function BookingDetailPage() {
             return due ? (
               <Link
                 href={`/customer/visits/${due.id}`}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-danger-50 p-4 ring-1 ring-danger-400/30 hover:bg-danger-100/60"
+                className="flex flex-wrap items-center gap-3 rounded-2xl bg-danger-50 p-4 ring-1 ring-danger-400/30 hover:bg-danger-100/60"
               >
-                <p className="text-sm font-semibold text-danger-700">{t("paymentDueBanner")}</p>
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-danger-700">
+                <Banknote className="size-5 shrink-0 text-danger-600" />
+                <p className="flex-1 text-sm font-semibold text-danger-700">{t("paymentDueBanner")}</p>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-danger-600 px-3.5 py-2 text-sm font-bold text-white">
                   {t("payNow")} <ChevronRight className="rtl:-scale-x-100 size-4" />
                 </span>
               </Link>
@@ -164,6 +165,11 @@ export default function BookingDetailPage() {
                               <Badge tone="danger">{t("paymentDue")}</Badge>
                             ) : null;
                           })()}
+                          {v.status === "COMPLETED" && (
+                            <span className="ms-auto inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-brand-700">
+                              <NotebookPen className="size-3.5 shrink-0" /> {t("viewNote")}
+                            </span>
+                          )}
                         </Link>
                         {canMove ? (
                           <Button size="sm" variant="ghost" onClick={() => setMoving(v)}>

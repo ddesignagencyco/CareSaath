@@ -9,7 +9,9 @@ import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { Modal } from "@shared/ui/overlay";
 import type { CaregiverVisitDetail } from "@shared/caregiver-types";
 import { useFmt } from "@shared/i18n/use-fmt";
+import { saveBlob } from "@shared/api/http";
 import { paymentsApi } from "@/features/caregiver/lib/api/caregiver";
+import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { keys } from "@/features/caregiver/lib/api/keys";
 
 /** Cash can be handed over once the caregiver is at the home. */
@@ -31,6 +33,13 @@ export function CashPayment({ visit }: { visit: CaregiverVisitDetail }) {
     success: t("confirmedToast"),
     onSuccess: () => setConfirming(false),
   });
+  const receipt = useAction(
+    async () => {
+      const { blob, filename } = await paymentsApi.receipt(payment!.id);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
 
   if (!payment || !CASH_STATUSES.includes(visit.status)) return null;
 
@@ -45,9 +54,18 @@ export function CashPayment({ visit }: { visit: CaregiverVisitDetail }) {
           <span className="tabular text-lg font-extrabold text-ink-900">{f.money(payment.amount)}</span>
         </div>
         {payment.status === "PAID" ? (
-          <p className="flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 text-sm font-semibold text-success-700">
-            <Check className="size-4 shrink-0" /> {payment.paidAt ? t("receivedAt", { time: f.dateTime(payment.paidAt) }) : t("received")}
-          </p>
+          <>
+            <p className="flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 text-sm font-semibold text-success-700">
+              <Check className="size-4 shrink-0" /> {payment.paidAt ? t("receivedAt", { time: f.dateTime(payment.paidAt) }) : t("received")}
+            </p>
+            {!USE_MOCKS && (
+              <Button variant="secondary" className="w-full" loading={receipt.isPending} onClick={() => receipt.mutate(undefined)}>
+                {t("receipt")}
+              </Button>
+            )}
+          </>
+        ) : payment.caregiverConfirmedAt ? (
+          <p className="rounded-lg bg-accent-50 px-3 py-2 text-sm font-semibold text-accent-700">{t("waitingCustomer")}</p>
         ) : (
           <>
             <p className="text-sm text-ink-500">{t("pendingHint")}</p>

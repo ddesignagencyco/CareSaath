@@ -16,6 +16,8 @@ import { localDayKey } from "@shared/lib/visit";
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
+import { DatePicker } from "@shared/ui/date-picker";
+import { TimePicker } from "@shared/ui/time-picker";
 import { Avatar, Skeleton } from "@shared/ui/misc";
 import { useToast } from "@shared/ui/toast";
 import type { Address, PatientProfile } from "@shared/caregiver-types";
@@ -115,13 +117,14 @@ export default function BookPage() {
   const today = now ? localDayKey(now) : "";
   const nowHHmm = now ? ((d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`)(new Date(now)) : "";
 
-  /** Pick the start date; when it's today, pre-fill a window starting ~30 min from now. */
+  /** Pick the start date; when it's today, pre-fill a window starting at the current time
+   *  (the next 5-min slot, so it's valid and never in the past) — not some minutes ahead. */
   const pickStartDate = (value: string) => {
     setStart(value);
     if (value && value === today && now) {
       const fmt = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-      const fromAt = new Date(now + 30 * 60_000);
-      fromAt.setMinutes(Math.ceil(fromAt.getMinutes() / 5) * 5, 0, 0); // round up to the next 5 min
+      const fromAt = new Date(now);
+      fromAt.setMinutes((Math.floor(fromAt.getMinutes() / 5) + 1) * 5, 0, 0); // next 5-min slot from now
       const toAt = new Date(fromAt.getTime() + 60 * 60_000);
       setFrom(fmt(fromAt));
       setTo(fmt(toAt));
@@ -184,7 +187,25 @@ export default function BookPage() {
     {
       invalidate: [keys.bookings],
       success: t("success"),
-      onSuccess: (b) => router.replace(`/customer/bookings/${b.id}`),
+      onSuccess: (b) => {
+        // Clear the form so the next booking starts fresh (App Router can reuse this instance).
+        setStep(0);
+        setPatientId(null);
+        setAddressId(null);
+        setType("SINGLE");
+        setStart("");
+        setEnd("");
+        setWeekdays([1, 2, 3, 4, 5]);
+        setFrom("10:00");
+        setTo("11:00");
+        setPromo("");
+        setPromoError(null);
+        setApplied(null);
+        setRx(null);
+        setRxError(null);
+        if (fileInput.current) fileInput.current.value = "";
+        router.replace(`/customer/bookings/${b.id}`);
+      },
       onError: (err) => {
         if (err instanceof ApiError && err.message.startsWith("Promo code")) {
           setPromoError(apiError(err));
@@ -337,14 +358,24 @@ export default function BookPage() {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className={clsx("grid grid-cols-1 gap-4", type === "SINGLE" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
               <Field label={type === "SINGLE" ? t("when.date") : t("when.from")} required>
-                {(fid) => <Input id={fid} type="date" min={today} value={start} onChange={(e) => pickStartDate(e.target.value)} />}
+                {(fid) => <DatePicker id={fid} min={today} value={start} onChange={pickStartDate} />}
               </Field>
               {type === "RECURRING" && (
                 <Field label={t("when.until")} required hint={t("when.upTo", { n: MAX_RANGE_DAYS })}>
-                  {(fid) => <Input id={fid} type="date" min={start || today} max={maxEnd || undefined} value={end} onChange={(e) => setEnd(e.target.value)} />}
+                  {(fid) => <DatePicker id={fid} min={start || today} max={maxEnd || undefined} value={end} onChange={setEnd} />}
                 </Field>
+              )}
+              {type === "SINGLE" && (
+                <>
+                  <Field label={t("when.arriveBetween")} required>
+                    {(fid) => <TimePicker id={fid} min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={setFrom} />}
+                  </Field>
+                  <Field label={t("when.and")} required>
+                    {(fid) => <TimePicker id={fid} min={from || undefined} value={to} onChange={setTo} />}
+                  </Field>
+                </>
               )}
             </div>
             {type === "RECURRING" && (
@@ -371,14 +402,16 @@ export default function BookPage() {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label={t("when.arriveBetween")} required>
-                {(fid) => <Input id={fid} type="time" min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={(e) => setFrom(e.target.value)} className="tabular" />}
-              </Field>
-              <Field label={t("when.and")} required>
-                {(fid) => <Input id={fid} type="time" value={to} onChange={(e) => setTo(e.target.value)} className="tabular" />}
-              </Field>
-            </div>
+            {type === "RECURRING" && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label={t("when.arriveBetween")} required>
+                  {(fid) => <TimePicker id={fid} min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={setFrom} />}
+                </Field>
+                <Field label={t("when.and")} required>
+                  {(fid) => <TimePicker id={fid} min={from || undefined} value={to} onChange={setTo} />}
+                </Field>
+              </div>
+            )}
             {whenError ? (
               start && <p className="text-sm font-medium text-danger-600">{whenError}</p>
             ) : (

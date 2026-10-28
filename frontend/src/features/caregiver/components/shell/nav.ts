@@ -6,6 +6,7 @@ import {
   Home,
   Inbox,
   Menu,
+  MessagesSquare,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export type NavLabelKey =
   | "profile"
   | "notifications"
   | "reports"
+  | "messages"
   | "more";
 
 /** Message key under `caregiverA.nav.groups`. */
@@ -38,16 +40,19 @@ export const PRIMARY: NavItem[] = [
   { href: "/caregiver/earnings", labelKey: "earnings", icon: Wallet },
 ];
 
+const MESSAGES_ITEM: NavItem = { href: "/caregiver/messages", labelKey: "messages", icon: MessagesSquare };
+
 export const SECONDARY: NavItem[] = [
   { href: "/caregiver/availability", labelKey: "availability", icon: CalendarClock },
   { href: "/caregiver/profile", labelKey: "profile", icon: UserRound },
   { href: "/caregiver/notifications", labelKey: "notifications", icon: Bell },
   { href: "/caregiver/reports", labelKey: "reports", icon: FileWarning },
+  MESSAGES_ITEM,
 ];
 
 /** Desktop sidebar sections (same items as the mobile tabs + More menu). */
 export const SIDEBAR_GROUPS: { labelKey?: NavGroupKey; items: NavItem[] }[] = [
-  { items: [PRIMARY[0]] },
+  { items: [PRIMARY[0], MESSAGES_ITEM] },
   { labelKey: "work", items: [PRIMARY[1], PRIMARY[2]] },
   { labelKey: "money", items: [PRIMARY[3]] },
   { labelKey: "myProfile", items: [SECONDARY[0], SECONDARY[1]] },

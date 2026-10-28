@@ -33,6 +33,7 @@ const DISPUTE: Record<DisputeStatus, Tone> = { OPEN: "warning", RESOLVED: "succe
 const PAYOUT: Record<PayoutStatus, Tone> = {
   REQUESTED: "warning",
   PROCESSING: "info",
+  TRANSFERRED: "info",
   PAID: "success",
   REJECTED: "danger",
 };

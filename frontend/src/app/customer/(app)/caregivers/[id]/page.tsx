@@ -61,9 +61,7 @@ export default function CaregiverProfilePage() {
                 <BadgeCheck className="mt-0.5 size-5 shrink-0 text-brand-600" />
                 <div className="text-sm">
                   <p className="font-bold text-ink-900">{t("licenseVerified")}</p>
-                  <p className="text-ink-600">
-                    {L.licenseBody(p.licenseBody)} · <span className="tabular font-semibold" dir="ltr">{p.licenseNumber}</span>
-                  </p>
+                  <p className="text-ink-600">{L.licenseBody(p.licenseBody)}</p>
                 </div>
               </div>
 

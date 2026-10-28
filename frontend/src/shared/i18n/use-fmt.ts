@@ -80,6 +80,8 @@ export function useFmt() {
         return shortDayF.format(fromDateOnly(dateOnly));
       },
       longDay: (dateOnly: string) => longDayF.format(fromDateOnly(dateOnly)),
+      /** "YYYY-MM-DD" → compact date with year (e.g. "27 Oct 2026"), parsed locally. */
+      dateLong: (dateOnly: string) => dtf({ day: "numeric", month: "short", year: "numeric" }).format(fromDateOnly(dateOnly)),
       /** "09:00" -> "9:00 AM" */
       time,
       timeWindow: (start: string, end: string) => isolate(`${time(start)} – ${time(end)}`),

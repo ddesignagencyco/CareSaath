@@ -60,7 +60,6 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
                   !done && !now && "bg-ink-100 text-ink-400",
                 )}
               >
-                {now && <span className="absolute inset-0 animate-ping rounded-full bg-accent-500/30" aria-hidden />}
                 {done ? <Check className="size-4" /> : i + 1}
               </span>
               <span className={clsx("h-0.5 flex-1", i === TRACK.length - 1 ? "invisible" : done ? "bg-brand-400" : "bg-ink-200")} />
@@ -150,6 +149,12 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
     success: t("abandoned"),
   });
 
+  // Phase 15: two-sided cash — the customer confirms they handed the money over.
+  const confirmCash = useAction(() => paymentsApi.confirmCash(existing?.id ?? ""), {
+    invalidate: [keys.payments],
+    success: t("cashConfirmedToast"),
+  });
+
   if (!payable && !existing) return null;
 
   return (
@@ -185,6 +190,17 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
         </button>
       )}
       {existing?.status === "PAID" && existing.paidAt && <p className="mt-1 text-xs text-ink-500">{t("paidAt", { date: f.dateTime(existing.paidAt) })}</p>}
+
+      {/* Two-sided cash: confirm handing the money over, then wait for the caregiver. */}
+      {existing?.status === "PENDING" &&
+        existing.method === "CASH" &&
+        (existing.customerConfirmedAt ? (
+          <p className="mt-2 text-sm text-ink-500">{t("cashWaitingCaregiver")}</p>
+        ) : (
+          <Button className="mt-2 w-full" variant="secondary" loading={confirmCash.isPending} onClick={() => confirmCash.mutate(undefined)}>
+            {t("confirmCash")}
+          </Button>
+        ))}
 
       {open && (
         <Modal

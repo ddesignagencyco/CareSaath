@@ -112,9 +112,11 @@ export const visitsApi = {
 };
 
 export const paymentsApi = {
-  /** POST /caregiver/payments/:id/confirm-cash — CASH + PENDING only; settles it as PAID. */
+  /** POST /caregiver/payments/:id/confirm-cash — the caregiver's half of two-sided cash (Phase 15). */
   confirmCash: (paymentId: string) =>
     M ? mock.confirmCash(paymentId) : http.post<CaregiverPaymentRow>(`/caregiver/payments/${paymentId}/confirm-cash`),
+  /** GET /caregiver/payments/:id/receipt — PDF blob (Phase 15; real backend only). */
+  receipt: (id: string) => http.download(`/caregiver/payments/${id}/receipt`),
 };
 
 export const moneyApi = {
@@ -132,6 +134,14 @@ export const moneyApi = {
   updateAccount: (id: string, dto: Partial<PayoutAccountInput>) => (M ? mock.updatePayoutAccount(id, dto) : http.patch<PayoutAccount>(`/caregiver/payout-accounts/${id}`, dto)),
   /** DELETE /caregiver/payout-accounts/:id */
   deleteAccount: (id: string) => (M ? mock.deletePayoutAccount(id) : http.delete<{ ok: true }>(`/caregiver/payout-accounts/${id}`)),
+  /** POST /caregiver/payouts/:id/confirm-received — Phase 15: caregiver confirms the transfer arrived (TRANSFERRED → PAID). */
+  confirmPayoutReceived: (id: string) =>
+    M ? mock.confirmPayoutReceived(id) : http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/confirm-received`, {}),
+  /** POST /caregiver/payouts/:id/report-not-received — Phase 15: money not arrived (stays TRANSFERRED, issueNote set). */
+  reportPayoutNotReceived: (id: string, note: string) =>
+    M ? mock.reportPayoutNotReceived(id, note) : http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/report-not-received`, { note }),
+  /** GET /caregiver/payouts/:id/receipt — transfer PDF blob (Phase 15; real backend only). */
+  payoutReceipt: (id: string) => http.download(`/caregiver/payouts/${id}/receipt`),
 };
 
 export const safetyApi = {
@@ -157,4 +167,6 @@ export const notificationsApi = {
   /** POST /notifications/read — mark the given ids (or everything before a time) as read. */
   markRead: (dto: { ids?: string[]; before?: string }) =>
     M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
+  /** GET /notifications/unread-count — Phase 15. */
+  unreadCount: () => (M ? mock.unreadCount() : http.get<{ unread: number }>("/notifications/unread-count")),
 };

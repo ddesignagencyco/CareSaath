@@ -63,8 +63,7 @@ export default function TodayPage() {
           href={`/caregiver/visits/${active.id}`}
           className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 p-4 text-white shadow-pop transition-transform active:scale-[0.99]"
         >
-          <span className="relative flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
-            <span className="absolute inset-0 animate-ping rounded-xl bg-white/20" aria-hidden />
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
             <Navigation className="size-5" />
           </span>
           <span className="min-w-0 flex-1">

@@ -111,6 +111,10 @@ export interface CustomerPayment {
   payoutRequestId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Phase 15: two-sided cash — PAID only once both are set. */
+  customerConfirmedAt?: string | null;
+  caregiverConfirmedAt?: string | null;
+  confirmationNote?: string | null;
 }
 
 /** GET /customer/payments item and GET /customer/payments/:id */

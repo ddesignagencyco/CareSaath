@@ -10,6 +10,8 @@ import { useAction } from "@shared/api/use-action";
 import { Button, IconButton } from "@shared/ui/button";
 import { Card, CardHeader } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
+import { DatePicker } from "@shared/ui/date-picker";
+import { TimePicker } from "@shared/ui/time-picker";
 import { ErrorState, Skeleton } from "@shared/ui/misc";
 import type { Availability, AvailabilityRuleInput } from "@shared/caregiver-types";
 import { useNow } from "@shared/hooks/use-now";
@@ -113,20 +115,19 @@ function WeeklyEditor({ initial }: { initial: Availability }) {
                 ) : (
                   wins.map((w, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <Input
-                        type="time"
+                      <TimePicker
                         aria-label={t("windowStart", { day: name, n: i + 1 })}
                         value={w.start}
-                        className="tabular w-32"
-                        onChange={(e) => update(dow, wins.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))}
+                        className="w-32"
+                        onChange={(v) => update(dow, wins.map((x, j) => (j === i ? { ...x, start: v } : x)))}
                       />
                       <span className="text-ink-400">–</span>
-                      <Input
-                        type="time"
+                      <TimePicker
                         aria-label={t("windowEnd", { day: name, n: i + 1 })}
                         value={w.end}
-                        className="tabular w-32"
-                        onChange={(e) => update(dow, wins.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))}
+                        className="w-32"
+                        min={w.start || undefined}
+                        onChange={(v) => update(dow, wins.map((x, j) => (j === i ? { ...x, end: v } : x)))}
                       />
                       <IconButton label={t("removeWindow")} onClick={() => update(dow, wins.filter((_, j) => j !== i))}>
                         <X className="size-4" />
@@ -190,10 +191,10 @@ function BlockedDates({ blocks }: { blocks: Availability["blocks"] }) {
       <div className="space-y-4 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t("from")}>
-            {(id) => <Input id={id} type="date" min={today} value={start} onChange={(e) => setStart(e.target.value)} />}
+            {(id) => <DatePicker id={id} min={today} value={start} onChange={setStart} />}
           </Field>
           <Field label={t("to")} error={error}>
-            {(id) => <Input id={id} type="date" min={start || today} value={end} onChange={(e) => setEnd(e.target.value)} />}
+            {(id) => <DatePicker id={id} min={start || today} value={end} onChange={setEnd} />}
           </Field>
           <Field label={t("reason")} hint={t("reasonHint")} className="sm:col-span-2">
             {(id) => <Input id={id} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder={t("reasonPlaceholder")} />}

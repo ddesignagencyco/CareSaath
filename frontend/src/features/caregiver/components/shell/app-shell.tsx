@@ -18,7 +18,9 @@ import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/ap
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/caregiver/lib/notifications";
 import { NotificationBell } from "@shared/ui/notification-bell";
-import { ApiError, USE_MOCKS } from "@/features/caregiver/lib/api/http";
+import { ApiError, USE_MOCKS, http } from "@/features/caregiver/lib/api/http";
+import { session } from "@/features/caregiver/lib/api/session";
+import { useRealtime } from "@shared/api/realtime";
 import { homeFor, refreshTokens, tokenRole, useMe, useSessionRaw, useSignOut } from "@/features/caregiver/lib/auth";
 import { useRequestCount, useUnreadCount } from "./counts";
 import { isActive, MORE, PRIMARY, SECONDARY, SIDEBAR_GROUPS } from "./nav";
@@ -50,6 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOut = useSignOut();
   const client = useQueryClient();
   const approved = me.data?.caregiverProfile?.verificationStatus === "APPROVED";
+  useRealtime({ session, queryClient: client, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
   // Only for the avatar photo; pages share this cache entry.
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get, enabled: approved });
   const requests = useRequestCount(approved);

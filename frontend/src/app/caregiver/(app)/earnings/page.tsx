@@ -13,14 +13,92 @@ import { Field, Input } from "@shared/ui/field";
 import { EmptyState, ErrorState, Skeleton, TableSkeleton } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
 import { Select } from "@shared/ui/select";
+import { saveBlob } from "@shared/api/http";
 import { formatMoney } from "@shared/lib/format";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import type { PayoutAccount } from "@shared/types";
+import type { CaregiverPayoutRequest } from "@shared/caregiver-types";
 import { PayoutAccountForm } from "@/features/caregiver/components/earnings/payout-account-form";
-import { ApiError } from "@/features/caregiver/lib/api/http";
+import { ApiError, USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { moneyApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
+
+/** A payout history row, with Phase 15 confirm-received / report-not-received when TRANSFERRED. */
+function PayoutRow({ p }: { p: CaregiverPayoutRequest }) {
+  const t = useTranslations("caregiverB.earnings");
+  const tc = useTranslations("common.actions");
+  const f = useFmt();
+  const [reporting, setReporting] = useState(false);
+  const [note, setNote] = useState("");
+  const confirm = useAction(() => moneyApi.confirmPayoutReceived(p.id), {
+    invalidate: [keys.earnings, [...keys.payouts, "list"]],
+    success: t("history.confirmedToast"),
+  });
+  const report = useAction(() => moneyApi.reportPayoutNotReceived(p.id, note.trim()), {
+    invalidate: [[...keys.payouts, "list"]],
+    success: t("history.reportedToast"),
+    onSuccess: () => {
+      setReporting(false);
+      setNote("");
+    },
+  });
+  const receipt = useAction(
+    async () => {
+      const { blob, filename } = await moneyApi.payoutReceipt(p.id);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
+  const showActions = p.status === "TRANSFERRED" && !p.caregiverConfirmedAt;
+  const canReceipt = !USE_MOCKS && (p.status === "PAID" || p.status === "TRANSFERRED");
+  return (
+    <li className="flex flex-col gap-2 px-5 py-3.5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="tabular font-bold text-ink-900">{formatMoney(p.amount)}</p>
+          <p className="truncate text-xs text-ink-500">
+            {p.payoutAccount.provider} <span dir="ltr">{p.payoutAccount.accountNumber}</span> · {t("history.requested", { date: f.date(p.requestedAt) })}
+            {p.processedAt && ` · ${p.status === "PAID" ? t("history.paid", { date: f.date(p.processedAt) }) : t("history.closed", { date: f.date(p.processedAt) })}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <PayoutStatusBadge status={p.status} />
+          {canReceipt && (
+            <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(undefined)}>
+              {t("history.receipt")}
+            </Button>
+          )}
+        </div>
+      </div>
+      {showActions &&
+        (p.issueReportedAt ? (
+          <p className="text-xs font-semibold text-accent-700">{t("history.reported")}</p>
+        ) : reporting ? (
+          <div className="space-y-2">
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("history.reportPlaceholder")} maxLength={500} />
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setReporting(false)}>
+                {tc("cancel")}
+              </Button>
+              <Button size="sm" loading={report.isPending} disabled={!note.trim()} onClick={() => report.mutate(undefined)}>
+                {t("history.reportNot")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setReporting(true)}>
+              {t("history.reportNot")}
+            </Button>
+            <Button size="sm" loading={confirm.isPending} onClick={() => confirm.mutate(undefined)}>
+              {t("history.confirmReceived")}
+            </Button>
+          </div>
+        ))}
+    </li>
+  );
+}
 
 function RequestPayout({ available, accounts, onClose }: { available: number; accounts: PayoutAccount[]; onClose: () => void }) {
   const t = useTranslations("caregiverB.earnings.withdraw");
@@ -222,18 +300,7 @@ export default function EarningsPage() {
               ) : (
                 <ul className="mt-3 divide-y divide-ink-100 border-t border-ink-100">
                   {payouts.data.items.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3 px-5 py-3.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="tabular font-bold text-ink-900">{formatMoney(p.amount)}</p>
-                        <p className="truncate text-xs text-ink-500">
-                          {p.payoutAccount.provider} <span dir="ltr">{p.payoutAccount.accountNumber}</span> ·{" "}
-                          {t("history.requested", { date: f.date(p.requestedAt) })}
-                          {p.processedAt &&
-                            ` · ${p.status === "PAID" ? t("history.paid", { date: f.date(p.processedAt) }) : t("history.closed", { date: f.date(p.processedAt) })}`}
-                        </p>
-                      </div>
-                      <PayoutStatusBadge status={p.status} />
-                    </li>
+                    <PayoutRow key={p.id} p={p} />
                   ))}
                 </ul>
               )}

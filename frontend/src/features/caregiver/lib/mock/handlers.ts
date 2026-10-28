@@ -29,6 +29,7 @@ import type {
   Visit,
   CaregiverBookingStatus,
   AppNotification,
+  PayoutRequestRow,
 } from "@shared/caregiver-types";
 import { parsePkMobile } from "@shared/lib/phone";
 import type { CaregiverDocument, DocType, IncidentPriority, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "@shared/types";
@@ -587,8 +588,12 @@ export async function confirmCash(paymentId: string): Promise<CaregiverPaymentRo
   if (pay.method !== "CASH") bad("Only cash payments are confirmed this way");
   if (pay.status !== "PAID") {
     if (pay.status !== "PENDING") bad(`Cannot settle a payment in ${pay.status} state`);
-    pay.status = "PAID";
-    pay.paidAt = nowIso();
+    // Phase 15: two-sided — the caregiver's confirm only settles once the customer has confirmed too.
+    pay.caregiverConfirmedAt = nowIso();
+    if (pay.customerConfirmedAt) {
+      pay.status = "PAID";
+      pay.paidAt = nowIso();
+    }
     persist();
   }
   return clone({ ...pay, gatewayRef: null, updatedAt: pay.paidAt ?? pay.createdAt });
@@ -699,7 +704,7 @@ export async function listPayouts(q: PageQuery & { status?: PayoutStatus }): Pro
   return paginate(rows, q);
 }
 
-export async function requestPayout(dto: { payoutAccountId: string; amount: number }) {
+export async function requestPayout(dto: { payoutAccountId: string; amount: number }): Promise<PayoutRequestRow> {
   await delay(500);
   requireCaregiverToken();
   const p = myProfile();
@@ -722,6 +727,33 @@ export async function requestPayout(dto: { payoutAccountId: string; amount: numb
   d.payouts.push(payout);
   persist();
   return clone(payout);
+}
+
+/** Phase 15: caregiver confirms a transferred payout arrived (TRANSFERRED → PAID). */
+export async function confirmPayoutReceived(id: string): Promise<PayoutRequestRow> {
+  await delay(400);
+  requireCaregiverToken();
+  const p = myProfile();
+  const po = db().payouts.find((x) => x.id === id && x.caregiverId === p.id) ?? notFound("Payout request not found");
+  if (po.status !== "TRANSFERRED") bad(`Only a transferred payout can be confirmed (this one is ${po.status})`);
+  po.status = "PAID";
+  po.processedAt = nowIso();
+  po.caregiverConfirmedAt = nowIso();
+  persist();
+  return clone(po);
+}
+
+/** Phase 15: caregiver reports the transfer never arrived (stays TRANSFERRED, issueNote set). */
+export async function reportPayoutNotReceived(id: string, note: string): Promise<PayoutRequestRow> {
+  await delay(400);
+  requireCaregiverToken();
+  const p = myProfile();
+  const po = db().payouts.find((x) => x.id === id && x.caregiverId === p.id) ?? notFound("Payout request not found");
+  if (po.status !== "TRANSFERRED") bad(`Only a transferred payout can be reported (this one is ${po.status})`);
+  po.issueReportedAt = nowIso();
+  po.issueNote = note;
+  persist();
+  return clone(po);
 }
 
 /* ---- Safety, disputes, notifications -------------------------------------------- */
@@ -777,6 +809,13 @@ export async function listNotifications(q: PageQuery): Promise<Paginated<AppNoti
   await delay(200);
   const user = currentUser();
   return paginate(db().notifications.filter((n) => n.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), q);
+}
+
+/** Phase 15: GET /notifications/unread-count. */
+export async function unreadCount(): Promise<{ unread: number }> {
+  await delay(100);
+  const user = currentUser();
+  return { unread: db().notifications.filter((n) => n.userId === user.id && n.channel === "PUSH" && !n.readAt).length };
 }
 
 export async function markNotifsRead(dto: { ids?: string[]; before?: string }): Promise<{ updated: number }> {

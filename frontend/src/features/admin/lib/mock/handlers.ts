@@ -315,7 +315,10 @@ export async function listPayouts(q: PageQuery & { status?: PayoutStatus }) {
 
 const PAYOUT_TRANSITIONS: Record<PayoutStatus, PayoutStatus[]> = {
   REQUESTED: ["PROCESSING", "REJECTED"],
-  PROCESSING: ["PAID", "REJECTED"],
+  PROCESSING: ["TRANSFERRED", "REJECTED"],
+  // Phase 15: admin sends (TRANSFERRED), then the caregiver confirms arrival (→ PAID).
+  // Admin can resend (TRANSFERRED → TRANSFERRED) to clear a "not received" report.
+  TRANSFERRED: ["TRANSFERRED"],
   PAID: [],
   REJECTED: [],
 };

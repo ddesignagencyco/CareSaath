@@ -26,6 +26,7 @@
     "profile": "Profile & documents",
     "notifications": "Notifications",
     "reports": "Reports & disputes",
+    "messages": "Messages",
     "more": "More",
     "withCount": "{label} ({count})",
     "groups": {
@@ -153,9 +154,9 @@
         "title": "Payout approved",
         "body": "{amount} is being transferred to your account."
       },
-      "payoutPaid": {
+      "payoutTransferred": {
         "title": "Payout sent",
-        "body": "{amount} has been paid to your account."
+        "body": "{amount} was sent to your account. Confirm you received it."
       },
       "payoutRejected": {
         "title": "Payout rejected",
@@ -164,6 +165,30 @@
       "safetyUpdated": {
         "title": "Safety report updated",
         "body": "Status: {status}."
+      },
+      "bookingCompleted": {
+        "title": "Booking completed",
+        "body": "All visits in this booking are done."
+      },
+      "reviewReceived": {
+        "title": "New review",
+        "body": "A family left you a review."
+      },
+      "cashInitiated": {
+        "title": "Cash payment started",
+        "body": "The family chose to pay this visit in cash."
+      },
+      "cashCustomerConfirmed": {
+        "title": "Family confirmed the cash",
+        "body": "Confirm you received the cash to finish the payment."
+      },
+      "paymentPaid": {
+        "title": "Payment verified",
+        "body": "{amount} for a visit is confirmed."
+      },
+      "sosContact": {
+        "title": "Emergency contacts alerted",
+        "body": "{contact} was alerted by SMS."
       }
     }
   },

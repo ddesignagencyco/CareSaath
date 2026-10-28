@@ -1,10 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
 import { bookingsApi, notificationsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
-import { getSeenAt, SEEN_EVENT } from "@/features/caregiver/lib/notifications";
 
 /** Pending booking requests (badge on Requests). */
 export function useRequestCount(enabled: boolean) {
@@ -17,23 +15,15 @@ export function useRequestCount(enabled: boolean) {
   }).data;
 }
 
-function subscribeSeen(onChange: () => void) {
-  window.addEventListener(SEEN_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(SEEN_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-/** In-app (PUSH) notifications newer than the last time the list was opened. */
+/** Unread in-app (PUSH) notifications — Phase 15 `GET /notifications/unread-count`. */
 export function useUnreadCount(enabled: boolean) {
-  const seenAt = useSyncExternalStore(subscribeSeen, getSeenAt, () => "");
-  const list = useQuery({
-    queryKey: [...keys.notifications, "list"],
-    queryFn: () => notificationsApi.list({ limit: 50 }),
-    refetchInterval: 60_000,
-    enabled,
-  });
-  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && !n.readAt && n.createdAt > seenAt).length;
+  return (
+    useQuery({
+      queryKey: [...keys.notifications, "unread"],
+      queryFn: () => notificationsApi.unreadCount(),
+      refetchInterval: 60_000,
+      enabled,
+      select: (d) => d.unread,
+    }).data ?? 0
+  );
 }

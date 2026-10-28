@@ -82,6 +82,7 @@
   "payout": {
     "REQUESTED": "Requested",
     "PROCESSING": "Processing",
+    "TRANSFERRED": "Transferred",
     "PAID": "Paid",
     "REJECTED": "Rejected"
   },

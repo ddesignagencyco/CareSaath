@@ -9,6 +9,7 @@ import { Badge, type Tone } from "@shared/ui/badge";
 import { Button, IconButton } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
+import { DatePicker } from "@shared/ui/date-picker";
 import { Select } from "@shared/ui/select";
 import { EmptyState, ErrorState, TableSkeleton } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
@@ -157,18 +158,22 @@ function PromoForm({ promo, onClose }: { promo: PromoCode | null; onClose: () =>
           {(id) => <Input id={id} type="number" dir="ltr" min={1} value={f.amount} onChange={(e) => set("amount", e.target.value)} className="tabular" />}
         </Field>
         <Field label={t("validFrom")} required>
-          {(id) => <Input id={id} type="date" value={f.validFrom} onChange={(e) => set("validFrom", e.target.value)} />}
+          {(id) => <DatePicker id={id} value={f.validFrom} onChange={(v) => set("validFrom", v)} />}
         </Field>
         <Field label={t("validUntil")} required error={f.validTo ? errors.validTo : null}>
-          {(id) => <Input id={id} type="date" value={f.validTo} min={f.validFrom} onChange={(e) => set("validTo", e.target.value)} />}
+          {(id) => <DatePicker id={id} value={f.validTo} min={f.validFrom} onChange={(v) => set("validTo", v)} />}
         </Field>
         <Field label={t("maxUses")} error={errors.maxUses} hint={t("maxUsesHint")}>
           {(id) => <Input id={id} type="number" dir="ltr" min={1} value={f.maxUses} onChange={(e) => set("maxUses", e.target.value)} className="tabular" />}
         </Field>
-        <label className="flex items-center gap-3 self-end rounded-lg border border-ink-200 px-3 py-2.5">
-          <input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="size-4 accent-brand-600" />
-          <span className="text-sm font-semibold text-ink-800">{t("active")}</span>
-        </label>
+        {/* Spacer matches the sibling Field's label height so the toggle lines up with the Max uses input (hidden when stacked on mobile). */}
+        <div className="space-y-1.5">
+          <span aria-hidden className="hidden select-none text-sm font-semibold sm:block">&nbsp;</span>
+          <label className="flex h-10 cursor-pointer items-center gap-3 rounded-lg border border-ink-200 bg-white px-3 shadow-card">
+            <input type="checkbox" checked={f.active} onChange={(e) => set("active", e.target.checked)} className="size-4 accent-brand-600" />
+            <span className="text-sm font-semibold text-ink-800">{t("active")}</span>
+          </label>
+        </div>
       </div>
     </Modal>
   );

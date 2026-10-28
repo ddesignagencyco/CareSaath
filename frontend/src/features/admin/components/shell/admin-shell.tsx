@@ -7,9 +7,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { IconButton } from "@shared/ui/button";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRealtime } from "@shared/api/realtime";
 import { authApi, meApi } from "@/features/admin/lib/api/admin";
-import { USE_MOCKS } from "@/features/admin/lib/api/http";
+import { USE_MOCKS, http } from "@/features/admin/lib/api/http";
 import { decodeToken, session } from "@/features/admin/lib/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
@@ -68,6 +69,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   // The admin's own name (the token carries no name; /customer/me is the shared profile route).
   const me = useQuery({ queryKey: ["a-me"], queryFn: meApi.get, enabled: !!current, staleTime: 300_000 });
+  const qc = useQueryClient();
+  useRealtime({ session, queryClient: qc, notificationsKey: ["a-notifications"], refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
 
   // Close the mobile menu after navigation.
   const [lastPath, setLastPath] = useState(pathname);

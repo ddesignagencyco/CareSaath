@@ -155,12 +155,17 @@ export const payoutsApi = {
   /** POST /admin/payouts/:id/approve (REQUESTED -> PROCESSING) */
   approve: (id: string, dto: ResolvePayoutInput = {}) =>
     USE_MOCKS ? mock.resolvePayout(id, "PROCESSING", dto) : http.post<PayoutRequestRecord>(`/admin/payouts/${id}/approve`, dto),
-  /** POST /admin/payouts/:id/mark-paid (PROCESSING -> PAID) */
+  /** POST /admin/payouts/:id/mark-transferred (PROCESSING -> TRANSFERRED) — Phase 15. */
+  markTransferred: (id: string, dto: ResolvePayoutInput = {}) =>
+    USE_MOCKS ? mock.resolvePayout(id, "TRANSFERRED", dto) : http.post<PayoutRequestRecord>(`/admin/payouts/${id}/mark-transferred`, dto),
+  /** @deprecated POST /admin/payouts/:id/mark-paid — Phase 15 alias of mark-transferred (now ends at TRANSFERRED, not PAID). */
   markPaid: (id: string, dto: ResolvePayoutInput = {}) =>
-    USE_MOCKS ? mock.resolvePayout(id, "PAID", dto) : http.post<PayoutRequestRecord>(`/admin/payouts/${id}/mark-paid`, dto),
+    USE_MOCKS ? mock.resolvePayout(id, "TRANSFERRED", dto) : http.post<PayoutRequestRecord>(`/admin/payouts/${id}/mark-paid`, dto),
   /** POST /admin/payouts/:id/reject (reason required) */
   reject: (id: string, dto: ResolvePayoutInput) =>
     USE_MOCKS ? mock.resolvePayout(id, "REJECTED", dto) : http.post<PayoutRequestRecord>(`/admin/payouts/${id}/reject`, dto),
+  /** GET /admin/payouts/:id/receipt — transfer PDF blob (Phase 15; real backend only). */
+  receipt: (id: string) => http.download(`/admin/payouts/${id}/receipt`),
 };
 
 export const commissionsApi = {

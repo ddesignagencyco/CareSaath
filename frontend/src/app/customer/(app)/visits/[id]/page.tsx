@@ -155,13 +155,7 @@ export default function CustomerVisitPage() {
                           {t.rich("checkId", {
                             name: c.user.fullName,
                             body: L.licenseBody(c.licenseBody),
-                            license: c.licenseNumber,
                             b: (chunks) => <b>{chunks}</b>,
-                            num: (chunks) => (
-                              <b className="tabular" dir="ltr">
-                                {chunks}
-                              </b>
-                            ),
                           })}
                         </span>
                       </p>

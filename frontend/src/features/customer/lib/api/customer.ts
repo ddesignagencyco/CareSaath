@@ -155,6 +155,10 @@ export const paymentsApi = {
   get: (id: string) => (M ? mock.getPayment(id) : http.get<CustomerPaymentWithVisit>(`/customer/payments/${id}`)),
   /** PATCH /customer/payments/:id/cancel — abandon a PENDING payment so another method can be used. */
   cancel: (id: string) => (M ? mock.cancelPayment(id) : http.patch<CustomerPayment>(`/customer/payments/${id}/cancel`, {})),
+  /** POST /customer/payments/:id/confirm-cash — customer confirms they handed the cash over (Phase 15, two-sided). */
+  confirmCash: (id: string) => (M ? mock.confirmCashCustomer(id) : http.post<CustomerPayment>(`/customer/payments/${id}/confirm-cash`, {})),
+  /** GET /customer/payments/:id/receipt — PDF blob (Phase 15; real backend only). */
+  receipt: (id: string) => http.download(`/customer/payments/${id}/receipt`),
 };
 
 export const disputesApi = {
@@ -171,4 +175,6 @@ export const notificationsApi = {
   /** POST /notifications/read — mark the given ids (or everything before a time) as read. */
   markRead: (dto: { ids?: string[]; before?: string }) =>
     M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
+  /** GET /notifications/unread-count — Phase 15. */
+  unreadCount: () => (M ? mock.unreadCount() : http.get<{ unread: number }>("/notifications/unread-count")),
 };

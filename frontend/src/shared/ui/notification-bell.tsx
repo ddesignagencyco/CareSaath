@@ -103,17 +103,18 @@ export function NotificationBell({
   }, [open]);
 
   function toggle() {
-    setOpen((o) => {
-      const next = !o;
-      if (next) {
-        setSeenBefore(getSeenAt());
-        if (items[0]) {
-          markSeen(items[0].createdAt); // clears the badge on this device instantly
-          markRead?.(items[0].createdAt); // persists read state to the server
-        }
-      }
-      return next;
-    });
+    // `toggle` only runs from the button's onClick (an event handler, not render),
+    // so `open` is current here. Keep the side effects OUT of the setState updater:
+    // an updater runs during render, and markSeen/markRead there would set state in
+    // other components mid-render (React warns about that).
+    const next = !open;
+    setOpen(next);
+    if (!next) return;
+    setSeenBefore(getSeenAt());
+    if (items[0]) {
+      markSeen(items[0].createdAt); // clears the badge on this device instantly
+      markRead?.(items[0].createdAt); // persists read state to the server
+    }
   }
 
   return (

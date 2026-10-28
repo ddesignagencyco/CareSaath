@@ -79,6 +79,7 @@
     "completedToast": "Visit completed. Thank you!",
     "noteTitle": "Write the visit note",
     "noteDesc": "The family sees this summary. Submitting it completes the visit, and it can't be edited later.",
+    "paymentRequired": "The visit can't be completed until the payment is verified — card settled, or cash confirmed by both sides.",
     "noteLabel": "Visit note",
     "notePlaceholder": "e.g. Vitals: BP 130/85, sugar 140 fasting. Medication given: insulin 14 units…",
     "submitNote": "Submit & complete visit",
@@ -142,7 +143,14 @@
       "emptyDescription": "Withdrawals you request will appear here.",
       "requested": "requested {date}",
       "paid": "paid {date}",
-      "closed": "closed {date}"
+      "closed": "closed {date}",
+      "confirmReceived": "I received it",
+      "reportNot": "Not received",
+      "reportPlaceholder": "What happened? (optional note)",
+      "reported": "Reported as not received — the admin will resend.",
+      "confirmedToast": "Payout confirmed",
+      "reportedToast": "Reported to the admin",
+      "receipt": "Receipt"
     },
     "accounts": {
       "title": "Payout accounts",
@@ -382,6 +390,8 @@
     "title": "Cash payment",
     "amountLabel": "Collect from the family",
     "pendingHint": "Confirm only after the family has handed you the cash.",
+    "waitingCustomer": "You confirmed. Waiting for the family to confirm handing over the cash.",
+    "receipt": "Download receipt",
     "confirm": "Confirm cash received",
     "confirmTitle": "Confirm cash received?",
     "confirmDescription": "You received {amount} in cash for this visit.",

@@ -304,6 +304,9 @@ export interface VisitPaymentSummary {
   amount: number;
   caregiverAmount: number;
   paidAt: string | null;
+  /** Phase 15: two-sided cash — PAID only once both are set. */
+  customerConfirmedAt?: string | null;
+  caregiverConfirmedAt?: string | null;
 }
 
 /** POST /caregiver/payments/:id/confirm-cash — the updated Payment row. */
@@ -350,6 +353,12 @@ export interface PayoutRequestRow {
   status: PayoutStatus;
   requestedAt: string;
   processedAt: string | null;
+  /** Phase 15: two-sided payouts (admin sends → caregiver confirms arrival). */
+  transferredAt?: string | null;
+  transferReference?: string | null;
+  caregiverConfirmedAt?: string | null;
+  issueReportedAt?: string | null;
+  issueNote?: string | null;
 }
 
 export interface CaregiverPayoutRequest extends PayoutRequestRow {

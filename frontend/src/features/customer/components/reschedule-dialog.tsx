@@ -7,7 +7,9 @@ import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { localDayKey } from "@shared/lib/visit";
 import { Button } from "@shared/ui/button";
-import { Field, Input } from "@shared/ui/field";
+import { Field } from "@shared/ui/field";
+import { DatePicker } from "@shared/ui/date-picker";
+import { TimePicker } from "@shared/ui/time-picker";
 import { Modal } from "@shared/ui/overlay";
 import type { Visit } from "@shared/caregiver-types";
 import { bookingsApi } from "@/features/customer/lib/api/customer";
@@ -62,13 +64,13 @@ export function RescheduleDialog({ bookingId, visit, onClose, onDone }: { bookin
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label={t("newDate")} className="sm:col-span-3">
-          {(id) => <Input id={id} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />}
+          {(id) => <DatePicker id={id} min={today} value={date} onChange={setDate} />}
         </Field>
         <Field label={t("arriveBetween")}>
-          {(id) => <Input id={id} type="time" value={from} onChange={(e) => setFrom(e.target.value)} className="tabular" />}
+          {(id) => <TimePicker id={id} value={from} onChange={setFrom} />}
         </Field>
         <Field label={t("and")}>
-          {(id) => <Input id={id} type="time" value={to} onChange={(e) => setTo(e.target.value)} className="tabular" />}
+          {(id) => <TimePicker id={id} min={from || undefined} value={to} onChange={setTo} />}
         </Field>
         {error && <p className="text-sm font-medium text-danger-600 sm:col-span-3">{error}</p>}
       </div>

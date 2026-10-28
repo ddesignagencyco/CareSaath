@@ -49,6 +49,7 @@
       "contacts": "Emergency contacts",
       "payments": "Payments",
       "notifications": "Notifications",
+      "messages": "Messages",
       "profile": "Profile",
       "disputes": "Disputes"
     }
@@ -228,8 +229,8 @@
         "title": "Visit rescheduled"
       },
       "paymentPaid": {
-        "title": "Payment received",
-        "body": "{amount} paid."
+        "title": "Payment confirmed",
+        "body": "You paid {amount}."
       },
       "disputeRaised": {
         "title": "Dispute raised",
@@ -246,6 +247,30 @@
       "sosContact": {
         "title": "SOS alert sent",
         "body": "{contact} was alerted by SMS."
+      },
+      "visitConfirmed": {
+        "title": "Visit confirmed",
+        "body": "Your visit is scheduled."
+      },
+      "visitDeclined": {
+        "title": "Visit declined",
+        "body": "The caregiver can't make this visit. Choose another caregiver."
+      },
+      "visitCancelled": {
+        "title": "Visit cancelled",
+        "body": "This visit was cancelled."
+      },
+      "bookingCompleted": {
+        "title": "Booking completed",
+        "body": "All visits in this booking are done."
+      },
+      "cashCaregiverConfirmed": {
+        "title": "Caregiver confirmed the cash",
+        "body": "Confirm you handed over the cash to finish the payment."
+      },
+      "paymentFailed": {
+        "title": "Payment failed",
+        "body": "Your payment didn't go through. Try another method."
       }
     }
   }

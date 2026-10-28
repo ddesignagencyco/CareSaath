@@ -40,6 +40,10 @@ export interface MockPayment {
   paidAt: string | null;
   payoutRequestId: string | null;
   createdAt: string;
+  /** Phase 15: two-sided cash. */
+  customerConfirmedAt?: string | null;
+  caregiverConfirmedAt?: string | null;
+  confirmationNote?: string | null;
 }
 
 export interface MockDb {

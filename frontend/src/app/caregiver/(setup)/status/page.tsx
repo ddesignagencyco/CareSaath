@@ -27,21 +27,21 @@ function Timeline({ profile }: { profile: MyCaregiverProfile }) {
     { label: t("live"), detail: t("liveDetail"), done: false },
   ];
   return (
-    <ol className="space-y-4">
+    <ol>
       {steps.map((s, i) => (
         <li key={s.label} className="flex gap-3">
           <span className="flex flex-col items-center">
             <span
               className={clsx(
-                "flex size-7 items-center justify-center rounded-full text-xs font-bold",
+                "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                 s.done ? "bg-brand-600 text-white" : s.current ? "bg-accent-500 text-white ring-4 ring-accent-100" : "bg-ink-100 text-ink-400",
               )}
             >
               {s.done ? <Check className="size-4" /> : s.current ? <Clock3 className="size-4" /> : i + 1}
             </span>
-            {i < steps.length - 1 && <span className={clsx("mt-1 w-0.5 flex-1", s.done ? "bg-brand-300" : "bg-ink-100")} />}
+            {i < steps.length - 1 && <span className={clsx("my-1 w-0.5 flex-1 rounded-full", s.done ? "bg-brand-300" : "bg-ink-100")} />}
           </span>
-          <span className="pb-2">
+          <span className={clsx(i < steps.length - 1 && "pb-6")}>
             <span className={clsx("block text-sm font-bold", s.done || s.current ? "text-ink-900" : "text-ink-400")}>{s.label}</span>
             <span className="block text-xs text-ink-500">{s.detail}</span>
           </span>
@@ -119,7 +119,7 @@ export default function StatusPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1.2fr]">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1.2fr] md:items-start">
         {status === "PENDING" ? (
           <Card>
             <CardHeader title={t("progress")} />

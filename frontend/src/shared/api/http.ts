@@ -129,7 +129,47 @@ export function createHttp(store: SessionStore) {
       for (const [k, v] of Object.entries(fields)) form.append(k, v);
       return request<T>("POST", path, form);
     },
+    /** GET a binary response (e.g. a PDF receipt) as a Blob + its Content-Disposition filename. */
+    download: async (path: string, query?: Query): Promise<{ blob: Blob; filename: string }> => {
+      const url = buildUrl(path, query);
+      const before = store.get();
+      let res = await send("GET", url, before?.accessToken);
+      if (res.status === 401 && before?.refreshToken && !path.startsWith("/auth/")) {
+        const err = await toError(res);
+        if (!TOKEN_ERRORS.has(err.message)) throw err;
+        refreshing ??= refresh(before.refreshToken).finally(() => {
+          refreshing = null;
+        });
+        if (!(await refreshing)) throw err;
+        res = await send("GET", url, store.get()?.accessToken);
+      }
+      if (!res.ok) throw await toError(res);
+      const blob = await res.blob();
+      const filename = /filename="?([^"]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "receipt.pdf";
+      return { blob, filename };
+    },
+    /** Force a token refresh (used by the realtime socket on `auth.expired`). Returns false if there's no session. */
+    refreshSession: (): Promise<boolean> => {
+      const current = store.get();
+      if (!current?.refreshToken) return Promise.resolve(false);
+      refreshing ??= refresh(current.refreshToken).finally(() => {
+        refreshing = null;
+      });
+      return refreshing;
+    },
   };
+}
+
+/** Save a downloaded Blob to the user's device (browser only). */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export interface Health {

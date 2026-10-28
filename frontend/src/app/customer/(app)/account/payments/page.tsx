@@ -13,9 +13,13 @@ import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DetailList, EmptyState, ErrorState, FilterTabs, Pagination, Skeleton, TableSkeleton } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
+import { Button } from "@shared/ui/button";
+import { useAction } from "@shared/api/use-action";
+import { saveBlob } from "@shared/api/http";
 import type { PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
 import type { CustomerPayment } from "@shared/customer-types";
 import { paymentsApi } from "@/features/customer/lib/api/customer";
+import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 
 const ICON: Record<PaymentMethod, React.ComponentType<{ className?: string }>> = {
@@ -45,6 +49,13 @@ function Receipt({ id, onClose }: { id: string; onClose: () => void }) {
   const statusText = useStatusText();
   const q = useQuery({ queryKey: [...keys.payments, "detail", id], queryFn: () => paymentsApi.get(id) });
   const p = q.data;
+  const download = useAction(
+    async () => {
+      const { blob, filename } = await paymentsApi.receipt(id);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
   return (
     <Modal
       open
@@ -53,9 +64,16 @@ function Receipt({ id, onClose }: { id: string; onClose: () => void }) {
       description={p ? t("visitFor", { patient: p.visit.booking.patient.name }) : undefined}
       footer={
         p && (
-          <Link href={`/customer/visits/${p.visitId}`} className="text-sm font-semibold text-brand-700 hover:underline">
-            {tr("viewVisit")}
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            <Link href={`/customer/visits/${p.visitId}`} className="text-sm font-semibold text-brand-700 hover:underline">
+              {tr("viewVisit")}
+            </Link>
+            {!USE_MOCKS && p.status === "PAID" && (
+              <Button variant="secondary" loading={download.isPending} onClick={() => download.mutate(undefined)}>
+                {tr("downloadPdf")}
+              </Button>
+            )}
+          </div>
         )
       }
     >

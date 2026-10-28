@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, CalendarCheck2, CircleUserRound, Home, MapPin, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Users, Wallet } from "lucide-react";
+import { Bell, CalendarCheck2, CircleUserRound, Home, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -14,8 +14,10 @@ import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
-import { ApiError, USE_MOCKS } from "@/features/customer/lib/api/http";
+import { ApiError, USE_MOCKS, http } from "@/features/customer/lib/api/http";
+import { session } from "@/features/customer/lib/api/session";
 import { keys } from "@/features/customer/lib/api/keys";
+import { useRealtime } from "@shared/api/realtime";
 import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
 import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/customer/lib/labels";
 import { NotificationBell } from "@shared/ui/notification-bell";
@@ -32,6 +34,7 @@ type NavLabel =
   | "items.payments"
   | "items.disputes"
   | "items.notifications"
+  | "items.messages"
   | "items.profile";
 
 interface NavItem {
@@ -49,7 +52,7 @@ const NAV: NavItem[] = [
 
 /** Desktop sidebar sections; on phones the family/account pages live under the Account tab. */
 const SIDEBAR_GROUPS: { label?: "groups.care" | "groups.family" | "groups.account"; items: NavItem[] }[] = [
-  { items: [NAV[0]] },
+  { items: [NAV[0], { href: "/customer/messages", label: "items.messages", icon: MessagesSquare }] },
   { label: "groups.care", items: [NAV[1], NAV[2]] },
   {
     label: "groups.family",
@@ -83,14 +86,16 @@ function subscribeSeen(onChange: () => void) {
 }
 
 function useUnread(enabled: boolean) {
-  const seenAt = useSyncExternalStore(subscribeSeen, getSeenAt, () => "");
-  const list = useQuery({
-    queryKey: [...keys.notifications, "list"],
-    queryFn: () => notificationsApi.list({ limit: 50 }),
-    refetchInterval: 30_000,
-    enabled,
-  });
-  return (list.data?.items ?? []).filter((n) => n.channel === "PUSH" && !n.readAt && n.createdAt > seenAt).length;
+  // Phase 15: GET /notifications/unread-count (markRead invalidates the keys.notifications prefix).
+  return (
+    useQuery({
+      queryKey: [...keys.notifications, "unread"],
+      queryFn: () => notificationsApi.unreadCount(),
+      refetchInterval: 30_000,
+      enabled,
+      select: (d) => d.unread,
+    }).data ?? 0
+  );
 }
 
 /**
@@ -110,6 +115,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const signOut = useSignOut();
   const unread = useUnread(!!me.data);
   const qc = useQueryClient();
+  useRealtime({ session, queryClient: qc, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.customer.sidebarCollapsed");
 
   // GET /customer/me has no role guard, so a non-customer session (e.g. a stale

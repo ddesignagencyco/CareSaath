@@ -7,6 +7,7 @@ import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { Card } from "@shared/ui/card";
 import { EmptyState, ErrorState, FilterTabs, TableSkeleton } from "@shared/ui/misc";
+import { DatePicker } from "@shared/ui/date-picker";
 import type { CaregiverVisitListItem } from "@shared/caregiver-types";
 import { VisitRow } from "@/features/caregiver/components/visit-row";
 import { useNow } from "@shared/hooks/use-now";
@@ -82,13 +83,7 @@ export default function VisitsPage() {
           />
         )}
         <div className="flex items-center gap-2">
-          <input
-            type="date"
-            aria-label={t("onDate")}
-            value={onDate}
-            onChange={(e) => setOnDate(e.target.value)}
-            className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-sm text-ink-900"
-          />
+          <DatePicker aria-label={t("onDate")} placeholder={t("onDate")} value={onDate} onChange={setOnDate} className="w-44" />
           {onDate && (
             <button type="button" onClick={() => setOnDate("")} className="text-sm font-semibold text-brand-700 hover:underline">
               {t("clearDate")}
