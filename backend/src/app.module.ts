@@ -20,6 +20,7 @@ import { AvailabilityModule } from './availability/availability.module.js';
 import { VerificationModule } from './verification/verification.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { BookingExpiryModule } from './bookings/booking-expiry.service.js';
 import { VisitsModule } from './visits/visits.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
@@ -51,6 +52,7 @@ import { EmailModule } from './email/email.module.js';
     VerificationModule,
     NotificationsModule,
     BookingsModule,
+    BookingExpiryModule,
     VisitsModule,
     FeedbackModule,
     PaymentsModule,

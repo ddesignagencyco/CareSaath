@@ -29,6 +29,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -58,6 +59,7 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { distanceMeters } from '../visits/visits.module.js';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -151,6 +153,16 @@ export class CreateBookingDto {
   @IsString()
   @MaxLength(24)
   promoCode?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'ASAP request: shorter response window (booking.immediateRespondWindowMinutes) and the ' +
+      "caregiver's last known location must be within booking.immediateMaxDistanceMeters of the visit address.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  isImmediate?: boolean;
 }
 
 export class CancelBookingDto {
@@ -264,6 +276,30 @@ export class BookingsService {
     );
   }
 
+  /** Immediate bookings require the caregiver to already be near the visit address. */
+  private async assertCaregiverNearby(
+    caregiver: { currentLat: Prisma.Decimal | null; currentLng: Prisma.Decimal | null },
+    address: { latitude: Prisma.Decimal; longitude: Prisma.Decimal },
+  ): Promise<void> {
+    if (caregiver.currentLat === null || caregiver.currentLng === null) {
+      throw new BadRequestException(
+        'This caregiver has not shared a live location; immediate bookings need a nearby caregiver',
+      );
+    }
+    const maxDistanceMeters = await this.config.getNumber('booking.immediateMaxDistanceMeters');
+    const meters = distanceMeters(
+      Number(caregiver.currentLat),
+      Number(caregiver.currentLng),
+      Number(address.latitude),
+      Number(address.longitude),
+    );
+    if (meters > maxDistanceMeters) {
+      throw new BadRequestException(
+        `This caregiver is about ${Math.round(meters)} m away; immediate bookings require a caregiver within ${maxDistanceMeters} m`,
+      );
+    }
+  }
+
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
       where: { userId: user.sub },
@@ -287,6 +323,9 @@ export class BookingsService {
     }
     if (dto.type === BookingType.RECURRING && (!dto.weekdays || dto.weekdays.length === 0)) {
       throw new BadRequestException('weekdays are required for a recurring booking');
+    }
+    if (dto.isImmediate && dto.type === BookingType.RECURRING) {
+      throw new BadRequestException('Immediate bookings must be type SINGLE');
     }
 
     const [patient, address, caregiver] = await Promise.all([
@@ -312,6 +351,9 @@ export class BookingsService {
     if (!caregiver) {
       throw new NotFoundException('Caregiver not available');
     }
+    if (dto.isImmediate) {
+      await this.assertCaregiverNearby(caregiver, address);
+    }
 
     const occurrences = expandOccurrences(
       startDate,
@@ -324,7 +366,9 @@ export class BookingsService {
     }
 
     const now = new Date();
-    const respondWindowMinutes = await this.config.getNumber('booking.respondWindowMinutes');
+    const respondWindowMinutes = await this.config.getNumber(
+      dto.isImmediate ? 'booking.immediateRespondWindowMinutes' : 'booking.respondWindowMinutes',
+    );
     const respondBy = new Date(now.getTime() + respondWindowMinutes * 60 * 1000);
     const rateSnapshot = caregiver.ratePerVisit;
 
@@ -357,6 +401,7 @@ export class BookingsService {
           promoCodeId: promoId,
           discountAmount,
           respondBy,
+          isImmediate: dto.isImmediate ?? false,
           status: BookingStatus.REQUESTED,
         },
       });

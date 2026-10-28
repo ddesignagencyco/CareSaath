@@ -10,7 +10,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
   const prisma = {
     caregiverProfile: {
       findUnique: vi.fn().mockResolvedValue({ id: 'cg-1' }),
+      findFirst: vi.fn(),
     },
+    patientProfile: { findFirst: vi.fn() },
+    address: { findFirst: vi.fn() },
     booking: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -122,6 +125,108 @@ describe('BookingsService.accept', () => {
         booking: { customerId: 'cust-1', caregiverId: 'cg-1', id: { not: 'b-1' } },
       },
     });
+  });
+});
+
+describe('BookingsService.createCustomerBooking', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const customer: AuthUser = { sub: 'cust-1', role: 'CUSTOMER', phone: '+923000000001' };
+  const baseDto = {
+    patientId: 'pat-1',
+    caregiverId: 'cg-1',
+    addressId: 'addr-1',
+    startDate: '2026-11-01',
+    endDate: '2026-11-01',
+    timeWindowStart: '09:00',
+    timeWindowEnd: '11:00',
+  };
+
+  function setHappyPath(prisma: ReturnType<typeof makeService>['prisma'], caregiverExtra: Record<string, unknown> = {}) {
+    prisma.patientProfile.findFirst.mockResolvedValue({ id: 'pat-1' });
+    prisma.address.findFirst.mockResolvedValue({ id: 'addr-1', latitude: 31.5204, longitude: 74.3587 });
+    prisma.caregiverProfile.findFirst.mockResolvedValue({
+      id: 'cg-1',
+      userId: 'u-caregiver',
+      specialty: 'NURSING',
+      ratePerVisit: 50000,
+      currentLat: null,
+      currentLng: null,
+      ...caregiverExtra,
+    });
+    prisma.visit.count.mockResolvedValue(0);
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'b-1',
+      customerId: 'cust-1',
+      caregiverId: 'cg-1',
+      prescriptions: [],
+    });
+    prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        booking: { create: vi.fn().mockResolvedValue({ id: 'b-1' }) },
+        visit: { createMany: vi.fn() },
+      }),
+    );
+  }
+
+  it('uses the standard respond window for a normal booking', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma);
+    config.getNumber.mockImplementation((key: string) =>
+      Promise.resolve(key === 'booking.respondWindowMinutes' ? 60 : 10),
+    );
+
+    await service.createCustomerBooking(customer, baseDto);
+
+    expect(config.getNumber).toHaveBeenCalledWith('booking.respondWindowMinutes');
+    expect(config.getNumber).not.toHaveBeenCalledWith('booking.immediateMaxDistanceMeters');
+  });
+
+  it('rejects an immediate booking when the caregiver has no live location', async () => {
+    const { service, prisma } = makeService();
+    setHappyPath(prisma);
+    await expect(
+      service.createCustomerBooking(customer, { ...baseDto, isImmediate: true }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects an immediate booking when the caregiver is too far away', async () => {
+    const { service, prisma, config } = makeService();
+    // ~11km north of the visit address: well past any sane immediate radius.
+    setHappyPath(prisma, { currentLat: 31.62, currentLng: 74.3587 });
+    config.getNumber.mockImplementation((key: string) =>
+      Promise.resolve(key === 'booking.immediateMaxDistanceMeters' ? 5000 : 10),
+    );
+    await expect(
+      service.createCustomerBooking(customer, { ...baseDto, isImmediate: true }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('accepts an immediate booking from a nearby caregiver, using the shorter window', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma, { currentLat: 31.5204, currentLng: 74.3587 });
+    config.getNumber.mockImplementation((key: string) =>
+      Promise.resolve(
+        key === 'booking.immediateRespondWindowMinutes' ? 10 : key === 'booking.immediateMaxDistanceMeters' ? 5000 : 60,
+      ),
+    );
+
+    await service.createCustomerBooking(customer, { ...baseDto, isImmediate: true });
+
+    expect(config.getNumber).toHaveBeenCalledWith('booking.immediateRespondWindowMinutes');
+  });
+
+  it('rejects an immediate recurring booking before touching the database', async () => {
+    const { service, prisma } = makeService();
+    await expect(
+      service.createCustomerBooking(customer, {
+        ...baseDto,
+        type: 'RECURRING' as never,
+        weekdays: [1, 3],
+        isImmediate: true,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.patientProfile.findFirst).not.toHaveBeenCalled();
   });
 });
 

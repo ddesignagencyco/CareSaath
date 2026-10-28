@@ -88,6 +88,30 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     envDefault: 30,
     description: 'Redis TTL for cached public caregiver search results.',
   },
+  {
+    key: 'booking.immediateRespondWindowMinutes',
+    envVar: 'BOOKING_IMMEDIATE_RESPOND_WINDOW_MINUTES',
+    envDefault: 10,
+    description: 'Minutes a caregiver has to accept or decline an immediate (ASAP) booking request.',
+  },
+  {
+    key: 'booking.immediateMaxDistanceMeters',
+    envVar: 'BOOKING_IMMEDIATE_MAX_DISTANCE_METERS',
+    envDefault: 5000,
+    description: 'Maximum distance (metres) between a caregiver\'s last known location and the visit address to request an immediate booking.',
+  },
+  {
+    key: 'caregiver.strikeThreshold',
+    envVar: 'CAREGIVER_STRIKE_THRESHOLD',
+    envDefault: 3,
+    description: 'Number of strikes (declined bookings, late arrivals, no-shows) before a caregiver is auto-suspended.',
+  },
+  {
+    key: 'visit.lateArrivalGraceMinutes',
+    envVar: 'VISIT_LATE_ARRIVAL_GRACE_MINUTES',
+    envDefault: 15,
+    description: 'Minutes past the visit time window start a caregiver may check in without it counting as a late-arrival strike.',
+  },
 ];
 
 const CONFIG_CACHE_TTL_SECONDS = 60;
