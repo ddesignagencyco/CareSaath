@@ -45,6 +45,7 @@ import {
   BookingType,
   Prisma,
   UserRole,
+  VisitStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -59,6 +60,13 @@ import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A caregiver actively engaged with a patient right now; a future CONFIRMED visit is fine. */
+const ACTIVE_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+];
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -416,15 +424,38 @@ export class BookingsService {
     } satisfies Prisma.BookingInclude;
   }
 
-  /** Prescriptions carry a viewable `url`; the internal storage key is not exposed. */
-  private async presentBooking<T extends { prescriptions: Array<{ fileKey: string }> }>(booking: T) {
-    const prescriptions = await Promise.all(
-      booking.prescriptions.map(async ({ fileKey, ...rest }) => {
-        const { url } = await withFileUrl(this.storage, { fileKey });
-        return { ...rest, url };
-      }),
-    );
-    return { ...booking, prescriptions };
+  /** Completed visits this caregiver has already done for this customer's family, excluding this booking. */
+  private async priorVisitsWithCaregiver(
+    customerId: string,
+    caregiverId: string,
+    excludeBookingId: string,
+  ): Promise<number> {
+    return this.prisma.visit.count({
+      where: {
+        status: VisitStatus.COMPLETED,
+        booking: { customerId, caregiverId, id: { not: excludeBookingId } },
+      },
+    });
+  }
+
+  /**
+   * Prescriptions carry a viewable `url` (the internal storage key is not
+   * exposed), and `priorVisitsWithCaregiver` surfaces how many completed
+   * visits this caregiver already has with this customer's family.
+   */
+  private async presentBooking<
+    T extends { id: string; customerId: string; caregiverId: string; prescriptions: Array<{ fileKey: string }> },
+  >(booking: T) {
+    const [prescriptions, priorVisitsWithCaregiver] = await Promise.all([
+      Promise.all(
+        booking.prescriptions.map(async ({ fileKey, ...rest }) => {
+          const { url } = await withFileUrl(this.storage, { fileKey });
+          return { ...rest, url };
+        }),
+      ),
+      this.priorVisitsWithCaregiver(booking.customerId, booking.caregiverId, booking.id),
+    ]);
+    return { ...booking, prescriptions, priorVisitsWithCaregiver };
   }
 
   async getBooking(id: string) {
@@ -582,6 +613,15 @@ export class BookingsService {
     }
     if (booking.status !== BookingStatus.REQUESTED) {
       throw new BadRequestException('Only requested bookings can be accepted');
+    }
+    const activeVisit = await this.prisma.visit.findFirst({
+      where: { status: { in: ACTIVE_VISIT_STATUSES }, booking: { caregiverId } },
+      select: { id: true },
+    });
+    if (activeVisit) {
+      throw new BadRequestException(
+        'You are currently on a visit; complete it before accepting another booking',
+      );
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.booking.update({

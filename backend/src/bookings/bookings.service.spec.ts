@@ -23,6 +23,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
       findFirst: vi.fn(),
       update: vi.fn(),
       create: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
     visitStatusHistory: { create: vi.fn() },
     prescriptionDocument: { create: vi.fn(), findFirst: vi.fn() },
@@ -70,7 +71,13 @@ describe('BookingsService.accept', () => {
     prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
     );
-    prisma.booking.findUnique.mockResolvedValue({ id: 'b-1', status: BookingStatus.CONFIRMED, prescriptions: [] });
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'b-1',
+      status: BookingStatus.CONFIRMED,
+      customerId: 'cust-1',
+      caregiverId: 'cg-1',
+      prescriptions: [],
+    });
 
     const result = await service.accept(caregiverUser, 'b-1');
 
@@ -81,6 +88,40 @@ describe('BookingsService.accept', () => {
     expect(notifications.notify).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'cust-1', event: 'booking.confirmed' }),
     );
+  });
+
+  it('rejects accepting when the caregiver already has an active visit elsewhere', async () => {
+    const { service, prisma } = makeService();
+    prisma.booking.findFirst.mockResolvedValue({ id: 'b-1', status: BookingStatus.REQUESTED });
+    prisma.visit.findFirst.mockResolvedValue({ id: 'v-active' });
+    await expect(service.accept(caregiverUser, 'b-1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the count of prior completed visits with this caregiver', async () => {
+    const { service, prisma } = makeService();
+    prisma.booking.findFirst.mockResolvedValue({ id: 'b-1', status: BookingStatus.REQUESTED, customerId: 'cust-1' });
+    prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
+    );
+    prisma.booking.findUnique.mockResolvedValue({
+      id: 'b-1',
+      status: BookingStatus.CONFIRMED,
+      customerId: 'cust-1',
+      caregiverId: 'cg-1',
+      prescriptions: [],
+    });
+    prisma.visit.count.mockResolvedValue(4);
+
+    const result = await service.accept(caregiverUser, 'b-1');
+
+    expect(result).toMatchObject({ priorVisitsWithCaregiver: 4 });
+    expect(prisma.visit.count).toHaveBeenCalledWith({
+      where: {
+        status: 'COMPLETED',
+        booking: { customerId: 'cust-1', caregiverId: 'cg-1', id: { not: 'b-1' } },
+      },
+    });
   });
 });
 
