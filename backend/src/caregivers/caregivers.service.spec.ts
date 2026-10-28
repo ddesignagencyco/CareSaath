@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CaregiversService } from './caregivers.module.js';
 import { deriveKey, encryptField } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -157,5 +157,120 @@ describe('CaregiversService', () => {
     });
     const result = (await service.getMine(user)) as { cnic: string };
     expect(result.cnic).toBe('***********67-1');
+  });
+
+  describe('pricing bracket', () => {
+    it('register: defaults the bracket to ratePerVisit when no bracket is given', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+      prisma.commissionRate.findUnique.mockResolvedValue({ id: 'comm-1' });
+      prisma.caregiverProfile.create.mockResolvedValue({ id: 'cg-1' });
+      await service.register(user, {
+        cnic: '1234567890123',
+        licenseNumber: 'PNC-1',
+        licenseBody: 'PNC' as never,
+        specialty: 'NURSING' as never,
+        serviceCities: ['Lahore'],
+        ratePerVisit: 50000,
+      });
+      const data = prisma.caregiverProfile.create.mock.calls[0][0].data;
+      expect(data).toMatchObject({ minRatePerVisit: 50000, maxRatePerVisit: 50000 });
+    });
+
+    it('register: rejects a rate outside the given bracket', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+      prisma.commissionRate.findUnique.mockResolvedValue({ id: 'comm-1' });
+      await expect(
+        service.register(user, {
+          cnic: '1234567890123',
+          licenseNumber: 'PNC-1',
+          licenseBody: 'PNC' as never,
+          specialty: 'NURSING' as never,
+          serviceCities: ['Lahore'],
+          ratePerVisit: 40000,
+          minRatePerVisit: 50000,
+          maxRatePerVisit: 80000,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.caregiverProfile.create).not.toHaveBeenCalled();
+    });
+
+    it('register: rejects an inverted bracket', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+      prisma.commissionRate.findUnique.mockResolvedValue({ id: 'comm-1' });
+      await expect(
+        service.register(user, {
+          cnic: '1234567890123',
+          licenseNumber: 'PNC-1',
+          licenseBody: 'PNC' as never,
+          specialty: 'NURSING' as never,
+          serviceCities: ['Lahore'],
+          ratePerVisit: 50000,
+          minRatePerVisit: 80000,
+          maxRatePerVisit: 50000,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('updateProfile: allows moving the rate within the existing bracket', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({
+        id: 'cg-1',
+        specialty: 'NURSING',
+        ratePerVisit: 50000,
+        minRatePerVisit: 40000,
+        maxRatePerVisit: 60000,
+        commissionRateId: 'comm-1',
+      });
+      prisma.caregiverProfile.update.mockResolvedValue({ id: 'cg-1', ratePerVisit: 55000 });
+      const result = await service.updateProfile(user, { ratePerVisit: 55000 });
+      expect(result).toMatchObject({ ratePerVisit: 55000 });
+    });
+
+    it('updateProfile: rejects moving the rate outside the existing bracket', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({
+        id: 'cg-1',
+        specialty: 'NURSING',
+        ratePerVisit: 50000,
+        minRatePerVisit: 40000,
+        maxRatePerVisit: 60000,
+        commissionRateId: 'comm-1',
+      });
+      await expect(service.updateProfile(user, { ratePerVisit: 70000 })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.caregiverProfile.update).not.toHaveBeenCalled();
+    });
+
+    it('updateProfile: can widen the bracket and move the rate in the same call', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({
+        id: 'cg-1',
+        specialty: 'NURSING',
+        ratePerVisit: 50000,
+        minRatePerVisit: 40000,
+        maxRatePerVisit: 60000,
+        commissionRateId: 'comm-1',
+      });
+      prisma.caregiverProfile.update.mockResolvedValue({ id: 'cg-1', ratePerVisit: 75000 });
+      await service.updateProfile(user, { ratePerVisit: 75000, maxRatePerVisit: 80000 });
+      expect(prisma.caregiverProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ ratePerVisit: 75000, maxRatePerVisit: 80000 }),
+        }),
+      );
+    });
+
+    it('updateProfile: leaves an untouched bracket/rate alone (no validation noise)', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({
+        id: 'cg-1',
+        specialty: 'NURSING',
+        ratePerVisit: 50000,
+        minRatePerVisit: 40000,
+        maxRatePerVisit: 60000,
+        commissionRateId: 'comm-1',
+      });
+      prisma.caregiverProfile.update.mockResolvedValue({ id: 'cg-1', bio: 'Updated bio' });
+      await expect(service.updateProfile(user, { bio: 'Updated bio' })).resolves.toMatchObject({
+        bio: 'Updated bio',
+      });
+    });
   });
 });

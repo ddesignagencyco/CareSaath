@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -32,6 +33,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -64,6 +66,7 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { computeCaregiverBadge } from './badge.js';
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
@@ -144,6 +147,24 @@ export class RegisterCaregiverDto {
   @IsInt()
   @Min(1000)
   ratePerVisit!: number;
+
+  @ApiPropertyOptional({
+    example: 50000,
+    description: 'Lower bound of the self-set pricing bracket (paisa). Defaults to ratePerVisit when omitted.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  minRatePerVisit?: number;
+
+  @ApiPropertyOptional({
+    example: 80000,
+    description: 'Upper bound of the self-set pricing bracket (paisa). Defaults to ratePerVisit when omitted.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  maxRatePerVisit?: number;
 }
 
 export class UpdateCaregiverProfileDto {
@@ -152,11 +173,23 @@ export class UpdateCaregiverProfileDto {
   @IsEnum(Specialty)
   specialty?: Specialty;
 
-  @ApiPropertyOptional({ example: 65000, description: 'New rate per visit in paisa' })
+  @ApiPropertyOptional({ example: 65000, description: 'New rate per visit in paisa; must stay within the current (or newly set) pricing bracket' })
   @IsOptional()
   @IsInt()
   @Min(1000)
   ratePerVisit?: number;
+
+  @ApiPropertyOptional({ example: 50000, description: 'New lower bound of the pricing bracket (paisa)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  minRatePerVisit?: number;
+
+  @ApiPropertyOptional({ example: 80000, description: 'New upper bound of the pricing bracket (paisa)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  maxRatePerVisit?: number;
 
   @ApiPropertyOptional({ example: ['Lahore', 'Kasur'] })
   @IsOptional()
@@ -176,6 +209,20 @@ export class UpdateCaregiverProfileDto {
   @Min(0)
   @Max(60)
   experienceYears?: number;
+}
+
+export class UpdateLocationDto {
+  @ApiProperty({ example: 31.5204, description: 'Current latitude' })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat!: number;
+
+  @ApiProperty({ example: 74.3587, description: 'Current longitude' })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng!: number;
 }
 
 export class SearchQueryDto {
@@ -203,6 +250,18 @@ export class SearchQueryDto {
   @Min(1)
   @Max(100)
   limit = 20;
+}
+
+/** A caregiver's rate must sit within the bracket they set for themselves. */
+function assertRateWithinBracket(rate: number, min: number, max: number): void {
+  if (min > max) {
+    throw new BadRequestException('minRatePerVisit must not be greater than maxRatePerVisit');
+  }
+  if (rate < min || rate > max) {
+    throw new BadRequestException(
+      `ratePerVisit (${rate}) must be between the pricing bracket ${min}-${max}`,
+    );
+  }
 }
 
 @Injectable()
@@ -233,6 +292,9 @@ export class CaregiversService {
         'Commission rate not configured for this specialty (run seed)',
       );
     }
+    const minRatePerVisit = dto.minRatePerVisit ?? dto.ratePerVisit;
+    const maxRatePerVisit = dto.maxRatePerVisit ?? dto.ratePerVisit;
+    assertRateWithinBracket(dto.ratePerVisit, minRatePerVisit, maxRatePerVisit);
 
     const profile = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -250,6 +312,8 @@ export class CaregiversService {
           bio: dto.bio ?? null,
           serviceArea: { cities: dto.serviceCities },
           ratePerVisit: dto.ratePerVisit,
+          minRatePerVisit,
+          maxRatePerVisit,
           commissionRateId: commission.id,
         },
       });
@@ -280,6 +344,13 @@ export class CaregiversService {
     return photoKey ? this.storage.presignedGet(photoKey) : null;
   }
 
+  /** How many visits this caregiver has fully completed, for ranking/badges. */
+  private async completedVisitsCount(caregiverId: string): Promise<number> {
+    return this.prisma.visit.count({
+      where: { status: 'COMPLETED', booking: { caregiverId } },
+    });
+  }
+
   async getMine(user: AuthUser) {
     const profile = await this.prisma.caregiverProfile.findUnique({
       where: { userId: user.sub },
@@ -293,11 +364,18 @@ export class CaregiversService {
       throw new NotFoundException('Caregiver profile not found');
     }
     const cnic = decryptMaybe(profile.cnic, CNIC_KEY);
+    const completedVisits = await this.completedVisitsCount(profile.id);
     return {
       ...profile,
       documents: await Promise.all(profile.documents.map((doc) => withFileUrl(this.storage, doc))),
       cnic: cnic ? maskValue(cnic, 4) : null,
       photoUrl: await this.photoUrlFor(profile.photoKey),
+      badge: computeCaregiverBadge({
+        experienceYears: profile.experienceYears,
+        ratingAverage: profile.ratingAverage,
+        ratingCount: profile.ratingCount,
+        completedVisits,
+      }),
     };
   }
 
@@ -318,11 +396,23 @@ export class CaregiversService {
       }
       commissionRateId = commission.id;
     }
+    const ratePerVisit = dto.ratePerVisit ?? profile.ratePerVisit;
+    const minRatePerVisit = dto.minRatePerVisit ?? profile.minRatePerVisit ?? ratePerVisit;
+    const maxRatePerVisit = dto.maxRatePerVisit ?? profile.maxRatePerVisit ?? ratePerVisit;
+    if (
+      dto.ratePerVisit !== undefined ||
+      dto.minRatePerVisit !== undefined ||
+      dto.maxRatePerVisit !== undefined
+    ) {
+      assertRateWithinBracket(ratePerVisit, minRatePerVisit, maxRatePerVisit);
+    }
     const updated = await this.prisma.caregiverProfile.update({
       where: { id: profile.id },
       data: {
         ...(dto.specialty !== undefined ? { specialty: dto.specialty } : {}),
         ...(dto.ratePerVisit !== undefined ? { ratePerVisit: dto.ratePerVisit } : {}),
+        ...(dto.minRatePerVisit !== undefined ? { minRatePerVisit: dto.minRatePerVisit } : {}),
+        ...(dto.maxRatePerVisit !== undefined ? { maxRatePerVisit: dto.maxRatePerVisit } : {}),
         ...(dto.serviceCities !== undefined
           ? { serviceArea: { cities: dto.serviceCities } }
           : {}),
@@ -445,10 +535,19 @@ export class CaregiversService {
       }),
     ]);
     const withPhotos = await Promise.all(
-      items.map(async ({ photoKey, ...rest }) => ({
-        ...rest,
-        photoUrl: await this.photoUrlFor(photoKey),
-      })),
+      items.map(async ({ photoKey, ...rest }) => {
+        const completedVisits = await this.completedVisitsCount(rest.id);
+        return {
+          ...rest,
+          photoUrl: await this.photoUrlFor(photoKey),
+          badge: computeCaregiverBadge({
+            experienceYears: rest.experienceYears,
+            ratingAverage: rest.ratingAverage,
+            ratingCount: rest.ratingCount,
+            completedVisits,
+          }),
+        };
+      }),
     );
     const result = paginate(withPhotos, query.page, query.limit, total);
     if (ttlSeconds > 0) {
@@ -489,7 +588,17 @@ export class CaregiversService {
       throw new NotFoundException('Caregiver not found');
     }
     const { photoKey, ...rest } = profile;
-    return { ...rest, photoUrl: await this.photoUrlFor(photoKey) };
+    const completedVisits = await this.completedVisitsCount(profile.id);
+    return {
+      ...rest,
+      photoUrl: await this.photoUrlFor(photoKey),
+      badge: computeCaregiverBadge({
+        experienceYears: profile.experienceYears,
+        ratingAverage: profile.ratingAverage,
+        ratingCount: profile.ratingCount,
+        completedVisits,
+      }),
+    };
   }
 
   async photoUrl(user: AuthUser) {
@@ -525,6 +634,22 @@ export class CaregiversService {
     });
     return { photoKey: stored.fileKey };
   }
+
+  /** Live GPS fix, used to judge proximity for immediate bookings. */
+  async updateLocation(user: AuthUser, dto: UpdateLocationDto) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    await this.prisma.caregiverProfile.update({
+      where: { id: profile.id },
+      data: { currentLat: dto.lat, currentLng: dto.lng, locationUpdatedAt: new Date() },
+    });
+    return { ok: true as const };
+  }
 }
 
 @ApiTags('Caregiver - Profile')
@@ -541,6 +666,15 @@ export class CaregiverController {
   })
   register(@CurrentUser() user: AuthUser, @Body() dto: RegisterCaregiverDto) {
     return this.caregivers.register(user, dto);
+  }
+
+  @Patch('location')
+  @ApiOperation({
+    summary: 'Update live location',
+    description: 'Updates the caregiver\'s current GPS fix; used to judge proximity for immediate (ASAP) bookings.',
+  })
+  updateLocation(@CurrentUser() user: AuthUser, @Body() dto: UpdateLocationDto) {
+    return this.caregivers.updateLocation(user, dto);
   }
 
   @Get('profile')
