@@ -72,6 +72,7 @@ describe('Realtime (e2e)', () => {
 
   afterAll(async () => {
     for (const socket of sockets) socket.disconnect();
+    await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.caregiverProfile.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.auditLog.deleteMany({ where: { actorId: { in: createdUserIds } } });
     await prisma.notification.deleteMany({ where: { userId: { in: createdUserIds } } });

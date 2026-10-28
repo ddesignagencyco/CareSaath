@@ -27,6 +27,7 @@ describe('NotificationsService', () => {
   let push: ReturnType<typeof adapter>;
   let sms: ReturnType<typeof adapter>;
   let whatsapp: ReturnType<typeof adapter>;
+  let email: ReturnType<typeof adapter>;
   let service: NotificationsService;
   let realtime: { emit: ReturnType<typeof vi.fn> };
 
@@ -39,12 +40,14 @@ describe('NotificationsService', () => {
     push = adapter(NotificationChannel.PUSH);
     sms = adapter(NotificationChannel.SMS);
     whatsapp = adapter(NotificationChannel.WHATSAPP, false);
+    email = adapter(NotificationChannel.EMAIL);
     realtime = { emit: vi.fn() };
     service = new NotificationsService(
       prisma as never,
       sms as never,
       whatsapp as never,
       push as never,
+      email as never,
       realtime as never,
     );
   });
@@ -75,6 +78,29 @@ describe('NotificationsService', () => {
       expect.objectContaining({ phone: '+923001234567', message: 'Confirmed' } as Partial<ChannelDelivery>),
     );
     expect(whatsapp.send).not.toHaveBeenCalled();
+    expect(email.send).not.toHaveBeenCalled();
+  });
+
+  it('emails the recipient when they have an email on file', async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: 'CAREGIVER', email: 'care@example.com' });
+    await service.notify({
+      userId: 'u-1',
+      event: 'booking.requested',
+      payload: {},
+      message: 'Confirmed',
+    });
+    expect(email.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'care@example.com',
+        title: 'New booking request',
+        message: 'Confirmed',
+      } as Partial<ChannelDelivery>),
+    );
+  });
+
+  it('skips email when the recipient has no email on file', async () => {
+    await service.notify({ userId: 'u-1', event: 'booking.requested', payload: {} });
+    expect(email.send).not.toHaveBeenCalled();
   });
 
   it('marks a notification FAILED when the adapter throws', async () => {

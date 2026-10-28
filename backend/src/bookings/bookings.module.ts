@@ -29,6 +29,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -45,6 +46,7 @@ import {
   BookingType,
   Prisma,
   UserRole,
+  VisitStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -57,8 +59,17 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { PromosModule, PromosService } from '../promos/promos.module.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { distanceMeters } from '../visits/visits.module.js';
+import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A caregiver actively engaged with a patient right now; a future CONFIRMED visit is fine. */
+const ACTIVE_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+];
 
 function toDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -143,6 +154,16 @@ export class CreateBookingDto {
   @IsString()
   @MaxLength(24)
   promoCode?: string;
+
+  @ApiPropertyOptional({
+    example: false,
+    description:
+      'ASAP request: shorter response window (booking.immediateRespondWindowMinutes) and the ' +
+      "caregiver's last known location must be within booking.immediateMaxDistanceMeters of the visit address.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  isImmediate?: boolean;
 }
 
 export class CancelBookingDto {
@@ -239,6 +260,7 @@ export class BookingsService {
     private readonly promos: PromosService,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly caregivers: CaregiversService,
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
@@ -254,6 +276,30 @@ export class BookingsService {
       { users: [customerId, caregiverUserId] },
       { type: 'booking', id, action, status },
     );
+  }
+
+  /** Immediate bookings require the caregiver to already be near the visit address. */
+  private async assertCaregiverNearby(
+    caregiver: { currentLat: Prisma.Decimal | null; currentLng: Prisma.Decimal | null },
+    address: { latitude: Prisma.Decimal; longitude: Prisma.Decimal },
+  ): Promise<void> {
+    if (caregiver.currentLat === null || caregiver.currentLng === null) {
+      throw new BadRequestException(
+        'This caregiver has not shared a live location; immediate bookings need a nearby caregiver',
+      );
+    }
+    const maxDistanceMeters = await this.config.getNumber('booking.immediateMaxDistanceMeters');
+    const meters = distanceMeters(
+      Number(caregiver.currentLat),
+      Number(caregiver.currentLng),
+      Number(address.latitude),
+      Number(address.longitude),
+    );
+    if (meters > maxDistanceMeters) {
+      throw new BadRequestException(
+        `This caregiver is about ${Math.round(meters)} m away; immediate bookings require a caregiver within ${maxDistanceMeters} m`,
+      );
+    }
   }
 
   private async caregiverProfileId(user: AuthUser): Promise<string> {
@@ -280,6 +326,9 @@ export class BookingsService {
     if (dto.type === BookingType.RECURRING && (!dto.weekdays || dto.weekdays.length === 0)) {
       throw new BadRequestException('weekdays are required for a recurring booking');
     }
+    if (dto.isImmediate && dto.type === BookingType.RECURRING) {
+      throw new BadRequestException('Immediate bookings must be type SINGLE');
+    }
 
     const [patient, address, caregiver] = await Promise.all([
       this.prisma.patientProfile.findFirst({
@@ -304,6 +353,9 @@ export class BookingsService {
     if (!caregiver) {
       throw new NotFoundException('Caregiver not available');
     }
+    if (dto.isImmediate) {
+      await this.assertCaregiverNearby(caregiver, address);
+    }
 
     const occurrences = expandOccurrences(
       startDate,
@@ -316,7 +368,9 @@ export class BookingsService {
     }
 
     const now = new Date();
-    const respondWindowMinutes = await this.config.getNumber('booking.respondWindowMinutes');
+    const respondWindowMinutes = await this.config.getNumber(
+      dto.isImmediate ? 'booking.immediateRespondWindowMinutes' : 'booking.respondWindowMinutes',
+    );
     const respondBy = new Date(now.getTime() + respondWindowMinutes * 60 * 1000);
     const rateSnapshot = caregiver.ratePerVisit;
 
@@ -349,6 +403,7 @@ export class BookingsService {
           promoCodeId: promoId,
           discountAmount,
           respondBy,
+          isImmediate: dto.isImmediate ?? false,
           status: BookingStatus.REQUESTED,
         },
       });
@@ -416,15 +471,38 @@ export class BookingsService {
     } satisfies Prisma.BookingInclude;
   }
 
-  /** Prescriptions carry a viewable `url`; the internal storage key is not exposed. */
-  private async presentBooking<T extends { prescriptions: Array<{ fileKey: string }> }>(booking: T) {
-    const prescriptions = await Promise.all(
-      booking.prescriptions.map(async ({ fileKey, ...rest }) => {
-        const { url } = await withFileUrl(this.storage, { fileKey });
-        return { ...rest, url };
-      }),
-    );
-    return { ...booking, prescriptions };
+  /** Completed visits this caregiver has already done for this customer's family, excluding this booking. */
+  private async priorVisitsWithCaregiver(
+    customerId: string,
+    caregiverId: string,
+    excludeBookingId: string,
+  ): Promise<number> {
+    return this.prisma.visit.count({
+      where: {
+        status: VisitStatus.COMPLETED,
+        booking: { customerId, caregiverId, id: { not: excludeBookingId } },
+      },
+    });
+  }
+
+  /**
+   * Prescriptions carry a viewable `url` (the internal storage key is not
+   * exposed), and `priorVisitsWithCaregiver` surfaces how many completed
+   * visits this caregiver already has with this customer's family.
+   */
+  private async presentBooking<
+    T extends { id: string; customerId: string; caregiverId: string; prescriptions: Array<{ fileKey: string }> },
+  >(booking: T) {
+    const [prescriptions, priorVisitsWithCaregiver] = await Promise.all([
+      Promise.all(
+        booking.prescriptions.map(async ({ fileKey, ...rest }) => {
+          const { url } = await withFileUrl(this.storage, { fileKey });
+          return { ...rest, url };
+        }),
+      ),
+      this.priorVisitsWithCaregiver(booking.customerId, booking.caregiverId, booking.id),
+    ]);
+    return { ...booking, prescriptions, priorVisitsWithCaregiver };
   }
 
   async getBooking(id: string) {
@@ -583,6 +661,15 @@ export class BookingsService {
     if (booking.status !== BookingStatus.REQUESTED) {
       throw new BadRequestException('Only requested bookings can be accepted');
     }
+    const activeVisit = await this.prisma.visit.findFirst({
+      where: { status: { in: ACTIVE_VISIT_STATUSES }, booking: { caregiverId } },
+      select: { id: true },
+    });
+    if (activeVisit) {
+      throw new BadRequestException(
+        'You are currently on a visit; complete it before accepting another booking',
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.booking.update({
         where: { id },
@@ -639,6 +726,7 @@ export class BookingsService {
     });
     await this.notifyCustomer(booking.customerId, 'booking.declined', { bookingId: id });
     this.bookingChanged(id, 'declined', BookingStatus.DECLINED, booking.customerId, user.sub);
+    await this.caregivers.recordStrike(caregiverId, 'DECLINED', id);
     return this.getBooking(id);
   }
 
@@ -932,7 +1020,7 @@ export class CaregiverBookingsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PromosModule, PlatformConfigModule],
+  imports: [NotificationsModule, PromosModule, PlatformConfigModule, CaregiversModule],
   controllers: [CustomerBookingsController, CaregiverBookingsController],
   providers: [BookingsService],
   exports: [BookingsService],

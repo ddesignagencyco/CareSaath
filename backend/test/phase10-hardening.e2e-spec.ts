@@ -74,6 +74,9 @@ describe('Phase 10 hardening (e2e)', () => {
     await prisma.caregiverDocument.deleteMany({
       where: { caregiver: { userId: { in: createdUserIds } } },
     });
+    await prisma.caregiverStrike.deleteMany({
+      where: { caregiver: { userId: { in: createdUserIds } } },
+    });
     await prisma.caregiverProfile.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await close();

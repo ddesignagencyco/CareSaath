@@ -50,6 +50,10 @@ export function createPrismaMock() {
     payment: model(),
     payoutAccount: model(),
     payoutRequest: model(),
+    chatMessage: model(),
+    medicalOrder: model(),
+    caregiverStrike: model(),
+    callLog: model(),
     // $transaction supports both array form and callback form.
     $transaction: vi.fn(),
   };

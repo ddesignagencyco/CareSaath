@@ -20,8 +20,11 @@ import { AvailabilityModule } from './availability/availability.module.js';
 import { VerificationModule } from './verification/verification.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { BookingExpiryModule } from './bookings/booking-expiry.service.js';
 import { VisitsModule } from './visits/visits.module.js';
 import { FeedbackModule } from './feedback/feedback.module.js';
+import { MedicalOrdersModule } from './medical-orders/medical-orders.module.js';
+import { ChatModule } from './chat/chat.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { PayoutsModule } from './payouts/payouts.module.js';
 import { CommissionsModule } from './commissions/commissions.module.js';
@@ -32,6 +35,7 @@ import { AdminSafetyModule } from './admin/safety.module.js';
 import { PlatformConfigModule } from './config/platform-config.module.js';
 import { RetentionModule } from './common/retention/retention.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
+import { EmailModule } from './email/email.module.js';
 
 @Module({
   imports: [
@@ -50,8 +54,11 @@ import { RealtimeModule } from './realtime/realtime.module.js';
     VerificationModule,
     NotificationsModule,
     BookingsModule,
+    BookingExpiryModule,
     VisitsModule,
     FeedbackModule,
+    MedicalOrdersModule,
+    ChatModule,
     PaymentsModule,
     PayoutsModule,
     CommissionsModule,
@@ -61,6 +68,7 @@ import { RealtimeModule } from './realtime/realtime.module.js';
     AdminSafetyModule,
     PlatformConfigModule,
     RetentionModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,6 +1,6 @@
 import './config/load-env.js';
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
@@ -8,7 +8,12 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: [
+      { path: 'health', method: RequestMethod.GET },
+      { path: '', method: RequestMethod.GET },
+    ],
+  });
   // Fan socket events out through Redis so every API instance reaches its own connected clients.
   const socketAdapter = new RedisIoAdapter(app);
   socketAdapter.connectToRedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
@@ -98,7 +103,7 @@ async function bootstrap() {
   });
 
   const port = process.env['PORT'] ?? 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   const base = `http://localhost:${port}`;
   const logger = new Logger('Bootstrap');

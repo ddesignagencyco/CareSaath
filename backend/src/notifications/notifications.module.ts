@@ -41,8 +41,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
+import { EmailModule } from '../email/email.module.js';
 import { eventDefinition } from './events.js';
 import {
+  EmailChannelAdapter,
   NotificationChannelAdapter,
   PushChannelAdapter,
   SmsChannelAdapter,
@@ -119,9 +121,10 @@ export class NotificationsService {
     smsAdapter: SmsChannelAdapter,
     whatsappAdapter: WhatsAppChannelAdapter,
     pushAdapter: PushChannelAdapter,
+    emailAdapter: EmailChannelAdapter,
     @Optional() private readonly realtime?: RealtimeService,
   ) {
-    this.adapters = [pushAdapter, smsAdapter, whatsappAdapter];
+    this.adapters = [pushAdapter, smsAdapter, whatsappAdapter, emailAdapter];
   }
 
   /**
@@ -139,7 +142,7 @@ export class NotificationsService {
       }
       const recipient = await this.prisma.user.findUnique({
         where: { id: input.userId },
-        select: { role: true },
+        select: { role: true, email: true },
       });
       if (!recipient) {
         return;
@@ -155,9 +158,14 @@ export class NotificationsService {
         if (!adapter.enabled()) {
           continue;
         }
-        const requiresPhone =
-          adapter.channel !== NotificationChannel.PUSH;
-        if (requiresPhone && !input.phone) {
+        if (
+          (adapter.channel === NotificationChannel.SMS ||
+            adapter.channel === NotificationChannel.WHATSAPP) &&
+          !input.phone
+        ) {
+          continue;
+        }
+        if (adapter.channel === NotificationChannel.EMAIL && !recipient.email) {
           continue;
         }
         const created = await this.prisma.notification.create({
@@ -175,6 +183,8 @@ export class NotificationsService {
         try {
           await adapter.send({
             phone: input.phone,
+            email: recipient.email,
+            title,
             message: input.message,
             event: input.event,
           });
@@ -305,12 +315,14 @@ export class NotificationsController {
 }
 
 @Module({
+  imports: [EmailModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
     SmsChannelAdapter,
     WhatsAppChannelAdapter,
     PushChannelAdapter,
+    EmailChannelAdapter,
   ],
   exports: [NotificationsService],
 })

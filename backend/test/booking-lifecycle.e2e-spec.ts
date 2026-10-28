@@ -103,6 +103,7 @@ describe('Booking & visit lifecycle (e2e)', () => {
     await prisma.booking.deleteMany({ where: { customerId } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: customerId } });
     await prisma.address.deleteMany({ where: { userId: customerId } });
+    await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: caregiverUserId } } });
     await prisma.caregiverProfile.deleteMany({ where: { userId: caregiverUserId } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await close();

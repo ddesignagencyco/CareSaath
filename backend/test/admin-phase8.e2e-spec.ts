@@ -88,6 +88,7 @@ describe('Admin: promos, disputes, analytics, reports, safety (e2e)', () => {
     await prisma.promoCode.deleteMany({ where: { code: { startsWith: 'E2E8' } } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: customerId } });
     await prisma.address.deleteMany({ where: { userId: customerId } });
+    await prisma.caregiverStrike.deleteMany({ where: { caregiverId: caregiverProfileId } });
     await prisma.caregiverProfile.deleteMany({ where: { id: caregiverProfileId } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await close();

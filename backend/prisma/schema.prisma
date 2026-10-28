@@ -33,6 +33,7 @@ enum Specialty {
   PHYSIOTHERAPY
   POST_SURGERY_CARE
   ELDERLY_CARE
+  DOCTOR
 }
 
 enum LicenseBody {
@@ -101,6 +102,7 @@ enum NotificationChannel {
   SMS
   WHATSAPP
   PUSH
+  EMAIL
 }
 
 enum NotificationStatus {
@@ -174,6 +176,20 @@ enum DisputeStatus {
   RESOLVED
 }
 
+enum StrikeReason {
+  DECLINED
+  LATE_ARRIVAL
+  NO_SHOW
+}
+
+enum CallStatus {
+  INITIATED
+  CONNECTED
+  ENDED
+  MISSED
+  REJECTED
+}
+
 // ---------------------------------------------------------------------------
 // Identity and access (ERD §3.1)
 // ---------------------------------------------------------------------------
@@ -181,6 +197,7 @@ enum DisputeStatus {
 model User {
   id                String       @id @default(uuid())
   phone             String       @unique
+  email             String?      @unique
   role              UserRole     @default(CUSTOMER)
   fullName          String       @default("")
   preferredLanguage Language     @default(EN)
@@ -205,6 +222,9 @@ model User {
   againstDisputes      Dispute[]               @relation("DisputeAgainst")
   resolvedDisputes     Dispute[]               @relation("DisputeResolvedBy")
   credentialReviews    CredentialReview[]      @relation("CredentialReviewer")
+  sentChatMessages     ChatMessage[]
+  callsPlaced          CallLog[]               @relation("CallCaller")
+  callsReceived        CallLog[]               @relation("CallCallee")
 }
 
 model OtpCode {
@@ -255,6 +275,7 @@ model PatientProfile {
 
   user     User      @relation(fields: [ownerUserId], references: [id])
   bookings Booking[]
+  medicalOrders MedicalOrder[]
 
   @@index([ownerUserId])
 }
@@ -291,7 +312,18 @@ model CaregiverProfile {
   bio                String?
   photoKey           String?
   serviceArea        Json // pilot representation: { "cities": string[] } (TBD)
-  ratePerVisit       Int // minor units (paisa)
+  ratePerVisit       Int // minor units (paisa); current advertised/charged rate
+  /// Self-set pricing bracket: ratePerVisit must stay within [minRatePerVisit, maxRatePerVisit].
+  /// Null until the caregiver first sets a bracket (unbounded until then).
+  minRatePerVisit    Int?
+  maxRatePerVisit    Int?
+  /// Live GPS fix, updated periodically by the caregiver app; used to judge
+  /// proximity for immediate bookings.
+  currentLat         Decimal?           @db.Decimal(9, 6)
+  currentLng         Decimal?           @db.Decimal(9, 6)
+  locationUpdatedAt  DateTime?
+  /// Cumulative count of CaregiverStrike rows (declines / late arrivals / no-shows).
+  strikeCount        Int                @default(0)
   commissionRateId   String
   verificationStatus VerificationStatus @default(PENDING)
   approvedAt         DateTime?
@@ -312,6 +344,8 @@ model CaregiverProfile {
   bookings         Booking[]
   reviews          Review[]
   visitNotes       VisitNote[]
+  strikes          CaregiverStrike[]
+  medicalOrdersIssued MedicalOrder[]
 
   @@index([verificationStatus, specialty])
   // GIN index for the city filter: the search matches `serviceArea @> {"cities":[...]}`
@@ -395,6 +429,9 @@ model Booking {
   promoCodeId      String?
   discountAmount   Int           @default(0)
   status           BookingStatus @default(REQUESTED)
+  /// ASAP request: shorter respond window (booking.immediateRespondWindowMinutes)
+  /// and the caregiver must be within booking.immediateMaxDistanceMeters.
+  isImmediate      Boolean       @default(false)
   respondBy        DateTime
   cancelledAt      DateTime?
   cancelledById    String?
@@ -409,6 +446,8 @@ model Booking {
   promoCode  PromoCode?      @relation(fields: [promoCodeId], references: [id])
   visits     Visit[]
   prescriptions PrescriptionDocument[]
+  chatMessages  ChatMessage[]
+  strikes       CaregiverStrike[]
 
   @@index([caregiverId, startDate])
   @@index([customerId])
@@ -444,6 +483,8 @@ model Visit {
   safetyIncidents  SafetyIncident[]
   disputes         Dispute[]
   otpCodes         OtpCode[]
+  medicalOrders    MedicalOrder[]
+  callLogs         CallLog[]
 
   @@index([bookingId])
   @@index([scheduledDate, status])
@@ -486,6 +527,79 @@ model VisitNote {
 
   visit     Visit             @relation(fields: [visitId], references: [id])
   caregiver CaregiverProfile  @relation(fields: [caregiverId], references: [id])
+}
+
+/// One text message between the customer and caregiver on a booking (FR: in-app chat).
+model ChatMessage {
+  id        String    @id @default(uuid())
+  bookingId String
+  senderId  String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  sender  User    @relation(fields: [senderId], references: [id])
+
+  @@index([bookingId, createdAt])
+}
+
+/// A doctor-authored diagnosis / prescription / lab-test order for a visit.
+/// Only a CaregiverProfile with specialty = DOCTOR may create one (enforced in
+/// MedicalOrdersService, not here: Prisma has no row-level specialty check).
+model MedicalOrder {
+  id        String   @id @default(uuid())
+  visitId   String
+  doctorId  String
+  patientId String
+  diagnosis String?
+  /// [{ name, dosage, frequency, durationDays, instructions }]
+  medicines Json     @default("[]")
+  /// [{ name, instructions }]
+  labTests  Json     @default("[]")
+  createdAt DateTime @default(now())
+
+  visit   Visit            @relation(fields: [visitId], references: [id])
+  doctor  CaregiverProfile @relation(fields: [doctorId], references: [id])
+  patient PatientProfile   @relation(fields: [patientId], references: [id])
+
+  @@index([visitId])
+  @@index([patientId])
+}
+
+/// Audit trail of accept/decline/late-arrival behaviour feeding strikeCount;
+/// crossing caregiver.strikeThreshold auto-suspends the caregiver.
+model CaregiverStrike {
+  id          String       @id @default(uuid())
+  caregiverId String
+  bookingId   String?
+  reason      StrikeReason
+  note        String?
+  createdAt   DateTime     @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  booking   Booking?         @relation(fields: [bookingId], references: [id])
+
+  @@index([caregiverId, createdAt])
+}
+
+/// Audit log for in-app voice/video calls; media itself is peer-to-peer WebRTC,
+/// the backend only relays signaling (see RealtimeGateway) and logs the attempt.
+model CallLog {
+  id          String     @id @default(uuid())
+  visitId     String
+  callerId    String
+  calleeId    String
+  status      CallStatus @default(INITIATED)
+  startedAt   DateTime   @default(now())
+  endedAt     DateTime?
+  durationSec Int?
+
+  visit  Visit @relation(fields: [visitId], references: [id])
+  caller User  @relation("CallCaller", fields: [callerId], references: [id])
+  callee User  @relation("CallCallee", fields: [calleeId], references: [id])
+
+  @@index([visitId])
 }
 
 model Review {

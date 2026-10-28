@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { VisitsService, distanceMeters } from './visits.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -56,6 +56,7 @@ describe('VisitsService transitions', () => {
       redis as never,
       sms as never,
       { getNumber: () => Promise.resolve(600) } as never,
+      { recordStrike: vi.fn().mockResolvedValue(undefined) } as never,
     );
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
   });
@@ -192,6 +193,72 @@ describe('VisitsService transitions', () => {
     });
   });
 
+  describe('late-arrival strikes', () => {
+    function makeLateCheckFixture(scheduledDate: Date, timeWindowStart: string) {
+      return visitFixture({
+        status: 'EN_ROUTE',
+        scheduledDate,
+        timeWindowStart,
+        booking: {
+          customerId: 'u-cust',
+          customer: { id: 'u-cust', phone: '+923000000001' },
+          patient: { medicalContext: null },
+          caregiver: { id: 'cg-1' },
+        },
+      });
+    }
+
+    it('does not strike a caregiver who checks in within the grace period', async () => {
+      const caregivers = { recordStrike: vi.fn().mockResolvedValue(undefined) };
+      const graceService = new VisitsService(
+        prisma as never,
+        createAuditMock() as never,
+        notifications as never,
+        redis as never,
+        sms as never,
+        { getNumber: (key: string) => Promise.resolve(key === 'visit.lateArrivalGraceMinutes' ? 15 : 0) } as never,
+        caregivers as never,
+      );
+      const now = new Date();
+      // Scheduled start == this instant's own hour:minute, so "now" is always on time.
+      const timeWindowStart = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
+      const fixture = makeLateCheckFixture(now, timeWindowStart);
+      prisma.visit.findFirst.mockResolvedValue(fixture);
+      prisma.visit.findUnique.mockResolvedValue(fixture);
+      prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
+
+      await graceService.checkIn(caregiver, 'v-1', { lat: 31.5, lng: 74.3 });
+
+      expect(caregivers.recordStrike).not.toHaveBeenCalled();
+    });
+
+    it('records a LATE_ARRIVAL strike when check-in is well past the window + grace', async () => {
+      const caregivers = { recordStrike: vi.fn().mockResolvedValue(undefined) };
+      const lateService = new VisitsService(
+        prisma as never,
+        createAuditMock() as never,
+        notifications as never,
+        redis as never,
+        sms as never,
+        { getNumber: (key: string) => Promise.resolve(key === 'visit.lateArrivalGraceMinutes' ? 15 : 0) } as never,
+        caregivers as never,
+      );
+      // Scheduled for two hours before "now", so check-in is far past the 15-minute grace.
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const fixture = makeLateCheckFixture(
+        twoHoursAgo,
+        `${twoHoursAgo.getUTCHours().toString().padStart(2, '0')}:00`,
+      );
+      prisma.visit.findFirst.mockResolvedValue(fixture);
+      prisma.visit.findUnique.mockResolvedValue(fixture);
+      prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
+
+      await lateService.checkIn(caregiver, 'v-1', { lat: 31.5, lng: 74.3 });
+
+      expect(caregivers.recordStrike).toHaveBeenCalledWith('cg-1', 'LATE_ARRIVAL', 'b-1');
+    });
+  });
+
   describe('payment gate on completion', () => {
     const completable = () => {
       prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CHECKED_OUT' }));
@@ -244,6 +311,7 @@ describe('VisitsService transitions', () => {
         redis as never,
         sms as never,
         { getNumber: () => Promise.resolve(0) } as never,
+        { recordStrike: vi.fn().mockResolvedValue(undefined) } as never,
       );
       await expect(lenient.submitNote(caregiver, 'v-1', { summary: 'done' })).resolves.toBeDefined();
       expect(prisma.payment.findMany).not.toHaveBeenCalled();
