@@ -61,6 +61,13 @@ describe('VisitsService transitions', () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
   });
 
+  it('strips the customer phone from the caregiver-facing visit response', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture());
+    const result = await service.getCaregiver(caregiver, 'v-1');
+    expect(result.booking.customer).toEqual({ id: 'u-cust' });
+    expect(result.booking.customer).not.toHaveProperty('phone');
+  });
+
   it('throws when the visit is not assigned to the caregiver', async () => {
     prisma.visit.findFirst.mockResolvedValue(null);
     await expect(service.enRoute(caregiver, 'v-1')).rejects.toBeInstanceOf(NotFoundException);

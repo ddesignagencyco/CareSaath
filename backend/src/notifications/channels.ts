@@ -78,6 +78,11 @@ export class PushChannelAdapter implements NotificationChannelAdapter {
 /** SOS events are safety-critical regardless of which role receives them. */
 const CRITICAL_EVENTS = new Set(['safety_incident.sos', 'safety_incident.sos.contact']);
 
+/** Critical events bypass per-channel notification preferences: safety alerts are never opted out of. */
+export function isCriticalNotificationEvent(event: string): boolean {
+  return CRITICAL_EVENTS.has(event);
+}
+
 /** Admin-only catalogue events read as action items rather than routine updates. */
 function emailVariant(event: string): 'standard' | 'admin' | 'critical' {
   if (CRITICAL_EVENTS.has(event)) {

@@ -14,6 +14,8 @@ function makeService(overrides: Record<string, unknown> = {}) {
     },
     patientProfile: { findFirst: vi.fn() },
     address: { findFirst: vi.fn() },
+    availabilityRule: { findMany: vi.fn().mockResolvedValue([]) },
+    availabilityBlock: { findMany: vi.fn().mockResolvedValue([]) },
     booking: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -180,6 +182,8 @@ describe('BookingsService.createCustomerBooking', () => {
       ...caregiverExtra,
     });
     prisma.visit.count.mockResolvedValue(0);
+    prisma.availabilityRule.findMany.mockResolvedValue([]);
+    prisma.availabilityBlock.findMany.mockResolvedValue([]);
     prisma.booking.findUnique.mockResolvedValue({
       id: 'b-1',
       customerId: 'cust-1',
@@ -239,6 +243,46 @@ describe('BookingsService.createCustomerBooking', () => {
     await service.createCustomerBooking(customer, { ...baseDto, isImmediate: true });
 
     expect(config.getNumber).toHaveBeenCalledWith('booking.immediateRespondWindowMinutes');
+  });
+
+  it('rejects a booking on a blacked-out date', async () => {
+    const { service, prisma } = makeService();
+    setHappyPath(prisma);
+    prisma.availabilityBlock.findMany.mockResolvedValue([
+      { startDate: new Date('2026-11-01T00:00:00.000Z'), endDate: new Date('2026-11-03T00:00:00.000Z') },
+    ]);
+    await expect(service.createCustomerBooking(customer, baseDto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('rejects a booking outside the caregiver\'s weekly availability', async () => {
+    const { service, prisma } = makeService();
+    setHappyPath(prisma);
+    // 2026-11-01 is a Sunday (dayOfWeek 0); the caregiver only set up Monday hours.
+    prisma.availabilityRule.findMany.mockResolvedValue([
+      { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+    ]);
+    await expect(service.createCustomerBooking(customer, baseDto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('accepts a booking that falls within the caregiver\'s weekly availability', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma);
+    config.getNumber.mockResolvedValue(60);
+    prisma.availabilityRule.findMany.mockResolvedValue([
+      { dayOfWeek: 0, startTime: '08:00', endTime: '18:00' },
+    ]);
+    await expect(service.createCustomerBooking(customer, baseDto)).resolves.toBeDefined();
+  });
+
+  it('does not restrict booking when the caregiver has no availability rules at all', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma);
+    config.getNumber.mockResolvedValue(60);
+    await expect(service.createCustomerBooking(customer, baseDto)).resolves.toBeDefined();
   });
 
   it('rejects an immediate recurring booking before touching the database', async () => {

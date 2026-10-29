@@ -159,6 +159,47 @@ describe('CaregiversService', () => {
     expect(result.cnic).toBe('***********67-1');
   });
 
+  it('deletes an unverified caregiver\'s wrongly-uploaded document', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1', verificationStatus: 'PENDING' });
+    prisma.caregiverDocument.findFirst.mockResolvedValue({ id: 'doc-1', type: 'LICENSE' });
+    prisma.caregiverDocument.delete.mockResolvedValue({});
+    await expect(service.deleteDocument(user, 'doc-1')).resolves.toEqual({ ok: true });
+    expect(prisma.caregiverDocument.delete).toHaveBeenCalledWith({ where: { id: 'doc-1' } });
+  });
+
+  it('refuses to delete a document once the profile is verified', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1', verificationStatus: 'APPROVED' });
+    prisma.caregiverDocument.findFirst.mockResolvedValue({ id: 'doc-1', type: 'LICENSE' });
+    await expect(service.deleteDocument(user, 'doc-1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.caregiverDocument.delete).not.toHaveBeenCalled();
+  });
+
+  it('clears the live GPS fix to stop sharing location entirely', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.caregiverProfile.update.mockResolvedValue({});
+    await expect(service.stopSharingLocation(user)).resolves.toEqual({ ok: true });
+    expect(prisma.caregiverProfile.update).toHaveBeenCalledWith({
+      where: { id: 'cg-1' },
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+    });
+  });
+
+  it('lists the caller\'s own strikes, most recent first', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.caregiverStrike.findMany.mockResolvedValue([{ id: 's-1', reason: 'LATE_ARRIVAL' }]);
+    const result = await service.listOwnStrikes(user);
+    expect(result).toEqual([{ id: 's-1', reason: 'LATE_ARRIVAL' }]);
+    expect(prisma.caregiverStrike.findMany).toHaveBeenCalledWith({
+      where: { caregiverId: 'cg-1' },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('404s listing strikes for a user with no caregiver profile', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+    await expect(service.listOwnStrikes(user)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   describe('pricing bracket', () => {
     it('register: defaults the bracket to ratePerVisit when no bracket is given', async () => {
       prisma.caregiverProfile.findUnique.mockResolvedValue(null);

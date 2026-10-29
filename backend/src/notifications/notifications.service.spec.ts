@@ -37,6 +37,7 @@ describe('NotificationsService', () => {
     prisma.user.findUnique.mockResolvedValue({ role: 'CAREGIVER' });
     prisma.notification.create.mockResolvedValue({ id: 'n-1' });
     prisma.notification.update.mockResolvedValue({ id: 'n-1', status: 'SENT' });
+    prisma.notificationPreference.findMany.mockResolvedValue([]);
     push = adapter(NotificationChannel.PUSH);
     sms = adapter(NotificationChannel.SMS);
     whatsapp = adapter(NotificationChannel.WHATSAPP, false);
@@ -181,6 +182,56 @@ describe('NotificationsService', () => {
     expect(realtime.emit).toHaveBeenCalledWith({ users: ['u-1'] }, 'notification.read', {
       ids: ['n-1', 'n-2'],
       before: null,
+    });
+  });
+
+  it('skips a channel the recipient opted out of', async () => {
+    prisma.notificationPreference.findMany.mockResolvedValue([{ channel: 'SMS' }]);
+    await service.notify({
+      userId: 'u-1',
+      phone: '+923001234567',
+      event: 'booking.requested',
+      payload: {},
+      message: 'Confirmed',
+    });
+    expect(sms.send).not.toHaveBeenCalled();
+    expect(push.send).toHaveBeenCalled();
+  });
+
+  it('still delivers a safety-critical event despite an opted-out channel', async () => {
+    prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN', email: null });
+    prisma.notificationPreference.findMany.mockResolvedValue([{ channel: 'SMS' }]);
+    await service.notify({
+      userId: 'u-1',
+      phone: '+923001234567',
+      event: 'safety_incident.sos',
+      payload: {},
+      message: 'SOS',
+    });
+    expect(sms.send).toHaveBeenCalled();
+  });
+
+  it('lists every channel, defaulting to enabled when there is no saved preference', async () => {
+    prisma.notificationPreference.findMany.mockResolvedValue([{ channel: 'SMS', enabled: false }]);
+    const result = await service.listPreferences(user);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        { channel: 'SMS', enabled: false },
+        { channel: 'PUSH', enabled: true },
+        { channel: 'EMAIL', enabled: true },
+        { channel: 'WHATSAPP', enabled: true },
+      ]),
+    );
+  });
+
+  it('upserts a preference by (userId, channel) when updated', async () => {
+    prisma.notificationPreference.upsert.mockResolvedValue({});
+    prisma.notificationPreference.findMany.mockResolvedValue([{ channel: 'WHATSAPP', enabled: false }]);
+    await service.updatePreference(user, { channel: 'WHATSAPP' as never, enabled: false });
+    expect(prisma.notificationPreference.upsert).toHaveBeenCalledWith({
+      where: { userId_channel: { userId: 'u-1', channel: 'WHATSAPP' } },
+      update: { enabled: false },
+      create: { userId: 'u-1', channel: 'WHATSAPP', enabled: false },
     });
   });
 });

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "OtpPurpose" ADD VALUE 'CHANGE_PHONE';

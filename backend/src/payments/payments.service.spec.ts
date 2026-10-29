@@ -144,6 +144,35 @@ describe('PaymentsService', () => {
     expect(prisma.payment.create).toHaveBeenCalled();
   });
 
+  it('funds a promo discount from the platform commission, not the caregiver', async () => {
+    // rate 6000, 20% commission => caregiver 4800 / platform 1200 with no promo.
+    // A 600 discount should dock the platform's 1200 share only; the caregiver
+    // still earns 4800 even though the customer only pays 5400.
+    prisma.visit.findFirst.mockResolvedValue(
+      payableVisit({ booking: { ...payableVisit().booking, discountAmount: 600 } }),
+    );
+    prisma.payment.findFirst.mockResolvedValue(null);
+    prisma.payment.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'pay-1', ...data }));
+
+    const result = await service.initiate(customer, { visitId: 'v-1', method: 'CASH' as never });
+
+    expect(result).toMatchObject({
+      amount: 5400,
+      caregiverAmount: 4800,
+      commissionAmount: 600,
+    });
+  });
+
+  it('lists payments for an operator across every visit', async () => {
+    prisma.payment.count.mockResolvedValue(1);
+    prisma.payment.findMany.mockResolvedValue([{ id: 'pay-1' }]);
+    const result = await service.listForAdmin({ page: 1, limit: 20 } as never);
+    expect(result).toMatchObject({ items: [{ id: 'pay-1' }], total: 1 });
+    expect(prisma.payment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
+  });
+
   it('returns a gateway reference for digital methods', async () => {
     prisma.visit.findFirst.mockResolvedValue(payableVisit());
     prisma.payment.findFirst.mockResolvedValue(null);

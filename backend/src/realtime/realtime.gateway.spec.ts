@@ -20,6 +20,7 @@ describe('RealtimeGateway', () => {
   let realtimeEmit: ReturnType<typeof vi.fn>;
   let calls: {
     startCall: ReturnType<typeof vi.fn>;
+    resolveCallee: ReturnType<typeof vi.fn>;
     loadForRouting: ReturnType<typeof vi.fn>;
     markConnected: ReturnType<typeof vi.fn>;
     markEnded: ReturnType<typeof vi.fn>;
@@ -35,6 +36,7 @@ describe('RealtimeGateway', () => {
     realtime.emit = realtimeEmit as never;
     calls = {
       startCall: vi.fn(),
+      resolveCallee: vi.fn(),
       loadForRouting: vi.fn(),
       markConnected: vi.fn().mockResolvedValue(undefined),
       markEnded: vi.fn().mockResolvedValue(undefined),
@@ -121,6 +123,7 @@ describe('RealtimeGateway call signaling', () => {
   let realtimeEmit: ReturnType<typeof vi.fn>;
   let calls: {
     startCall: ReturnType<typeof vi.fn>;
+    resolveCallee: ReturnType<typeof vi.fn>;
     loadForRouting: ReturnType<typeof vi.fn>;
     markConnected: ReturnType<typeof vi.fn>;
     markEnded: ReturnType<typeof vi.fn>;
@@ -135,6 +138,7 @@ describe('RealtimeGateway call signaling', () => {
     realtime.emit = realtimeEmit as never;
     calls = {
       startCall: vi.fn(),
+      resolveCallee: vi.fn(),
       loadForRouting: vi.fn(),
       markConnected: vi.fn().mockResolvedValue(undefined),
       markEnded: vi.fn().mockResolvedValue(undefined),
@@ -164,6 +168,20 @@ describe('RealtimeGateway call signaling', () => {
     const socket = fakeAuthedSocket('u-caller');
     await gateway.handleCallInvite(socket as never, { visitId: 'v-1', calleeId: 'u-callee', sdp: {} });
     expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ message: expect.any(String) }));
+  });
+
+  it('derives the callee from the visit when the caller cannot supply one', async () => {
+    calls.resolveCallee.mockResolvedValue('u-derived-callee');
+    calls.startCall.mockResolvedValue({ id: 'call-1' });
+    const socket = fakeAuthedSocket('u-caller');
+    await gateway.handleCallInvite(socket as never, { visitId: 'v-1', sdp: {} });
+    expect(calls.resolveCallee).toHaveBeenCalledWith('v-1', 'u-caller');
+    expect(calls.startCall).toHaveBeenCalledWith('v-1', 'u-caller', 'u-derived-callee');
+    expect(realtimeEmit).toHaveBeenCalledWith(
+      { users: ['u-derived-callee'] },
+      'call:incoming',
+      expect.objectContaining({ callId: 'call-1' }),
+    );
   });
 
   it('relays an answer to the original caller and marks the call connected', async () => {

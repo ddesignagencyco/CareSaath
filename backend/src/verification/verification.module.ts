@@ -23,6 +23,7 @@ import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min 
 import {
   CredentialDecision,
   CredentialReviewKind,
+  Prisma,
   UserStatus,
   VerificationStatus,
 } from '../generated/prisma/client.js';
@@ -37,6 +38,7 @@ import { StorageService, withFileUrl } from '../common/storage/storage.module.js
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { paginate } from '../common/dto/pagination.js';
+import { computeCaregiverBadge } from '../caregivers/badge.js';
 
 /** Must match the key used by CaregiversModule to encrypt CNIC. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
@@ -74,6 +76,12 @@ export class ListCaregiversQueryDto {
   @IsOptional()
   @IsDateString()
   reverifyDueBefore?: string;
+
+  @ApiPropertyOptional({ example: 'Fatima', description: 'Search by name, phone, or license number' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -143,10 +151,19 @@ export class VerificationService {
   }
 
   async list(query: ListCaregiversQueryDto) {
-    const where = {
+    const where: Prisma.CaregiverProfileWhereInput = {
       ...(query.status ? { verificationStatus: query.status } : {}),
       ...(query.reverifyDueBefore
         ? { reverifyDueAt: { lte: new Date(query.reverifyDueBefore) } }
+        : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { user: { fullName: { contains: query.q, mode: 'insensitive' } } },
+              { user: { phone: { contains: query.q } } },
+              { licenseNumber: { contains: query.q, mode: 'insensitive' } },
+            ],
+          }
         : {}),
     };
     const [total, items] = await this.prisma.$transaction([
@@ -162,7 +179,9 @@ export class VerificationService {
         },
       }),
     ]);
-    const presented = await Promise.all(items.map((item) => this.withDocumentUrls(presentCnic(item))));
+    const presented = await Promise.all(
+      items.map(async (item) => this.withBadge(await this.withDocumentUrls(presentCnic(item)))),
+    );
     return paginate(presented, query.page, query.limit, total);
   }
 
@@ -170,6 +189,33 @@ export class VerificationService {
   private async withDocumentUrls<T extends { documents: Array<{ fileKey: string }> }>(profile: T) {
     const documents = await Promise.all(profile.documents.map((doc) => withFileUrl(this.storage, doc)));
     return { ...profile, documents };
+  }
+
+  /**
+   * The badge is otherwise computed only on the caregiver's own GET
+   * /caregiver/profile; the admin list/detail returned raw columns, so the
+   * drawer couldn't show the tier. Same ranking logic, computed here too.
+   */
+  private async withBadge<
+    T extends {
+      id: string;
+      experienceYears: number | null;
+      ratingAverage: number | string | { toString(): string };
+      ratingCount: number;
+    },
+  >(profile: T) {
+    const completedVisits = await this.prisma.visit.count({
+      where: { status: 'COMPLETED', booking: { caregiverId: profile.id } },
+    });
+    return {
+      ...profile,
+      badge: computeCaregiverBadge({
+        experienceYears: profile.experienceYears,
+        ratingAverage: profile.ratingAverage,
+        ratingCount: profile.ratingCount,
+        completedVisits,
+      }),
+    };
   }
 
   private async load(id: string) {
@@ -195,7 +241,7 @@ export class VerificationService {
     if (!profile) {
       throw new NotFoundException('Caregiver not found');
     }
-    return this.withDocumentUrls(presentCnic(profile));
+    return this.withBadge(await this.withDocumentUrls(presentCnic(profile)));
   }
 
   /** FR-A1: approve after manual PNC/PMDC cross-check (SRS §7.5). */
@@ -352,10 +398,11 @@ export class VerificationService {
         data: { status: UserStatus.ACTIVE },
       });
       if (liftSuspension) {
-        // approvedAt / reverifyDueAt are deliberately left untouched.
+        // approvedAt / reverifyDueAt are deliberately left untouched, but the
+        // strike count resets — otherwise the next strike re-suspends immediately.
         await tx.caregiverProfile.update({
           where: { id },
-          data: { verificationStatus: VerificationStatus.APPROVED },
+          data: { verificationStatus: VerificationStatus.APPROVED, strikeCount: 0 },
         });
       }
     });
@@ -368,6 +415,15 @@ export class VerificationService {
     });
     await this.invalidateSearchCache();
     return this.finish(id, 'reactivated');
+  }
+
+  /** Caregiver strike history (reason/date), most recent first. */
+  async listStrikes(id: string) {
+    await this.load(id);
+    return this.prisma.caregiverStrike.findMany({
+      where: { caregiverId: id },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async documentUrl(id: string, documentId: string) {
@@ -390,7 +446,7 @@ export class VerificationController {
   @Get()
   @ApiOperation({
     summary: 'List caregivers verification queue',
-    description: 'Admin queue of caregiver registrations filtered by status (PENDING, APPROVED, REJECTED, SUSPENDED).',
+    description: 'Admin queue of caregiver registrations filtered by status (PENDING, APPROVED, REJECTED, SUSPENDED). Search by name, phone, or license number with ?q=.',
   })
   list(@Query() query: ListCaregiversQueryDto) {
     return this.verification.list(query);
@@ -471,6 +527,15 @@ export class VerificationController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.verification.reactivate(admin, id);
+  }
+
+  @Get(':id/strikes')
+  @ApiOperation({
+    summary: 'View caregiver strike history',
+    description: 'Lists declines, late arrivals and no-shows recorded against this caregiver, most recent first.',
+  })
+  listStrikes(@Param('id', ParseUUIDPipe) id: string) {
+    return this.verification.listStrikes(id);
   }
 
   @Get(':id/documents/:documentId/url')

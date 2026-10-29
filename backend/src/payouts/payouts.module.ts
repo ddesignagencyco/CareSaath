@@ -189,6 +189,12 @@ export class ListPayoutRequestsQueryDto {
   @IsEnum(PayoutStatus)
   status?: PayoutStatus;
 
+  @ApiPropertyOptional({ example: 'Fatima', description: 'Admin list only: search by caregiver name or phone' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
+
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -405,13 +411,16 @@ export class PayoutsService {
       throw new BadRequestException(`Requested amount exceeds available earnings (${available})`);
     }
 
-    // Greedily attach settled payments until the requested amount is covered.
+    // Greedily attach whole settled payments until the requested amount is
+    // covered. Payments are never split, so the last one can overshoot the
+    // requested amount; the payout is locked (and will settle) for exactly what
+    // it attaches, never for less, so no money is ever forfeited.
     const chosen: string[] = [];
-    let running = 0;
+    let lockedAmount = 0;
     for (const payment of eligible) {
-      if (running >= dto.amount) break;
+      if (lockedAmount >= dto.amount) break;
       chosen.push(payment.id);
-      running += payment.caregiverAmount;
+      lockedAmount += payment.caregiverAmount;
     }
 
     const payout = await this.prisma.$transaction(async (tx) => {
@@ -419,7 +428,7 @@ export class PayoutsService {
         data: {
           caregiverId,
           payoutAccountId: dto.payoutAccountId,
-          amount: dto.amount,
+          amount: lockedAmount,
           status: PayoutStatus.REQUESTED,
         },
       });
@@ -436,12 +445,12 @@ export class PayoutsService {
       action: 'payout_request.created',
       entityType: 'PayoutRequest',
       entityId: payout.id,
-      metadata: { amount: dto.amount, payments: chosen.length },
+      metadata: { requestedAmount: dto.amount, lockedAmount, payments: chosen.length },
     });
     await this.notifications.notifyAdmins({
       event: 'payout.requested',
-      payload: { payoutRequestId: payout.id, amount: dto.amount },
-      message: `A caregiver requested a payout of Rs ${dto.amount / 100}.`,
+      payload: { payoutRequestId: payout.id, amount: lockedAmount },
+      message: `A caregiver requested a payout of Rs ${lockedAmount / 100}.`,
     });
     this.payoutChanged(payout.id, user.sub, 'requested', PayoutStatus.REQUESTED);
     return payout;
@@ -473,7 +482,21 @@ export class PayoutsService {
   // ---- Admin payout resolution --------------------------------------------
 
   async listAll(query: ListPayoutRequestsQueryDto): Promise<Paginated<unknown>> {
-    const where: Prisma.PayoutRequestWhereInput = query.status ? { status: query.status } : {};
+    const where: Prisma.PayoutRequestWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.q
+        ? {
+            caregiver: {
+              user: {
+                OR: [
+                  { fullName: { contains: query.q, mode: 'insensitive' } },
+                  { phone: { contains: query.q } },
+                ],
+              },
+            },
+          }
+        : {}),
+    };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.payoutRequest.count({ where }),
       this.prisma.payoutRequest.findMany({
@@ -862,7 +885,7 @@ export class AdminPayoutsController {
   @Get()
   @ApiOperation({
     summary: 'List all caregiver payout requests',
-    description: 'Admin view of withdrawal requests across all caregivers with status filtering.',
+    description: 'Admin view of withdrawal requests across all caregivers with status filtering. Search by caregiver name or phone with ?q=.',
   })
   list(@Query() query: ListPayoutRequestsQueryDto) {
     return this.payouts.listAll(query);

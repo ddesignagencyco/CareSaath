@@ -120,13 +120,17 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @SubscribeMessage('call:invite')
   async handleCallInvite(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { visitId: string; calleeId: string; sdp: unknown },
+    @MessageBody() body: { visitId: string; calleeId?: string; sdp: unknown },
   ): Promise<void> {
     const callerId = (client.data as SocketData).userId;
     if (!callerId) return;
     try {
-      const call = await this.calls.startCall(body.visitId, callerId, body.calleeId);
-      this.realtime.emit({ users: [body.calleeId] }, 'call:incoming', {
+      // calleeId is optional: the customer has no public way to learn the
+      // caregiver's user id, so when it's omitted the callee is derived from
+      // the visit's other participant instead.
+      const calleeId = body.calleeId ?? (await this.calls.resolveCallee(body.visitId, callerId));
+      const call = await this.calls.startCall(body.visitId, callerId, calleeId);
+      this.realtime.emit({ users: [calleeId] }, 'call:incoming', {
         callId: call.id,
         visitId: body.visitId,
         callerId,

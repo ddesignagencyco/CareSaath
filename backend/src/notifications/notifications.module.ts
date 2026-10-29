@@ -7,12 +7,14 @@ import {
   Logger,
   Module,
   Optional,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiProperty,
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
@@ -45,6 +47,7 @@ import { EmailModule } from '../email/email.module.js';
 import { eventDefinition } from './events.js';
 import {
   EmailChannelAdapter,
+  isCriticalNotificationEvent,
   NotificationChannelAdapter,
   PushChannelAdapter,
   SmsChannelAdapter,
@@ -90,6 +93,16 @@ export class ListNotificationsQueryDto {
   @Min(1)
   @Max(100)
   limit = 20;
+}
+
+export class UpdateNotificationPreferenceDto {
+  @ApiProperty({ enum: NotificationChannel, description: 'Channel to opt in/out of.' })
+  @IsEnum(NotificationChannel)
+  channel!: NotificationChannel;
+
+  @ApiProperty({ description: 'false opts the channel out; true opts it back in.' })
+  @IsBoolean()
+  enabled!: boolean;
 }
 
 export class MarkNotificationsReadDto {
@@ -154,8 +167,22 @@ export class NotificationsService {
         return;
       }
       const title = input.title ?? definition.title;
+      const bypassPreferences = isCriticalNotificationEvent(input.event);
+      const disabledChannels = bypassPreferences
+        ? new Set<NotificationChannel>()
+        : new Set(
+            (
+              await this.prisma.notificationPreference.findMany({
+                where: { userId: input.userId, enabled: false },
+                select: { channel: true },
+              })
+            ).map((p) => p.channel),
+          );
       for (const adapter of this.adapters) {
         if (!adapter.enabled()) {
+          continue;
+        }
+        if (disabledChannels.has(adapter.channel)) {
           continue;
         }
         if (
@@ -277,6 +304,25 @@ export class NotificationsService {
     }
     return { updated: result.count };
   }
+
+  /** Every channel, defaulting to enabled when the caller has no saved preference for it. */
+  async listPreferences(user: AuthUser): Promise<Array<{ channel: NotificationChannel; enabled: boolean }>> {
+    const rows = await this.prisma.notificationPreference.findMany({ where: { userId: user.sub } });
+    const saved = new Map(rows.map((row) => [row.channel, row.enabled]));
+    return Object.values(NotificationChannel).map((channel) => ({
+      channel,
+      enabled: saved.get(channel) ?? true,
+    }));
+  }
+
+  async updatePreference(user: AuthUser, dto: UpdateNotificationPreferenceDto) {
+    await this.prisma.notificationPreference.upsert({
+      where: { userId_channel: { userId: user.sub, channel: dto.channel } },
+      update: { enabled: dto.enabled },
+      create: { userId: user.sub, channel: dto.channel, enabled: dto.enabled },
+    });
+    return this.listPreferences(user);
+  }
 }
 
 @ApiTags('System & Notifications')
@@ -311,6 +357,24 @@ export class NotificationsController {
   })
   markRead(@CurrentUser() user: AuthUser, @Body() dto: MarkNotificationsReadDto) {
     return this.notifications.markRead(user, dto);
+  }
+
+  @Get('preferences')
+  @ApiOperation({
+    summary: 'Get notification channel preferences',
+    description: 'Per-channel opt-in/opt-out for the caller (SMS / WHATSAPP / PUSH / EMAIL). A channel with no saved preference defaults to enabled.',
+  })
+  listPreferences(@CurrentUser() user: AuthUser) {
+    return this.notifications.listPreferences(user);
+  }
+
+  @Patch('preferences')
+  @ApiOperation({
+    summary: 'Update a notification channel preference',
+    description: 'Opts one channel in or out for the caller. Safety-critical alerts (e.g. SOS) are always delivered regardless of this setting.',
+  })
+  updatePreference(@CurrentUser() user: AuthUser, @Body() dto: UpdateNotificationPreferenceDto) {
+    return this.notifications.updatePreference(user, dto);
   }
 }
 

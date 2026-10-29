@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -10,7 +12,7 @@ import { OtpPurpose, UserStatus, UserRole } from '../generated/prisma/client.js'
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { ConfigService } from '../config/platform-config.module.js';
-import type { LoginAudience } from './dto/auth.dto.js';
+import type { LoginAudience, SignupRole } from './dto/auth.dto.js';
 import { SmsService } from './sms.service.js';
 
 const OTP_MAX_ATTEMPTS = 5;
@@ -57,6 +59,31 @@ export class AuthService {
     return `otp:${purpose}:${phone}`;
   }
 
+  private signupPendingKey(phone: string): string {
+    return `signup:pending:${phone}`;
+  }
+
+  /** Shared OTP check: looks up the stored hash, enforces the attempt limit, and verifies the code. */
+  private async checkOtp(phone: string, code: string, purpose: OtpPurpose): Promise<string> {
+    const key = this.otpKey(phone, purpose);
+    const stored = await this.redis.client.get(key);
+    if (!stored) {
+      throw new UnauthorizedException('OTP expired or not requested');
+    }
+    const attempts = await this.redis.client.incr(`${key}:attempts`);
+    if (attempts === 1) {
+      await this.redis.client.expire(`${key}:attempts`, await this.otpTtlSeconds());
+    }
+    if (attempts > OTP_MAX_ATTEMPTS) {
+      await this.redis.client.del(key, `${key}:attempts`);
+      throw new ForbiddenException('Too many attempts, request a new OTP');
+    }
+    if (stored !== this.hash(code)) {
+      throw new UnauthorizedException('Invalid OTP');
+    }
+    return key;
+  }
+
   async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
     const rateKey = `otp:rl:${phone}`;
     const used = await this.redis.client.incr(rateKey);
@@ -89,6 +116,11 @@ export class AuthService {
     return { ttlSeconds };
   }
 
+  /**
+   * Login only: requires an existing account (phone is the login identity).
+   * Signing up with an unregistered number is a separate flow (`signup` /
+   * `signupVerify`) so the two can never be conflated into one find-or-create.
+   */
   async verifyOtp(phone: string, code: string, audience?: LoginAudience): Promise<LoginResult> {
     const key = this.otpKey(phone, 'LOGIN');
     const stored = await this.redis.client.get(key);
@@ -109,15 +141,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid OTP');
     }
 
-    let user = await this.prisma.user.findUnique({ where: { phone } });
-    if (audience) {
-      const mismatch = user
-        ? !AUDIENCE_ROLES[audience].includes(user.role)
-        : audience === 'ADMIN';
-      if (mismatch) {
-        // Refuse before any account is created or tokens are issued.
-        throw new ForbiddenException('This account cannot sign in to this app');
-      }
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      throw new NotFoundException('No account found with this number. Please sign up.');
+    }
+    if (audience && !AUDIENCE_ROLES[audience].includes(user.role)) {
+      // Refuse before the OTP is consumed or tokens are issued.
+      throw new ForbiddenException('This account cannot sign in to this app');
     }
 
     await this.redis.client.del(key, `${key}:attempts`);
@@ -126,11 +156,6 @@ export class AuthService {
       data: { consumedAt: new Date() },
     });
 
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: { phone, role: UserRole.CUSTOMER },
-      });
-    }
     if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException('Account is not active');
     }
@@ -144,6 +169,168 @@ export class AuthService {
       ...tokens,
       user: { id: user.id, phone: user.phone, role: user.role, fullName: user.fullName },
     };
+  }
+
+  /** Starts a sign-up: rejects an already-registered phone, then sends a SIGNUP-purpose OTP. */
+  async signup(dto: { phone: string; fullName: string; email?: string; role: SignupRole }): Promise<{ ttlSeconds: number }> {
+    const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    if (existing) {
+      throw new ConflictException('This number is already registered');
+    }
+
+    const rateKey = `otp:rl:${dto.phone}`;
+    const used = await this.redis.client.incr(rateKey);
+    if (used === 1) {
+      await this.redis.client.expire(rateKey, OTP_REQUEST_WINDOW_SECONDS);
+    }
+    if (used > OTP_REQUEST_LIMIT) {
+      throw new ForbiddenException('Too many OTP requests, try again later');
+    }
+
+    const code = randomInt(100000, 999999).toString();
+    const ttlSeconds = await this.otpTtlSeconds();
+    await this.prisma.otpCode.create({
+      data: {
+        userId: null,
+        phone: dto.phone,
+        codeHash: this.hash(code),
+        purpose: OtpPurpose.SIGNUP,
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+      },
+    });
+    await this.redis.client.set(this.otpKey(dto.phone, OtpPurpose.SIGNUP), this.hash(code), 'EX', ttlSeconds);
+    await this.redis.client.set(
+      this.signupPendingKey(dto.phone),
+      JSON.stringify({ fullName: dto.fullName, email: dto.email ?? null, role: dto.role }),
+      'EX',
+      ttlSeconds,
+    );
+    await this.sms.sendOtp(dto.phone, code);
+    return { ttlSeconds };
+  }
+
+  /** Completes a sign-up: verifies the SIGNUP OTP and creates the account with the role chosen at signup. */
+  async signupVerify(phone: string, code: string): Promise<LoginResult> {
+    const key = await this.checkOtp(phone, code, OtpPurpose.SIGNUP);
+
+    const pendingRaw = await this.redis.client.get(this.signupPendingKey(phone));
+    if (!pendingRaw) {
+      throw new BadRequestException('Signup session expired, please sign up again');
+    }
+    const pending = JSON.parse(pendingRaw) as { fullName: string; email: string | null; role: SignupRole };
+
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing) {
+      throw new ConflictException('This number is already registered');
+    }
+
+    await this.redis.client.del(key, `${key}:attempts`, this.signupPendingKey(phone));
+    await this.prisma.otpCode.updateMany({
+      where: { phone, purpose: OtpPurpose.SIGNUP, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          phone,
+          fullName: pending.fullName,
+          ...(pending.email ? { email: pending.email } : {}),
+          role: pending.role === 'CAREGIVER' ? UserRole.CAREGIVER : UserRole.CUSTOMER,
+          lastLoginAt: new Date(),
+        },
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code === 'P2002') {
+        throw new ConflictException('Email already in use');
+      }
+      throw err;
+    }
+
+    const tokens = await this.issueTokens(user.id, user.role, user.phone);
+    return {
+      ...tokens,
+      user: { id: user.id, phone: user.phone, role: user.role, fullName: user.fullName },
+    };
+  }
+
+  private changePhoneKey(userId: string): string {
+    return `otp:${OtpPurpose.CHANGE_PHONE}:${userId}`;
+  }
+
+  /**
+   * Phone is the login identity, so changing it goes through its own
+   * CHANGE_PHONE-purpose OTP sent to the *new* number — the account isn't
+   * moved until that number is proven reachable by its owner.
+   */
+  async requestPhoneChange(userId: string, newPhone: string): Promise<{ ttlSeconds: number }> {
+    const existing = await this.prisma.user.findUnique({ where: { phone: newPhone } });
+    if (existing) {
+      throw new ConflictException('This number is already registered');
+    }
+    const rateKey = `otp:rl:${newPhone}`;
+    const used = await this.redis.client.incr(rateKey);
+    if (used === 1) {
+      await this.redis.client.expire(rateKey, OTP_REQUEST_WINDOW_SECONDS);
+    }
+    if (used > OTP_REQUEST_LIMIT) {
+      throw new ForbiddenException('Too many OTP requests, try again later');
+    }
+
+    const code = randomInt(100000, 999999).toString();
+    const ttlSeconds = await this.otpTtlSeconds();
+    await this.prisma.otpCode.create({
+      data: {
+        userId,
+        phone: newPhone,
+        codeHash: this.hash(code),
+        purpose: OtpPurpose.CHANGE_PHONE,
+        expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+      },
+    });
+    await this.redis.client.set(
+      this.changePhoneKey(userId),
+      JSON.stringify({ phone: newPhone, codeHash: this.hash(code) }),
+      'EX',
+      ttlSeconds,
+    );
+    await this.sms.sendOtp(newPhone, code);
+    return { ttlSeconds };
+  }
+
+  async verifyPhoneChange(userId: string, code: string): Promise<{ phone: string }> {
+    const key = this.changePhoneKey(userId);
+    const stored = await this.redis.client.get(key);
+    if (!stored) {
+      throw new UnauthorizedException('OTP expired or not requested');
+    }
+    const { phone, codeHash } = JSON.parse(stored) as { phone: string; codeHash: string };
+
+    const attempts = await this.redis.client.incr(`${key}:attempts`);
+    if (attempts === 1) {
+      await this.redis.client.expire(`${key}:attempts`, await this.otpTtlSeconds());
+    }
+    if (attempts > OTP_MAX_ATTEMPTS) {
+      await this.redis.client.del(key, `${key}:attempts`);
+      throw new ForbiddenException('Too many attempts, request a new OTP');
+    }
+    if (codeHash !== this.hash(code)) {
+      throw new UnauthorizedException('Invalid OTP');
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing) {
+      throw new ConflictException('This number is already registered');
+    }
+
+    await this.redis.client.del(key, `${key}:attempts`);
+    await this.prisma.otpCode.updateMany({
+      where: { userId, purpose: OtpPurpose.CHANGE_PHONE, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    const updated = await this.prisma.user.update({ where: { id: userId }, data: { phone } });
+    return { phone: updated.phone };
   }
 
   async refresh(refreshToken: string): Promise<TokenPair> {

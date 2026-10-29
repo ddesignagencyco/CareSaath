@@ -76,7 +76,39 @@ describe('VerificationService', () => {
     expect(redis.deleteByPattern).toHaveBeenCalledWith('search:caregivers:*');
   });
 
-  it('lifts a suspension on reactivate without resetting approval dates', async () => {
+  it('searches the caregiver queue by name, phone, or license number', async () => {
+    prisma.caregiverProfile.count.mockResolvedValue(0);
+    prisma.caregiverProfile.findMany.mockResolvedValue([]);
+    await service.list({ q: 'Fatima', page: 1, limit: 20 } as never);
+    expect(prisma.caregiverProfile.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { user: { fullName: { contains: 'Fatima', mode: 'insensitive' } } },
+            { user: { phone: { contains: 'Fatima' } } },
+            { licenseNumber: { contains: 'Fatima', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('computes the badge tier on the admin list, not just the caregiver\'s own profile', async () => {
+    prisma.caregiverProfile.count.mockResolvedValue(1);
+    prisma.caregiverProfile.findMany.mockResolvedValue([
+      pendingProfile({
+        verificationStatus: 'APPROVED',
+        experienceYears: 6,
+        ratingAverage: '4.8',
+        ratingCount: 25,
+      }),
+    ]);
+    prisma.visit.count.mockResolvedValue(120);
+    const result = await service.list({ page: 1, limit: 20 } as never);
+    expect(result.items[0]).toMatchObject({ badge: 'PLATINUM' });
+  });
+
+  it('lifts a suspension on reactivate, resetting strikes but not approval dates', async () => {
     prisma.caregiverProfile.findUnique.mockResolvedValue(
       pendingProfile({ verificationStatus: 'SUSPENDED', userId: 'u-cg' }),
     );
@@ -85,9 +117,29 @@ describe('VerificationService', () => {
     await service.reactivate(admin, 'cg-1');
     expect(prisma.caregiverProfile.update).toHaveBeenCalledWith({
       where: { id: 'cg-1' },
-      data: { verificationStatus: 'APPROVED' },
+      data: { verificationStatus: 'APPROVED', strikeCount: 0 },
     });
     expect(redis.deleteByPattern).toHaveBeenCalledWith('search:caregivers:*');
+  });
+
+  it('does not touch strikes when reactivating a caregiver who was never suspended', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(
+      pendingProfile({ verificationStatus: 'APPROVED', userId: 'u-cg' }),
+    );
+    prisma.user.update.mockResolvedValue({});
+    await service.reactivate(admin, 'cg-1');
+    expect(prisma.caregiverProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('lists a caregiver\'s strike history, most recent first', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(pendingProfile());
+    prisma.caregiverStrike.findMany.mockResolvedValue([{ id: 's-1', reason: 'NO_SHOW' }]);
+    const result = await service.listStrikes('cg-1');
+    expect(result).toEqual([{ id: 's-1', reason: 'NO_SHOW' }]);
+    expect(prisma.caregiverStrike.findMany).toHaveBeenCalledWith({
+      where: { caregiverId: 'cg-1' },
+      orderBy: { createdAt: 'desc' },
+    });
   });
 
   it('refuses to reject an approved caregiver (use suspend instead)', async () => {

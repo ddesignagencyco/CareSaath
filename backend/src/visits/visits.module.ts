@@ -116,6 +116,19 @@ function presentVisit<T extends { booking: { patient: { medicalContext: string |
 }
 
 /**
+ * Privacy (customer<->caregiver boundary): the caregiver never sees the
+ * customer's phone number; the two parties contact each other via in-app
+ * chat/call instead. The internal `loadForCaregiver` still selects it (needed
+ * server-side to send the check-in OTP), so this strips it only from
+ * responses actually returned to the caregiver.
+ */
+function omitCustomerPhone<T extends { booking: { customer: { phone: string } } }>(visit: T) {
+  const { phone, ...customer } = visit.booking.customer;
+  void phone;
+  return { ...visit, booking: { ...visit.booking, customer } };
+}
+
+/**
  * Visit state machine (TRD §6.3). Transitions are enforced here only; every
  * accepted transition writes a VisitStatusHistory row and notifies the customer.
  */
@@ -277,7 +290,7 @@ export class VisitsService {
           caregiver: {
             select: {
               id: true,
-              licenseNumber: true,
+              // No raw license number in customer/caregiver-facing visit responses (privacy).
               licenseBody: true,
               specialty: true,
               ratingAverage: true,
@@ -378,8 +391,8 @@ export class VisitsService {
   }
 
   /** FR-CG6, FR-C9, FR-C11: full visit context for the assigned caregiver. */
-  getCaregiver(user: AuthUser, id: string) {
-    return this.loadForCaregiver(user, id);
+  async getCaregiver(user: AuthUser, id: string) {
+    return omitCustomerPhone(await this.loadForCaregiver(user, id));
   }
 
   /** FR-C9, FR-C11: customer view of a visit, including the note when present. */
@@ -675,7 +688,7 @@ export class VisitsService {
       entityType: 'Visit',
       entityId: id,
     });
-    return this.loadForCaregiver(user, updated.id);
+    return omitCustomerPhone(await this.loadForCaregiver(user, updated.id));
   }
 
   private async runCaregiverTransition(

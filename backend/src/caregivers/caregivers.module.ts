@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   Injectable,
   Module,
@@ -67,6 +68,7 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { todayInPakistan } from '../availability/availability.module.js';
 import { computeCaregiverBadge } from './badge.js';
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
@@ -495,6 +497,34 @@ export class CaregiversService {
     return { url: await this.storage.presignedGet(doc.fileKey) };
   }
 
+  /** Lets a caregiver remove a wrongly-uploaded document and re-upload, before verification locks it in. */
+  async deleteDocument(user: AuthUser, documentId: string) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    const doc = await this.prisma.caregiverDocument.findFirst({
+      where: { id: documentId, caregiverId: profile.id },
+    });
+    if (!doc) {
+      throw new NotFoundException('Document not found');
+    }
+    if (profile.verificationStatus === VerificationStatus.APPROVED) {
+      throw new BadRequestException('Cannot remove a document once your profile is verified');
+    }
+    await this.prisma.caregiverDocument.delete({ where: { id: documentId } });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'caregiver.document.deleted',
+      entityType: 'CaregiverDocument',
+      entityId: documentId,
+      metadata: { type: doc.type },
+    });
+    return { ok: true as const };
+  }
+
   /** Public search (FR-C3, FR-C4): only APPROVED caregivers of ACTIVE users. */
   async search(query: SearchQueryDto): Promise<SearchResult> {
     const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${query.page}:${query.limit}`;
@@ -568,7 +598,9 @@ export class CaregiversService {
       select: {
         id: true,
         specialty: true,
-        licenseNumber: true,
+        // Customers never see the raw license number (privacy); the council
+        // (licenseBody) plus the APPROVED-only filter above is enough to show
+        // "License verified by CareSaath". The number stays on admin/verification endpoints.
         licenseBody: true,
         experienceYears: true,
         bio: true,
@@ -582,6 +614,13 @@ export class CaregiversService {
         availabilityRules: {
           orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
           select: { dayOfWeek: true, startTime: true, endTime: true },
+        },
+        // Upcoming blackout dates, so the booking screen can warn before the
+        // customer picks a date the caregiver already marked unavailable.
+        availabilityBlocks: {
+          where: { endDate: { gte: todayInPakistan() } },
+          orderBy: { startDate: 'asc' },
+          select: { startDate: true, endDate: true, reason: true },
         },
       },
     });
@@ -652,6 +691,22 @@ export class CaregiversService {
     return { ok: true as const };
   }
 
+  /** Hard off: clears the last-known GPS fix so location sharing is fully stopped server-side, not just paused on the client. */
+  async stopSharingLocation(user: AuthUser) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    await this.prisma.caregiverProfile.update({
+      where: { id: profile.id },
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+    });
+    return { ok: true as const };
+  }
+
   /**
    * Record a decline / late-arrival / no-show strike. Crossing
    * caregiver.strikeThreshold auto-suspends the caregiver (reuses
@@ -710,6 +765,21 @@ export class CaregiversService {
       { type: 'caregiver', id: caregiverId, action: 'suspended', status: VerificationStatus.SUSPENDED },
     );
   }
+
+  /** The caregiver's own strike history (reason/date), so they understand why they were struck/suspended. */
+  async listOwnStrikes(user: AuthUser) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    return this.prisma.caregiverStrike.findMany({
+      where: { caregiverId: profile.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
 
 @ApiTags('Caregiver - Profile')
@@ -735,6 +805,15 @@ export class CaregiverController {
   })
   updateLocation(@CurrentUser() user: AuthUser, @Body() dto: UpdateLocationDto) {
     return this.caregivers.updateLocation(user, dto);
+  }
+
+  @Delete('location')
+  @ApiOperation({
+    summary: 'Stop sharing live location',
+    description: "Clears the caregiver's last known GPS fix so location sharing is turned off entirely, not just paused on the client.",
+  })
+  stopSharingLocation(@CurrentUser() user: AuthUser) {
+    return this.caregivers.stopSharingLocation(user);
   }
 
   @Get('profile')
@@ -803,6 +882,18 @@ export class CaregiverController {
     return this.caregivers.documentUrl(user, id);
   }
 
+  @Delete('documents/:id')
+  @ApiOperation({
+    summary: 'Delete a credential document',
+    description: 'Removes a wrongly-uploaded document so it can be replaced. Only available before your profile is verified (APPROVED).',
+  })
+  deleteDocument(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.caregivers.deleteDocument(user, id);
+  }
+
   @Post('photo')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
@@ -835,6 +926,15 @@ export class CaregiverController {
   })
   photoUrl(@CurrentUser() user: AuthUser) {
     return this.caregivers.photoUrl(user);
+  }
+
+  @Get('strikes')
+  @ApiOperation({
+    summary: 'View my strike history',
+    description: 'Lists declines, late arrivals and no-shows recorded on the caregiver\'s own account, most recent first.',
+  })
+  listStrikes(@CurrentUser() user: AuthUser) {
+    return this.caregivers.listOwnStrikes(user);
   }
 }
 

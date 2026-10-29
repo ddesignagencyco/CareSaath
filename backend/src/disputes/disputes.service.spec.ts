@@ -101,4 +101,60 @@ describe('DisputesService', () => {
       expect.objectContaining({ userId: 'u-cust', event: 'dispute.resolved' }),
     );
   });
+
+  it('records a compensation amount when resolving', async () => {
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'OPEN', raisedById: 'u-cust' });
+    prisma.dispute.update.mockResolvedValue({ id: 'd-1', status: 'RESOLVED' });
+    await service.resolve(admin, 'd-1', { resolutionNote: 'refunded', compensationAmount: 30000 });
+    expect(prisma.dispute.update).toHaveBeenCalledWith({
+      where: { id: 'd-1' },
+      data: expect.objectContaining({ compensationAmount: 30000 }),
+      include: expect.any(Object),
+    });
+  });
+
+  it('orders the admin queue by priority then oldest first', async () => {
+    prisma.dispute.count.mockResolvedValue(0);
+    prisma.dispute.findMany.mockResolvedValue([]);
+    await service.listAll({ page: 1, limit: 20 } as never);
+    expect(prisma.dispute.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }] }),
+    );
+  });
+
+  it('assigns a dispute to the calling admin by default', async () => {
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'OPEN' });
+    prisma.dispute.update.mockResolvedValue({ id: 'd-1', assignedAdminId: 'u-admin' });
+    await service.assign(admin, 'd-1', {});
+    expect(prisma.dispute.update).toHaveBeenCalledWith({
+      where: { id: 'd-1' },
+      data: { assignedAdminId: 'u-admin' },
+      include: expect.any(Object),
+    });
+  });
+
+  it('assigns a dispute to a named admin', async () => {
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'OPEN' });
+    prisma.dispute.update.mockResolvedValue({ id: 'd-1', assignedAdminId: 'other-admin' });
+    await service.assign(admin, 'd-1', { adminId: 'other-admin' });
+    expect(prisma.dispute.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { assignedAdminId: 'other-admin' } }),
+    );
+  });
+
+  it('404s assigning a missing dispute', async () => {
+    prisma.dispute.findUnique.mockResolvedValue(null);
+    await expect(service.assign(admin, 'd-1', {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('sets a dispute priority', async () => {
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'OPEN' });
+    prisma.dispute.update.mockResolvedValue({ id: 'd-1', priority: 'CRITICAL' });
+    await service.setPriority(admin, 'd-1', { priority: 'CRITICAL' as never });
+    expect(prisma.dispute.update).toHaveBeenCalledWith({
+      where: { id: 'd-1' },
+      data: { priority: 'CRITICAL' },
+      include: expect.any(Object),
+    });
+  });
 });

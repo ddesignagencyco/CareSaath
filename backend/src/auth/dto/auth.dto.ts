@@ -1,8 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
 
 export const LOGIN_AUDIENCES = ['CUSTOMER', 'CAREGIVER', 'ADMIN'] as const;
 export type LoginAudience = (typeof LOGIN_AUDIENCES)[number];
+
+export const SIGNUP_ROLES = ['CUSTOMER', 'CAREGIVER'] as const;
+export type SignupRole = (typeof SIGNUP_ROLES)[number];
 
 export class RequestOtpDto {
   @ApiProperty({
@@ -45,6 +48,69 @@ export class VerifyOtpDto {
   @IsOptional()
   @IsIn(LOGIN_AUDIENCES)
   audience?: LoginAudience;
+}
+
+export class SignupDto {
+  @ApiProperty({
+    example: '+923001110099',
+    description: 'Pakistani mobile number with country code. Rejected with 409 if already registered.',
+  })
+  @IsString()
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'phone must be a valid phone number (e.g. +923001234567)',
+  })
+  phone!: string;
+
+  @ApiProperty({ example: 'Ayesha Khan', description: 'Full name for the new account' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName!: string;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Optional email on file from the start' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiProperty({
+    enum: SIGNUP_ROLES,
+    description: 'Account type to create. A CAREGIVER signup starts a caregiver-pending account; the caregiver still completes onboarding via POST /caregiver/register.',
+  })
+  @IsIn(SIGNUP_ROLES)
+  role!: SignupRole;
+}
+
+export class SignupVerifyDto {
+  @ApiProperty({ example: '+923001110099', description: 'Phone number that started the sign-up.' })
+  @IsString()
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'phone must be a valid phone number (e.g. +923001234567)',
+  })
+  phone!: string;
+
+  @ApiProperty({ example: '123456', description: '6-digit SIGNUP-purpose OTP code.' })
+  @IsString()
+  @Length(4, 8)
+  code!: string;
+}
+
+export class RequestPhoneChangeDto {
+  @ApiProperty({
+    example: '+923009990001',
+    description: 'New phone number to move the account to. Rejected with 409 if already registered to another account.',
+  })
+  @IsString()
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'newPhone must be a valid phone number (e.g. +923001234567)',
+  })
+  newPhone!: string;
+}
+
+export class VerifyPhoneChangeDto {
+  @ApiProperty({ example: '123456', description: 'CHANGE_PHONE-purpose OTP sent to the new number.' })
+  @IsString()
+  @Length(4, 8)
+  code!: string;
 }
 
 export class RefreshTokenDto {
