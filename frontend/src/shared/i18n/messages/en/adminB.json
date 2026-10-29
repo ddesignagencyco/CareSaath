@@ -34,6 +34,8 @@
     "title": "Disputes",
     "description": "Mediate disagreements between customers and caregivers about a specific visit.",
     "resolved": "Dispute resolved. The party who raised it has been notified.",
+    "all": "All",
+    "empty": "No disputes",
     "emptyOpen": "No open disputes",
     "emptyResolved": "No resolved disputes yet",
     "visitRef": "Visit <id>{visit}</id> · booking <id>{booking}</id>",
@@ -50,6 +52,7 @@
   "payouts": {
     "title": "Payouts",
     "description": "Caregiver withdrawal requests. Approve to start processing, then mark paid once funds are transferred.",
+    "allStatuses": "All",
     "approved": "Payout approved for processing",
     "paid": "Payout marked as paid. Caregiver notified.",
     "transferred": "Money transferred. The caregiver will confirm receipt.",
@@ -83,6 +86,61 @@
     "rejectPayout": "Reject payout",
     "noteNotStored": "The API doesn't save this note yet. Keep your own record of the reference."
   },
+  "payments": {
+    "title": "Payments",
+    "description": "Every payment captured across the platform, with downloadable receipts.",
+    "pendingTitle": "Payments ledger coming soon",
+    "pendingHint": "The screen is ready and activates once the backend exposes GET /admin/payments.",
+    "empty": "No payments match these filters.",
+    "receipt": "Receipt",
+    "forPatient": "for {name}",
+    "allStatuses": "All statuses",
+    "allMethods": "All methods",
+    "columns": {
+      "payer": "Customer",
+      "caregiver": "Caregiver",
+      "date": "Date",
+      "method": "Method",
+      "amount": "Amount",
+      "status": "Status"
+    }
+  },
+  "auditLogs": {
+    "title": "Audit log",
+    "description": "Append-only trail of every administrative action.",
+    "pendingTitle": "Audit log coming soon",
+    "pendingHint": "The screen is ready and activates once the backend exposes GET /admin/audit-logs.",
+    "empty": "No audit entries.",
+    "system": "System",
+    "columns": {
+      "when": "When",
+      "actor": "Actor",
+      "action": "Action",
+      "entity": "Entity"
+    }
+  },
+  "callLogs": {
+    "title": "Call history",
+    "description": "Persisted in-app voice and video calls between customers and caregivers.",
+    "pendingTitle": "Call history coming soon",
+    "pendingHint": "The screen is ready and activates once the backend exposes GET /admin/call-logs.",
+    "empty": "No calls match these filters.",
+    "allStatuses": "All statuses",
+    "columns": {
+      "caller": "Caller",
+      "callee": "Callee",
+      "started": "Started",
+      "duration": "Duration",
+      "status": "Status"
+    },
+    "status": {
+      "INITIATED": "Ringing",
+      "CONNECTED": "Connected",
+      "ENDED": "Ended",
+      "MISSED": "Missed",
+      "REJECTED": "Declined"
+    }
+  },
   "commissions": {
     "title": "Commission rates",
     "description": "Percentage of each visit fee kept by the platform, set per caregiver category. Past payments keep the rate captured when they were paid.",
@@ -97,6 +155,9 @@
     "description": "Discount codes customers can apply to bookings.",
     "newPromo": "New promo code",
     "empty": "No promo codes yet",
+    "search": "Search codes…",
+    "noResults": "No promo codes match.",
+    "allStates": "All statuses",
     "colCode": "Code",
     "colDiscount": "Discount",
     "colValidity": "Validity",
@@ -153,6 +214,10 @@
     "title": "Platform settings",
     "description": "Operational parameters that take effect immediately, without a redeploy. Every change is audit-logged.",
     "saved": "{title} set to {value} {unit}",
+    "savedToggle": "{title} {state}",
+    "resetDone": "{title} reset to default",
+    "on": "enabled",
+    "off": "disabled",
     "custom": "Custom",
     "default": "Default",
     "defaultValue": "default {value}",
@@ -166,12 +231,20 @@
       "otpTtl": "Login code lifetime",
       "checkinOtpTtl": "Visit check-in code lifetime",
       "notificationRetention": "Notification retention",
-      "searchCache": "Search cache duration"
+      "searchCache": "Search cache duration",
+      "immediateRespond": "Immediate booking response window",
+      "immediateDistance": "Immediate booking max distance",
+      "strikeThreshold": "Auto-suspend strike threshold",
+      "geofence": "Visit check-in geofence radius",
+      "lateGrace": "Late-arrival grace period",
+      "requirePayment": "Require payment before completing a visit"
     },
     "units": {
       "minutes": "minutes",
       "seconds": "seconds",
-      "days": "days"
+      "days": "days",
+      "meters": "meters",
+      "strikes": "strikes"
     },
     "groups": {
       "bookings": "Bookings",

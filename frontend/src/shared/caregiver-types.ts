@@ -15,6 +15,7 @@ import type {
   PayoutAccount,
   PayoutAccountType,
   PayoutStatus,
+  CaregiverBadge,
   Specialty,
   UserRole,
   UserStatus,
@@ -29,13 +30,15 @@ export type CaregiverBookingStatus = "REQUESTED" | "CONFIRMED" | "DECLINED" | "C
 export type CheckMethod = "GPS" | "OTP";
 export type PaymentMethod = "CASH" | "CARD" | "JAZZCASH" | "EASYPAISA";
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
-export type NotificationChannel = "SMS" | "WHATSAPP" | "PUSH";
+export type NotificationChannel = "SMS" | "WHATSAPP" | "PUSH" | "EMAIL";
 
 /* ---- Identity (GET /customer/me works for any role) --------------------- */
 
 export interface Me {
   id: string;
   phone: string;
+  /** Optional on the type so mock fixtures can omit it; the real API always returns it (nullable). */
+  email?: string | null;
   role: UserRole;
   fullName: string;
   preferredLanguage: Language;
@@ -60,8 +63,13 @@ export interface CaregiverProfileRow {
   photoKey: string | null;
   serviceArea: { cities: string[] };
   ratePerVisit: number;
+  /** Self-set pricing bracket: ratePerVisit must stay within [min, max]. Null = single point at ratePerVisit. */
+  minRatePerVisit?: number | null;
+  maxRatePerVisit?: number | null;
   commissionRateId: string;
   verificationStatus: VerificationStatus;
+  /** Accumulated strikes (declines, late arrivals); auto-suspends at the platform threshold. */
+  strikeCount?: number;
   approvedAt: string | null;
   reverifyDueAt: string | null;
   ratingAverage: string;
@@ -86,6 +94,8 @@ export interface MyCaregiverProfile extends CaregiverProfileRow {
   /** Latest 5, newest first. */
   credentialReviews: CredentialReview[];
   commissionRate: CommissionRate;
+  /** Ranking tier, computed by the backend on every read. */
+  badge?: CaregiverBadge;
 }
 
 export interface RegisterCaregiverInput {
@@ -99,11 +109,15 @@ export interface RegisterCaregiverInput {
   serviceCities: string[];
   /** Paisa, min 1000 (Rs 10). */
   ratePerVisit: number;
+  minRatePerVisit?: number;
+  maxRatePerVisit?: number;
 }
 
 export interface UpdateCaregiverProfileInput {
   specialty?: Specialty;
   ratePerVisit?: number;
+  minRatePerVisit?: number;
+  maxRatePerVisit?: number;
   serviceCities?: string[];
   bio?: string;
   experienceYears?: number;
@@ -178,6 +192,8 @@ export interface Booking {
   timeWindowStart: string;
   timeWindowEnd: string;
   serviceType: Specialty;
+  /** ASAP booking: the caregiver gets a short response window and must be nearby. */
+  isImmediate?: boolean;
   rateSnapshot: number;
   promoCodeId: string | null;
   discountAmount: number;
@@ -252,11 +268,51 @@ export interface PrescriptionDocument {
 
 export type PrescriptionSummary = Pick<PrescriptionDocument, "id" | "mimeType" | "sizeBytes" | "createdAt" | "uploadedById">;
 
+/* ---- Medical orders (doctor-only diagnosis / prescriptions / lab tests) --- */
+
+export interface Medicine {
+  name: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  instructions?: string;
+}
+
+export interface LabTest {
+  name: string;
+  instructions?: string;
+}
+
+/** A doctor's structured record for a visit. medicines/labTests are stored as JSON. */
+export interface MedicalOrder {
+  id: string;
+  visitId: string;
+  doctorId: string;
+  patientId: string;
+  diagnosis: string | null;
+  medicines: Medicine[];
+  labTests: LabTest[];
+  createdAt: string;
+}
+
+/** POST /caregiver/visits/:visitId/medical-orders — at least one field should be present. */
+export interface CreateMedicalOrderInput {
+  diagnosis?: string;
+  medicines?: Medicine[];
+  labTests?: LabTest[];
+}
+
 /** GET /caregiver/bookings item */
 export interface CaregiverBookingListItem extends Booking {
   patient: { id: string; name: string; relationship: PatientRelation };
   address: Address;
   visits: Visit[];
+  /**
+   * Completed visits this caregiver already did for this customer's family (excludes this booking).
+   * Already computed by the backend for BookingDetail; the list endpoint should include it too so the
+   * request card can flag returning customers. The badge renders only when the field is present.
+   */
+  priorVisitsWithCaregiver?: number;
 }
 
 /** accept / decline response */
@@ -266,6 +322,8 @@ export interface BookingDetail extends Booking {
   address: Address;
   caregiver: { id: string; specialty: Specialty; userId: string };
   prescriptions: PrescriptionSummary[];
+  /** Completed visits this caregiver already did for this customer's family (excludes this booking). */
+  priorVisitsWithCaregiver?: number;
 }
 
 /** GET /caregiver/visits item */

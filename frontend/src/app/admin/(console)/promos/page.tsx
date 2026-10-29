@@ -11,9 +11,10 @@ import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
 import { DatePicker } from "@shared/ui/date-picker";
 import { Select } from "@shared/ui/select";
-import { EmptyState, ErrorState, TableSkeleton } from "@shared/ui/misc";
+import { EmptyState, ErrorState } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
-import { Table, Td, Th, Tr } from "@shared/ui/table";
+import { DataTable } from "@shared/ui/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { promosApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import { formatMoney } from "@shared/lib/format";
@@ -192,6 +193,81 @@ export default function PromosPage() {
     success: (r) => (r.active ? t("activated", { code: r.code }) : t("paused", { code: r.code })),
   });
 
+  const states = [...new Set((promos.data ?? []).map((p) => promoState(p).key))];
+  const columns: ColumnDef<PromoCode, unknown>[] = [
+    {
+      accessorKey: "code",
+      header: t("colCode"),
+      cell: ({ row }) => (
+        <span dir="ltr" className="tabular rounded-md border border-dashed border-brand-300 bg-brand-50 px-2 py-1 font-bold tracking-wider text-brand-800">{row.original.code}</span>
+      ),
+    },
+    { id: "discount", header: t("colDiscount"), accessorFn: (p) => discountText(p), cell: ({ getValue }) => <span className="font-semibold text-ink-900">{getValue() as string}</span> },
+    {
+      id: "validity",
+      header: t("colValidity"),
+      meta: { className: "hidden md:table-cell" },
+      accessorFn: (p) => p.validFrom,
+      cell: ({ row }) => <span className="text-ink-700">{t("validityRange", { from: fmt.date(row.original.validFrom), to: fmt.date(row.original.validTo) })}</span>,
+    },
+    {
+      id: "usage",
+      header: t("colUsage"),
+      meta: { className: "hidden sm:table-cell" },
+      enableSorting: false,
+      cell: ({ row }) => {
+        const p = row.original;
+        const usage = p.maxUses ? Math.min(1, p.usesCount / p.maxUses) : null;
+        return (
+          <div>
+            <p dir="ltr" className="tabular text-ink-800 rtl:text-end">
+              {p.usesCount.toLocaleString("en-US")}
+              <span className="text-ink-400"> / {p.maxUses?.toLocaleString("en-US") ?? "∞"}</span>
+            </p>
+            {usage !== null && (
+              <div className="mt-1 h-1.5 w-24 rounded-full bg-ink-100">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${usage * 100}%` }} />
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: t("colStatus"),
+      accessorFn: (p) => promoState(p).key,
+      filterFn: "equalsString",
+      cell: ({ row }) => {
+        const s = promoState(row.original);
+        return (
+          <Badge tone={s.tone} dot>
+            {t(`state.${s.key}`)}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      meta: { className: "text-end" },
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button size="sm" variant="ghost" loading={toggle.isPending && toggle.variables?.id === p.id} onClick={() => toggle.mutate(p)}>
+              {p.active ? t("pause") : t("activate")}
+            </Button>
+            <IconButton label={t("editCode", { code: p.code })} onClick={() => setEditing(p)}>
+              <Pencil className="size-4" />
+            </IconButton>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -204,75 +280,40 @@ export default function PromosPage() {
         }
       />
 
-      <Card>
-        {promos.isError ? (
+      {promos.isError ? (
+        <Card>
           <ErrorState error={promos.error} onRetry={() => promos.refetch()} />
-        ) : !promos.data ? (
-          <TableSkeleton />
-        ) : promos.data.length === 0 ? (
+        </Card>
+      ) : promos.data && promos.data.length === 0 ? (
+        <Card>
           <EmptyState icon={BadgePercent} title={t("empty")} />
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t("colCode")}</Th>
-                <Th>{t("colDiscount")}</Th>
-                <Th className="hidden md:table-cell">{t("colValidity")}</Th>
-                <Th className="hidden sm:table-cell">{t("colUsage")}</Th>
-                <Th>{t("colStatus")}</Th>
-                <Th>
-                  <span className="sr-only">{t("colActions")}</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {promos.data.map((p) => {
-                const state = promoState(p);
-                const usage = p.maxUses ? Math.min(1, p.usesCount / p.maxUses) : null;
-                return (
-                  <Tr key={p.id}>
-                    <Td>
-                      <span dir="ltr" className="tabular rounded-md border border-dashed border-brand-300 bg-brand-50 px-2 py-1 font-bold tracking-wider text-brand-800">
-                        {p.code}
-                      </span>
-                    </Td>
-                    <Td className="font-semibold text-ink-900">{discountText(p)}</Td>
-                    <Td className="hidden md:table-cell text-ink-700">
-                      {t("validityRange", { from: fmt.date(p.validFrom), to: fmt.date(p.validTo) })}
-                    </Td>
-                    <Td className="hidden sm:table-cell">
-                      <p dir="ltr" className="tabular text-ink-800 rtl:text-end">
-                        {p.usesCount.toLocaleString("en-US")}
-                        <span className="text-ink-400"> / {p.maxUses?.toLocaleString("en-US") ?? "∞"}</span>
-                      </p>
-                      {usage !== null && (
-                        <div className="mt-1 h-1.5 w-24 rounded-full bg-ink-100">
-                          <div className="h-full rounded-full bg-brand-500" style={{ width: `${usage * 100}%` }} />
-                        </div>
-                      )}
-                    </Td>
-                    <Td>
-                      <Badge tone={state.tone} dot>
-                        {t(`state.${state.key}`)}
-                      </Badge>
-                    </Td>
-                    <Td className="text-end">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost" loading={toggle.isPending && toggle.variables?.id === p.id} onClick={() => toggle.mutate(p)}>
-                          {p.active ? t("pause") : t("activate")}
-                        </Button>
-                        <IconButton label={t("editCode", { code: p.code })} onClick={() => setEditing(p)}>
-                          <Pencil className="size-4" />
-                        </IconButton>
-                      </div>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={promos.data ?? []}
+          loading={!promos.data}
+          searchPlaceholder={t("search")}
+          emptyText={t("noResults")}
+          toolbar={
+            states.length > 1
+              ? (table) => {
+                  const col = table.getColumn("status");
+                  const val = (col?.getFilterValue() as string) ?? "ALL";
+                  return (
+                    <Select<string>
+                      className="w-44"
+                      value={val}
+                      isSearchable={false}
+                      onChange={(v) => col?.setFilterValue(!v || v === "ALL" ? undefined : v)}
+                      options={[{ value: "ALL", label: t("allStates") }, ...states.map((s) => ({ value: s, label: t(`state.${s}`) }))]}
+                    />
+                  );
+                }
+              : undefined
+          }
+        />
+      )}
 
       {editing && <PromoForm promo={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
     </>

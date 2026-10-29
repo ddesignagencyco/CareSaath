@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarDays, Check, Clock3, Inbox, MapPin, Repeat, X } from "lucide-react";
+import { CalendarDays, Check, Clock3, Inbox, MapPin, Repeat, X, Zap } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -12,6 +12,9 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Textarea } from "@shared/ui/field";
 import { EmptyState, ErrorState, FilterTabs, TableSkeleton } from "@shared/ui/misc";
+import { DataTable } from "@shared/ui/data-table";
+import { Select } from "@shared/ui/select";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Modal } from "@shared/ui/overlay";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
@@ -77,7 +80,7 @@ function DeclineDialog({ booking, onClose }: { booking: CaregiverBookingListItem
   );
 }
 
-function RequestCard({ booking, commissionPct }: { booking: CaregiverBookingListItem; commissionPct: number | null }) {
+function RequestCard({ booking, commissionPct, priorVisits }: { booking: CaregiverBookingListItem; commissionPct: number | null; priorVisits: number }) {
   const now = useNow(60_000);
   const t = useTranslations("caregiverA.requests.card");
   const f = useFmt();
@@ -110,6 +113,20 @@ function RequestCard({ booking, commissionPct }: { booking: CaregiverBookingList
             <p className="text-sm text-ink-500">
               {L.specialty(booking.serviceType)} · {booking.patient.relationship === "SELF" ? t("bookedByPatient") : t("bookedByFamily")}
             </p>
+            {priorVisits > 0 ? (
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 ring-1 ring-brand-200">
+                <Repeat className="size-3.5" /> {t("returning", { count: priorVisits })}
+              </span>
+            ) : (
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-ink-50 px-2 py-0.5 text-xs font-bold text-ink-600 ring-1 ring-ink-200">
+                {t("newCustomer")}
+              </span>
+            )}
+            {booking.isImmediate && (
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-700 ring-1 ring-danger-200">
+                <Zap className="size-3.5" /> {t("asap")}
+              </span>
+            )}
           </div>
           <div className="shrink-0 text-end">
             <p className="tabular text-lg font-extrabold text-ink-900">{f.money(perVisit)}</p>
@@ -173,42 +190,61 @@ function RequestCard({ booking, commissionPct }: { booking: CaregiverBookingList
   );
 }
 
-function HistoryRow({ booking }: { booking: CaregiverBookingListItem }) {
-  const now = useNow(60_000);
-  const t = useTranslations("caregiverA.requests.history");
-  const f = useFmt();
-  const L = useLabels();
-  const tone = booking.status === "CONFIRMED" ? "success" : booking.status === "DECLINED" ? "neutral" : "danger";
-  return (
-    <li className="flex items-center gap-4 px-5 py-3.5">
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-ink-900">{booking.patient.name}</p>
-        <p className="text-xs text-ink-500">
-          {t("line", { count: booking.visits.length, day: f.relativeDay(booking.startDate, now) })}
-          {booking.cancelReason && t("reason", { reason: booking.cancelReason })}
-        </p>
-      </div>
-      <Badge tone={tone} dot>
-        {L.bookingCaregiver(booking.status)}
-      </Badge>
-    </li>
-  );
-}
+const HISTORY_STATUSES = ["CONFIRMED", "COMPLETED", "DECLINED", "CANCELLED"] as const;
 
 export default function RequestsPage() {
   const t = useTranslations("caregiverA.requests");
+  const th = useTranslations("caregiverA.requests.history");
+  const f = useFmt();
+  const L = useLabels();
+  const now = useNow(60_000);
   const [tab, setTab] = useState<"pending" | "history">("pending");
   const pending = useQuery({
     queryKey: [...keys.bookings, "list", "REQUESTED"],
     queryFn: () => bookingsApi.list({ status: "REQUESTED", limit: 50 }),
     refetchInterval: 30_000,
   });
-  const all = useQuery({ queryKey: [...keys.bookings, "list", "all"], queryFn: () => bookingsApi.list({ limit: 50 }), enabled: tab === "history" });
+  // Fetched for both tabs: the history table and the per-customer prior-visit count on request cards.
+  const all = useQuery({ queryKey: [...keys.bookings, "list", "all"], queryFn: () => bookingsApi.list({ limit: 50 }) });
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get });
   const pct = profile.data ? Number(profile.data.commissionRate.percentage) : null;
 
   const items = [...(pending.data?.items ?? [])].sort((a, b) => a.respondBy.localeCompare(b.respondBy));
   const history = (all.data?.items ?? []).filter((b) => b.status !== "REQUESTED");
+
+  // Completed visits this caregiver has already done per customer — drives the "returning / new" badge.
+  const priorByCustomer = (all.data?.items ?? []).reduce<Record<string, number>>((m, b) => {
+    const done = b.visits.filter((v) => v.status === "COMPLETED").length;
+    if (done) m[b.customerId] = (m[b.customerId] ?? 0) + done;
+    return m;
+  }, {});
+
+  const historyColumns: ColumnDef<CaregiverBookingListItem, unknown>[] = [
+    {
+      id: "patient",
+      header: th("columns.patient"),
+      accessorFn: (b) => b.patient.name,
+      cell: ({ getValue }) => <span className="font-semibold text-ink-900">{getValue() as string}</span>,
+    },
+    {
+      id: "schedule",
+      header: th("columns.schedule"),
+      meta: { className: "hidden sm:table-cell" },
+      accessorFn: (b) => b.startDate,
+      cell: ({ row }) => <span className="text-ink-700">{th("line", { count: row.original.visits.length, day: f.relativeDay(row.original.startDate, now) })}</span>,
+    },
+    {
+      id: "status",
+      header: th("columns.status"),
+      accessorKey: "status",
+      filterFn: "equalsString",
+      cell: ({ row }) => (
+        <Badge tone={row.original.status === "CONFIRMED" ? "success" : row.original.status === "DECLINED" ? "neutral" : "danger"} dot>
+          {L.bookingCaregiver(row.original.status)}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -240,24 +276,35 @@ export default function RequestsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {items.map((b) => (
-              <RequestCard key={b.id} booking={b} commissionPct={pct} />
+              <RequestCard key={b.id} booking={b} commissionPct={pct} priorVisits={priorByCustomer[b.customerId] ?? 0} />
             ))}
           </div>
         )
-      ) : (
+      ) : all.data && history.length === 0 ? (
         <Card>
-          {!all.data ? (
-            <TableSkeleton rows={4} />
-          ) : history.length === 0 ? (
-            <EmptyState icon={Inbox} title={t("noResponses")} />
-          ) : (
-            <ul className="divide-y divide-ink-100">
-              {history.map((b) => (
-                <HistoryRow key={b.id} booking={b} />
-              ))}
-            </ul>
-          )}
+          <EmptyState icon={Inbox} title={t("noResponses")} />
         </Card>
+      ) : (
+        <DataTable
+          columns={historyColumns}
+          data={history}
+          loading={!all.data}
+          searchPlaceholder={th("searchPlaceholder")}
+          emptyText={th("noResults")}
+          toolbar={(table) => {
+            const col = table.getColumn("status");
+            const val = (col?.getFilterValue() as string) ?? "ALL";
+            return (
+              <Select<string>
+                className="w-44"
+                value={val}
+                isSearchable={false}
+                onChange={(v) => col?.setFilterValue(!v || v === "ALL" ? undefined : v)}
+                options={[{ value: "ALL", label: th("allStatuses") }, ...HISTORY_STATUSES.map((s) => ({ value: s, label: L.bookingCaregiver(s) }))]}
+              />
+            );
+          }}
+        />
       )}
     </>
   );

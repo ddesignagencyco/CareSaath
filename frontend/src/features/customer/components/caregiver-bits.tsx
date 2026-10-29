@@ -8,10 +8,13 @@ import { useTranslations } from "next-intl";
 import { formatMoney } from "@shared/lib/format";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
+import { TierBadge } from "@shared/ui/tier-badge";
 import { Avatar } from "@shared/ui/misc";
 import type { CaregiverSearchItem, PublicCaregiver } from "@shared/customer-types";
 import { caregiversApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
+
+export { TierBadge };
 
 export function Stars({ value, size = "sm", className }: { value: number; size?: "sm" | "lg"; className?: string }) {
   const t = useTranslations("customerA.bits");
@@ -63,8 +66,11 @@ export function CaregiverCard({ c }: { c: CaregiverSearchItem }) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-ink-900">{c.user.fullName}</p>
           <p className="text-sm text-ink-500">{L.specialty(c.specialty)}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {c.badge && <TierBadge badge={c.badge} />}
             <VerifiedTag />
+          </div>
+          <div className="mt-1.5">
             <Rating average={c.ratingAverage} count={c.ratingCount} />
           </div>
         </div>

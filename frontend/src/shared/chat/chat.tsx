@@ -9,6 +9,7 @@ import { formatBytes } from "@shared/lib/format";
 import { Avatar } from "@shared/ui/misc";
 import type { ChatConversation, ChatMessage } from "./types";
 import type { SendInput } from "./use-chat";
+import { useCallOptional } from "./call-context";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 // prettier-ignore
@@ -851,6 +852,16 @@ export function ChatThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const byId = useMemo(() => new Map(conversation.messages.map((m) => [m.id, m])), [conversation.messages]);
   const [call, setCall] = useState<{ video: boolean } | null>(null);
+  // Real WebRTC when the call engine is mounted and we know the visit + the other party's user id
+  // (caregiver → family); otherwise fall back to the demo overlay.
+  const callCtx = useCallOptional();
+  const placeCall = (video: boolean) => {
+    if (callCtx && conversation.visitId && conversation.peerUserId) {
+      callCtx.startCall({ visitId: conversation.visitId, calleeId: conversation.peerUserId, peerName: conversation.name, video });
+    } else {
+      setCall({ video });
+    }
+  };
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [docMsg, setDocMsg] = useState<ChatMessage | null>(null);
@@ -892,10 +903,10 @@ export function ChatThread({
             <span className="block text-xs text-ink-500">{conversation.online ? t("online") : conversation.role}</span>
           </span>
         </button>
-        <button type="button" aria-label={t("videoCall")} onClick={() => setCall({ video: true })} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
+        <button type="button" aria-label={t("videoCall")} onClick={() => placeCall(true)} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
           <Video className="size-5" />
         </button>
-        <button type="button" aria-label={t("voiceCall")} onClick={() => setCall({ video: false })} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
+        <button type="button" aria-label={t("voiceCall")} onClick={() => placeCall(false)} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
           <Phone className="size-5" />
         </button>
       </header>

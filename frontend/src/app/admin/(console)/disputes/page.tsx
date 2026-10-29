@@ -34,7 +34,7 @@ function Party({ label, user }: { label: string; user: Dispute["raisedBy"] }) {
 }
 
 export default function DisputesPage() {
-  const [status, setStatus] = useState<DisputeStatus>("OPEN");
+  const [status, setStatus] = useState<DisputeStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState<Dispute | null>(null);
   const t = useTranslations("adminB.disputes");
@@ -43,7 +43,7 @@ export default function DisputesPage() {
 
   const list = useQuery({
     queryKey: [...keys.disputes, "list", status, page],
-    queryFn: () => disputesApi.list({ status, page, limit: LIMIT }),
+    queryFn: () => disputesApi.list({ ...(status === "ALL" ? {} : { status }), page, limit: LIMIT }),
   });
 
   const resolve = useAction(({ id, note }: { id: string; note: string }) => disputesApi.resolve(id, note), {
@@ -67,6 +67,7 @@ export default function DisputesPage() {
             setPage(1);
           }}
           options={[
+            { value: "ALL", label: t("all") },
             { value: "OPEN", label: L.dispute("OPEN") },
             { value: "RESOLVED", label: L.dispute("RESOLVED") },
           ]}
@@ -83,7 +84,7 @@ export default function DisputesPage() {
         </Card>
       ) : list.data.items.length === 0 ? (
         <Card>
-          <EmptyState icon={Scale} title={status === "OPEN" ? t("emptyOpen") : t("emptyResolved")} />
+          <EmptyState icon={Scale} title={status === "ALL" ? t("empty") : status === "OPEN" ? t("emptyOpen") : t("emptyResolved")} />
         </Card>
       ) : (
         <div className="space-y-4">

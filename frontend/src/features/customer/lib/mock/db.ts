@@ -103,6 +103,7 @@ function seed(): MockDb {
     PHYSIOTHERAPY: [["10:00", "18:00"]],
     POST_SURGERY_CARE: [["09:00", "17:00"]],
     ELDERLY_CARE: [["08:00", "20:00"]],
+    DOCTOR: [["10:00", "14:00"], ["17:00", "20:00"]],
   };
   const caregivers: MockCaregiver[] = seeds.map(([id, name, specialty, body, license, years, rate, cities, rating, count, bio], i) => ({
     id,

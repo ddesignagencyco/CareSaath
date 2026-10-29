@@ -416,3 +416,13 @@ export async function setConfig(key: string, value: number): Promise<PlatformCon
   const { overridden, ...result } = clone(item);
   return result;
 }
+
+export async function resetConfig(key: string): Promise<PlatformConfigSetResult> {
+  await delay();
+  const item = db.platformConfig.find((c) => c.key === key) ?? notFound("Config key");
+  item.value = item.envDefault;
+  item.overridden = false;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the API omits `overridden` here
+  const { overridden, ...result } = clone(item);
+  return result;
+}

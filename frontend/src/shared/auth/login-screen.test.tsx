@@ -87,7 +87,7 @@ describe("LoginScreen", () => {
     await toOtpStep(user);
     await user.click(screen.getByRole("textbox", { name: "Digit 1" }));
     await user.keyboard("123456");
-    await waitFor(() => expect(verifyOtp).toHaveBeenCalledWith("+923001234567", "123456"));
+    await waitFor(() => expect(verifyOtp).toHaveBeenCalledWith("+923001234567", "123456", "", ""));
     expect(verifyOtp).toHaveBeenCalledTimes(1);
   });
 

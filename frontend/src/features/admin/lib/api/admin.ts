@@ -7,9 +7,14 @@ import * as mock from "../mock/handlers";
 import type {
   AdminCaregiver,
   AdminCaregiverRecord,
+  AdminPayment,
   AdminPayoutRequest,
   AnalyticsOverview,
   AnalyticsRange,
+  AuditLogEntry,
+  CallLogEntry,
+  CallStatus,
+  CaregiverBadge,
   CommissionRate,
   CreatePromoInput,
   Dispute,
@@ -30,17 +35,42 @@ import type {
   SafetyIncident,
   SafetyIncidentRecord,
   Specialty,
+  StrikeReason,
   TokenPair,
   UpdateIncidentInput,
   UpdatePromoInput,
   VerificationStatus,
 } from "@shared/types";
 import { checkHealth, type Health } from "@shared/api/http";
-import type { Me } from "@shared/caregiver-types";
+import type { Me, PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
 import { http, USE_MOCKS } from "./http";
 
 /** FR-A3 deactivate is now exposed by the backend (POST /admin/caregivers/:id/deactivate). */
 export const CAN_DEACTIVATE_CAREGIVER = true;
+
+/**
+ * Manual caregiver tier-badge override. Flip to `true` once the backend ships
+ * `POST /admin/caregivers/:id/badge` and includes `badge`/`badgeOverride` on the
+ * admin payload (spec in docs/requirement.md). Until then the drawer shows the
+ * tier read-only and hides the override control.
+ */
+export const CAN_OVERRIDE_BADGE = false;
+
+/**
+ * Admin payments ledger. The receipt endpoint (GET /admin/payments/:id/receipt)
+ * already exists, but there is no admin LIST endpoint yet. Flip to `true` once
+ * the backend ships `GET /admin/payments` (spec in docs/requirement.md).
+ */
+export const CAN_ADMIN_PAYMENTS = false;
+
+/** Admin audit-log viewer. Flip to `true` once the backend ships `GET /admin/audit-logs` (spec in docs/requirement.md). */
+export const CAN_AUDIT_LOG = false;
+
+/** Admin in-app call history. Flip to `true` once the backend ships `GET /admin/call-logs` (spec in docs/requirement.md). */
+export const CAN_CALL_LOGS = false;
+
+/** Manual caregiver strike reset/add. Flip to `true` once the backend ships `POST /admin/caregivers/:id/strikes` (spec in docs/requirement.md). */
+export const CAN_MANAGE_STRIKES = false;
 
 export const healthApi = {
   /** GET /health (public) — the mock is always healthy. */
@@ -78,8 +108,8 @@ export const authApi = {
 };
 
 export const caregiversApi = {
-  /** GET /admin/caregivers?status=&page=&limit= */
-  list: (q: PageQuery & { status?: VerificationStatus }) =>
+  /** GET /admin/caregivers?status=&reverifyDueBefore=&page=&limit= (reverifyDueBefore → due-asc order) */
+  list: (q: PageQuery & { status?: VerificationStatus; reverifyDueBefore?: string }) =>
     USE_MOCKS ? mock.listCaregivers(q) : http.get<Paginated<AdminCaregiver>>("/admin/caregivers", q),
   /** POST /admin/caregivers/:id/approve */
   approve: (id: string, reason?: string) =>
@@ -106,6 +136,15 @@ export const caregiversApi = {
   /** POST /admin/caregivers/:id/deactivate (FR-A3) — blocks the user account and hides them from search. */
   deactivate: (id: string, reason?: string): Promise<AdminCaregiverRecord> =>
     USE_MOCKS ? mock.deactivateCaregiver(id) : http.post<AdminCaregiverRecord>(`/admin/caregivers/${id}/deactivate`, { reason }),
+  /**
+   * POST /admin/caregivers/:id/badge — manual tier override; `badge: null` clears it (back to auto-computed).
+   * Gated behind CAN_OVERRIDE_BADGE until the backend endpoint exists (spec in docs/requirement.md).
+   */
+  setBadge: (id: string, badge: CaregiverBadge | null): Promise<AdminCaregiverRecord> =>
+    http.post<AdminCaregiverRecord>(`/admin/caregivers/${id}/badge`, { badge }),
+  /** POST /admin/caregivers/:id/strikes — reset to 0, or add a manual strike. Gated behind CAN_MANAGE_STRIKES (spec in docs/requirement.md). */
+  setStrikes: (id: string, body: { op: "reset" } | { op: "add"; reason: StrikeReason; note?: string }): Promise<AdminCaregiverRecord> =>
+    http.post<AdminCaregiverRecord>(`/admin/caregivers/${id}/strikes`, body),
   /** GET /admin/caregivers/:id/documents/:documentId/url */
   documentUrl: (id: string, documentId: string) =>
     USE_MOCKS
@@ -194,4 +233,27 @@ export const configApi = {
   /** PUT /admin/config/:key */
   set: (key: string, value: number) =>
     USE_MOCKS ? mock.setConfig(key, value) : http.put<PlatformConfigSetResult>(`/admin/config/${encodeURIComponent(key)}`, { value }),
+  /** DELETE /admin/config/:key — removes the override so the setting returns to its env default. */
+  reset: (key: string) =>
+    USE_MOCKS ? mock.resetConfig(key) : http.delete<PlatformConfigSetResult>(`/admin/config/${encodeURIComponent(key)}`),
+};
+
+export const paymentsApi = {
+  /** GET /admin/payments?status=&method=&page=&limit= — admin payments ledger. Backend list endpoint pending (see requirement.md); gated behind CAN_ADMIN_PAYMENTS. */
+  list: (q: PageQuery & { status?: PaymentStatus; method?: PaymentMethod }) =>
+    http.get<Paginated<AdminPayment>>("/admin/payments", q),
+  /** GET /admin/payments/:id/receipt — payment receipt PDF blob (real backend only). */
+  receipt: (id: string) => http.download(`/admin/payments/${id}/receipt`),
+};
+
+export const auditApi = {
+  /** GET /admin/audit-logs?entityType=&actorId=&page=&limit= — append-only audit trail. Backend endpoint pending; gated behind CAN_AUDIT_LOG (see requirement.md). */
+  list: (q: PageQuery & { entityType?: string; actorId?: string }) =>
+    http.get<Paginated<AuditLogEntry>>("/admin/audit-logs", q),
+};
+
+export const callLogsApi = {
+  /** GET /admin/call-logs?status=&page=&limit= — persisted in-app call history. Backend endpoint pending; gated behind CAN_CALL_LOGS (see requirement.md). */
+  list: (q: PageQuery & { status?: CallStatus }) =>
+    http.get<Paginated<CallLogEntry>>("/admin/call-logs", q),
 };

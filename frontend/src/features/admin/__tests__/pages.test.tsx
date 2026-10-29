@@ -38,7 +38,8 @@ describe("caregiver verification page", () => {
     return mockFetch((c) => {
       if (c.method === "GET" && apiPath(c) === "/admin/caregivers") {
         const status = c.url.searchParams.get("status");
-        return json(status === "PENDING" ? page([pending]) : page([]));
+        // Default filter is now "All" (no status param); also serve the pending row then.
+        return json(status === "PENDING" || status === null ? page([pending]) : page([]));
       }
       if (c.method === "POST") {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars -- action routes omit `user`
@@ -56,7 +57,7 @@ describe("caregiver verification page", () => {
 
     const name = await screen.findByText(pending.user.fullName);
     const listCall = f.calls.find((c) => c.url.searchParams.get("limit") === "10")!;
-    expect(Object.fromEntries(listCall.url.searchParams)).toEqual({ status: "PENDING", page: "1", limit: "10" });
+    expect(Object.fromEntries(listCall.url.searchParams)).toEqual({ page: "1", limit: "10" });
 
     await user.click(name);
     const drawer = await screen.findByRole("dialog");
@@ -91,7 +92,7 @@ describe("payouts page", () => {
     render(<PayoutsPage />);
 
     await screen.findByText(requested.caregiver.user.fullName);
-    expect(Object.fromEntries(f.calls[0].url.searchParams)).toEqual({ status: "REQUESTED", page: "1", limit: "10" });
+    expect(Object.fromEntries(f.calls[0].url.searchParams)).toEqual({ page: "1", limit: "10" });
     await user.click(screen.getByRole("button", { name: "Reject" }));
     const dialog = await screen.findByRole("dialog");
     const confirm = within(dialog).getByRole("button", { name: "Reject payout" });

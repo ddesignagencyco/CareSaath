@@ -46,6 +46,7 @@ const DEFAULT_BODY: Record<Specialty, LicenseBody> = {
   POST_SURGERY_CARE: "PNC",
   ELDERLY_CARE: "OTHER",
   PHYSIOTHERAPY: "OTHER",
+  DOCTOR: "PMDC",
 };
 
 export default function OnboardingPage() {
@@ -71,10 +72,14 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
   const [years, setYears] = useState("");
   const [cities, setCities] = useState<string[]>([]);
   const [rate, setRate] = useState("");
+  const [minRate, setMinRate] = useState("");
+  const [maxRate, setMaxRate] = useState("");
   const [bio, setBio] = useState("");
 
   const yearsNum = years === "" ? undefined : Number(years);
   const rateNum = Number(rate);
+  const minNum = minRate ? Number(minRate) : rateNum;
+  const maxNum = maxRate ? Number(maxRate) : rateNum;
   const errors: Record<number, Record<string, string | null>> = {
     0: {
       name: name.trim().length < 2 ? t("errors.name") : null,
@@ -89,6 +94,10 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
     2: {
       cities: cities.length === 0 ? t("errors.cities") : null,
       rate: !rate || !Number.isFinite(rateNum) || rateNum < 10 ? t("errors.rate") : null,
+      bracket:
+        (minRate || maxRate) && (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum || rateNum < minNum || rateNum > maxNum)
+          ? t("errors.bracket")
+          : null,
     },
   };
   const stepValid = (s: number) => Object.values(errors[s] ?? {}).every((e) => !e);
@@ -109,6 +118,8 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
           ...(bio.trim() ? { bio: bio.trim() } : {}),
           serviceCities: cities,
           ratePerVisit: Math.round(rateNum * 100),
+          minRatePerVisit: Math.round(minNum * 100),
+          maxRatePerVisit: Math.round(maxNum * 100),
         });
       } catch (e) {
         // A retry after a network blip: the profile already exists, carry on.
@@ -224,6 +235,12 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
               hint={rateNum >= 10 ? t("rateHintAmount", { amount: formatMoney(Math.round(rateNum * 100)) }) : t("rateHint")}
             >
               {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={rate} placeholder="2500" onChange={(e) => setRate(e.target.value)} className="tabular" />}
+            </Field>
+            <Field label={t("minRate")} error={err(2, "bracket")} hint={t("bracketHint")}>
+              {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={minRate} placeholder={rate || "2000"} onChange={(e) => setMinRate(e.target.value)} className="tabular" />}
+            </Field>
+            <Field label={t("maxRate")}>
+              {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={maxRate} placeholder={rate || "3000"} onChange={(e) => setMaxRate(e.target.value)} className="tabular" />}
             </Field>
             <Field label={t("about")} hint={t("aboutHint", { count: bio.length })}>
               {(id) => <Textarea id={id} value={bio} maxLength={2000} rows={4} onChange={(e) => setBio(e.target.value)} />}

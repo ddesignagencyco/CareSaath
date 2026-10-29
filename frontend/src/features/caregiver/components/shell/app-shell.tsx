@@ -21,6 +21,8 @@ import { NotificationBell } from "@shared/ui/notification-bell";
 import { ApiError, USE_MOCKS, http } from "@/features/caregiver/lib/api/http";
 import { session } from "@/features/caregiver/lib/api/session";
 import { useRealtime } from "@shared/api/realtime";
+import { useLiveLocation } from "@/features/caregiver/lib/use-live-location";
+import { CallProvider } from "@shared/chat/call-context";
 import { homeFor, refreshTokens, tokenRole, useMe, useSessionRaw, useSignOut } from "@/features/caregiver/lib/auth";
 import { useRequestCount, useUnreadCount } from "./counts";
 import { isActive, MORE, PRIMARY, SECONDARY, SIDEBAR_GROUPS } from "./nav";
@@ -53,6 +55,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const client = useQueryClient();
   const approved = me.data?.caregiverProfile?.verificationStatus === "APPROVED";
   useRealtime({ session, queryClient: client, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
+  // Share live location (for immediate/ASAP bookings) while an approved caregiver has the app open.
+  useLiveLocation(!USE_MOCKS && approved);
   // Only for the avatar photo; pages share this cache entry.
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get, enabled: approved });
   const requests = useRequestCount(approved);
@@ -96,6 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const phone = me.data ? formatPkMobile(me.data.phone) : "";
 
   return (
+    <CallProvider session={session} enabled={!USE_MOCKS && approved}>
     <div className={clsx("min-h-dvh transition-[padding] duration-200 ease-out", collapsed ? "lg:ps-20" : "lg:ps-64")}>
       {/* Desktop sidebar */}
       <aside
@@ -245,5 +250,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </ul>
       </nav>
     </div>
+    </CallProvider>
   );
 }

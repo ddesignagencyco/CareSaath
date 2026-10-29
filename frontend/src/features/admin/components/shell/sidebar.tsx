@@ -6,9 +6,12 @@ import {
   BadgePercent,
   BarChart3,
   CalendarClock,
+  CreditCard,
   FileSpreadsheet,
   Percent,
+  Phone,
   Scale,
+  ScrollText,
   Settings2,
   ShieldAlert,
   UserCheck,
@@ -18,7 +21,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { Logo, LogoMark } from "@shared/brand";
-import { caregiversApi, disputesApi, payoutsApi, safetyApi } from "@/features/admin/lib/api/admin";
+import { CAN_ADMIN_PAYMENTS, CAN_AUDIT_LOG, CAN_CALL_LOGS, caregiversApi, disputesApi, payoutsApi, safetyApi } from "@/features/admin/lib/api/admin";
 import { keys } from "@/features/admin/lib/api/hooks";
 
 interface NavItem {
@@ -80,18 +83,26 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       items: [
         { href: "/admin/safety", label: t("nav.safety"), icon: ShieldAlert, count: counts.incidents, urgent: true },
         { href: "/admin/disputes", label: t("nav.disputes"), icon: Scale, count: counts.disputes },
+        ...(CAN_CALL_LOGS ? [{ href: "/admin/call-logs", label: t("nav.callLogs"), icon: Phone }] : []),
       ],
     },
     {
       label: t("nav.groups.finance"),
       items: [
         { href: "/admin/payouts", label: t("nav.payouts"), icon: Wallet, count: counts.payouts },
+        ...(CAN_ADMIN_PAYMENTS ? [{ href: "/admin/payments", label: t("nav.payments"), icon: CreditCard }] : []),
         { href: "/admin/commissions", label: t("nav.commissions"), icon: Percent },
         { href: "/admin/promos", label: t("nav.promos"), icon: BadgePercent },
         { href: "/admin/reports", label: t("nav.reports"), icon: FileSpreadsheet },
       ],
     },
-    { label: t("nav.groups.platform"), items: [{ href: "/admin/settings", label: t("nav.settings"), icon: Settings2 }] },
+    {
+      label: t("nav.groups.platform"),
+      items: [
+        { href: "/admin/settings", label: t("nav.settings"), icon: Settings2 },
+        ...(CAN_AUDIT_LOG ? [{ href: "/admin/audit-logs", label: t("nav.auditLogs"), icon: ScrollText }] : []),
+      ],
+    },
   ];
 
   return (

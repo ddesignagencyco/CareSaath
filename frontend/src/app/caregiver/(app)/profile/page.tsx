@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, Camera, Star } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Camera, Star } from "lucide-react";
+import { TierBadge } from "@shared/ui/tier-badge";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -81,18 +82,30 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
   const L = useLabels();
   const { locale, setLocale } = useLocaleControl();
   const [name, setName] = useState(me.fullName);
+  const [email, setEmail] = useState(me.email ?? "");
   const [language, setLanguage] = useState<Locale>(locale);
   const [specialty, setSpecialty] = useState<Specialty>(profile.specialty);
   const [years, setYears] = useState(profile.experienceYears?.toString() ?? "");
   const [rate, setRate] = useState(String(profile.ratePerVisit / 100));
+  const [minRate, setMinRate] = useState(String((profile.minRatePerVisit ?? profile.ratePerVisit) / 100));
+  const [maxRate, setMaxRate] = useState(String((profile.maxRatePerVisit ?? profile.ratePerVisit) / 100));
   const [cities, setCities] = useState<string[]>(profile.serviceArea?.cities ?? []);
   const [bio, setBio] = useState(profile.bio ?? "");
 
   const rateNum = Number(rate);
+  const minNum = Number(minRate);
+  const maxNum = Number(maxRate);
   const yearsNum = years === "" ? undefined : Number(years);
   const errors = {
     name: name.trim().length < 2 ? t("errors.name") : null,
+    email: email.trim().length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? t("errors.email") : null,
     rate: !Number.isFinite(rateNum) || rateNum < 10 ? t("errors.rate") : null,
+    bracket:
+      !Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum
+        ? t("errors.bracket")
+        : rateNum < minNum || rateNum > maxNum
+          ? t("errors.rateInBracket")
+          : null,
     years: yearsNum !== undefined && (!Number.isInteger(yearsNum) || yearsNum < 0 || yearsNum > 60) ? t("errors.years") : null,
     cities: cities.length === 0 ? t("errors.cities") : null,
   };
@@ -101,16 +114,20 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
   const save = useAction(
     async () => {
       const nameChanged = name.trim() !== me.fullName;
+      const emailChanged = email.trim() !== (me.email ?? "");
       const languageChanged = API_LANGUAGE[language] !== me.preferredLanguage;
-      if (nameChanged || languageChanged) {
+      if (nameChanged || emailChanged || languageChanged) {
         await meApi.update({
           ...(nameChanged ? { fullName: name.trim() } : {}),
+          ...(emailChanged && email.trim() ? { email: email.trim() } : {}),
           ...(languageChanged ? { preferredLanguage: API_LANGUAGE[language] } : {}),
         });
       }
       return profileApi.update({
         specialty,
         ratePerVisit: Math.round(rateNum * 100),
+        minRatePerVisit: Math.round(minNum * 100),
+        maxRatePerVisit: Math.round(maxNum * 100),
         serviceCities: cities,
         bio: bio.trim(),
         ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
@@ -127,12 +144,23 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
           <Field label={t("fullName")} required error={errors.name}>
             {(id) => <Input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />}
           </Field>
+          <Field label={t("email")} hint={t("emailHint")} error={errors.email}>
+            {(id) => <Input id={id} type="email" value={email} maxLength={160} onChange={(e) => setEmail(e.target.value)} />}
+          </Field>
           <Field label={t("specialty")} required hint={specialty !== profile.specialty ? t("specialtyHint") : undefined}>
             {(id) => <Select inputId={id} value={specialty} onChange={(v) => v && setSpecialty(v)} options={SPECIALTY_OPTIONS.map((o) => ({ ...o, label: L.specialty(o.value), description: L.specialtyHint(o.value) }))} />}
           </Field>
-          <Field label={t("rate")} required error={errors.rate}>
+          <Field label={t("rate")} required error={errors.rate} hint={t("rateHint")}>
             {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={rate} onChange={(e) => setRate(e.target.value)} className="tabular" />}
           </Field>
+          <div className="grid grid-cols-2 gap-4 sm:col-span-2">
+            <Field label={t("minRate")} required error={errors.bracket}>
+              {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={minRate} onChange={(e) => setMinRate(e.target.value)} className="tabular" />}
+            </Field>
+            <Field label={t("maxRate")} required>
+              {(id) => <Input id={id} type="number" inputMode="numeric" min={10} dir="ltr" value={maxRate} onChange={(e) => setMaxRate(e.target.value)} className="tabular" />}
+            </Field>
+          </div>
           <Field label={t("years")} error={errors.years}>
             {(id) => <Input id={id} type="number" inputMode="numeric" min={0} max={60} dir="ltr" value={years} onChange={(e) => setYears(e.target.value)} className="tabular" />}
           </Field>
@@ -199,6 +227,7 @@ export default function ProfilePage() {
                   <Badge tone="success" dot>
                     <BadgeCheck className="size-3" /> {t("verified")}
                   </Badge>
+                  {p.badge && <TierBadge badge={p.badge} />}
                   {p.ratingCount > 0 && (
                     <Badge tone="accent">
                       <Star className="size-3 fill-current" /> {t("rating", { rating: Number(p.ratingAverage).toFixed(2), count: p.ratingCount })}
@@ -207,6 +236,12 @@ export default function ProfilePage() {
                 </div>
               </div>
             </Card>
+            {!!p.strikeCount && (
+              <Card className="flex items-start gap-3 border-warning-200 bg-warning-50 p-4 text-sm text-warning-800">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p dir="auto">{t("strikesWarning", { count: p.strikeCount })}</p>
+              </Card>
+            )}
             <ProfileForm key={p.updatedAt} me={me.data} profile={p} />
           </div>
 

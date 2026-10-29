@@ -10,6 +10,7 @@ import { useApiErrorText } from "../api/use-action";
 import { Logo } from "../brand";
 import { formatPkMobile, parsePkMobile } from "../lib/phone";
 import { Button } from "../ui/button";
+import { Field, Input } from "../ui/field";
 import { OtpInput } from "../ui/otp-input";
 import { PhoneField } from "../ui/phone-field";
 import { useToast } from "../ui/toast";
@@ -36,8 +37,20 @@ export interface LoginScreenProps {
   /** Top-right control on the form side (e.g. a language toggle). */
   topRight?: React.ReactNode;
   requestOtp: (phone: string) => Promise<unknown>;
-  /** Resolve with an error message to show it, or nothing on success. */
-  verifyOtp: (phone: string, code: string) => Promise<string | void>;
+  /** Resolve with an error message to show it, or nothing on success. `name`/`email` are set in signup mode. */
+  verifyOtp: (phone: string, code: string, name?: string, email?: string) => Promise<string | void>;
+  /** Signup mode: also collect the person's name in the first step. */
+  collectName?: boolean;
+  nameLabel?: string;
+  namePlaceholder?: string;
+  /** Signup mode: also collect an optional email (for notifications/receipts). */
+  collectEmail?: boolean;
+  emailLabel?: string;
+  emailPlaceholder?: string;
+  /** A link to the other auth screen (e.g. "Already have an account? Sign in"). */
+  altAction?: React.ReactNode;
+  /** Content at the top of the first step, above the name/phone fields (e.g. a role selector). */
+  aboveFields?: React.ReactNode;
 }
 
 const RESEND_SECONDS = 30;
@@ -117,6 +130,8 @@ export function LoginScreen(props: LoginScreenProps) {
   const toast = useToast();
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +141,10 @@ export function LoginScreen(props: LoginScreenProps) {
   const parsed = parsePkMobile(phone);
   const fullPhone = parsed.ok ? parsed.e164 : "";
   const phoneError = error ?? (touched && !parsed.ok && phone ? t(`phone.${parsed.code}`) : null);
+  const nameOk = !props.collectName || name.trim().length >= 2;
+  const nameError = props.collectName && touched && !nameOk ? t("login.nameRequired") : undefined;
+  const emailOk = !props.collectEmail || !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const emailError = props.collectEmail && touched && !!email.trim() && !emailOk ? t("login.emailInvalid") : undefined;
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -137,6 +156,7 @@ export function LoginScreen(props: LoginScreenProps) {
     e?.preventDefault();
     setTouched(true);
     setError(null);
+    if (!nameOk || !emailOk) return;
     if (!parsed.ok) {
       setError(t(`phone.${parsed.code}`));
       return;
@@ -160,7 +180,7 @@ export function LoginScreen(props: LoginScreenProps) {
     setError(null);
     setLoading(true);
     try {
-      const message = await props.verifyOtp(fullPhone, value);
+      const message = await props.verifyOtp(fullPhone, value, name.trim(), email.trim());
       if (message) {
         setError(message);
       } else {
@@ -192,6 +212,22 @@ export function LoginScreen(props: LoginScreenProps) {
               <h2 className="text-3xl font-extrabold tracking-tight text-ink-900">{props.phoneTitle}</h2>
               <p className="mt-2 text-ink-500">{props.phoneDescription}</p>
 
+              {props.aboveFields && <div className="mt-6">{props.aboveFields}</div>}
+
+              {props.collectName && (
+                <div className="mt-8">
+                  <Field label={props.nameLabel ?? ""} error={nameError} required>
+                    {(id) => <Input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={props.namePlaceholder} />}
+                  </Field>
+                </div>
+              )}
+              {props.collectEmail && (
+                <div className="mt-4">
+                  <Field label={props.emailLabel ?? ""} error={emailError}>
+                    {(id) => <Input id={id} type="email" value={email} maxLength={160} onChange={(e) => setEmail(e.target.value)} placeholder={props.emailPlaceholder} />}
+                  </Field>
+                </div>
+              )}
               <div className="mt-8">
                 <PhoneField
                   value={phone}
@@ -210,6 +246,7 @@ export function LoginScreen(props: LoginScreenProps) {
               </Button>
 
               {props.phoneHint}
+              {props.altAction && <div className="mt-6 text-center text-sm text-ink-500">{props.altAction}</div>}
             </form>
           ) : (
             <form

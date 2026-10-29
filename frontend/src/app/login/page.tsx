@@ -1,6 +1,7 @@
 "use client";
 
 import { BadgeCheck, MapPinned, Siren } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { decodeToken } from "@shared/api/session";
@@ -35,9 +36,17 @@ function LoginInner() {
       headline="Sign in to CareSaath"
       features={FEATURES}
       heroFooter="Home nursing & physiotherapy · Pakistan"
-      phoneTitle="Sign in or sign up"
-      phoneDescription="Enter your mobile number and we'll send you a one-time code."
+      phoneTitle="Sign in"
+      phoneDescription="Enter your registered mobile number and we'll send you a one-time code."
       footerNote="We'll take you to the right place based on your account."
+      altAction={
+        <>
+          New to CareSaath?{" "}
+          <Link href="/signup" className="font-semibold text-brand-700 hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
       codeHint={
         USE_MOCKS ? (
           <MockHint>

@@ -1,6 +1,26 @@
 {
   "visit": {
     "back": "Visits",
+    "medicalOrders": {
+      "title": "Medical orders",
+      "addTitle": "Record an order",
+      "hint": "Add a diagnosis, prescription, or lab tests. The family is notified.",
+      "diagnosis": "Diagnosis",
+      "diagnosisPlaceholder": "e.g. Upper respiratory tract infection",
+      "medicines": "Prescription",
+      "medName": "Medicine name",
+      "dosage": "Dosage",
+      "frequency": "Frequency",
+      "duration": "Duration",
+      "instructions": "Instructions",
+      "addMedicine": "Add medicine",
+      "labTests": "Lab tests",
+      "labName": "Test name",
+      "addLabTest": "Add lab test",
+      "remove": "Remove",
+      "save": "Save order",
+      "saved": "Order saved — the family has been notified."
+    },
     "closed": "This visit was {status, select, DECLINED {declined} other {cancelled}}.",
     "closedWithReason": "This visit was {status, select, DECLINED {declined} other {cancelled}}: \"{reason}\".",
     "awaitingResponse": "This booking is waiting for your response.",
@@ -24,6 +44,9 @@
     "recurring": "Recurring · {days}",
     "singleVisit": "Single visit",
     "timeline": "Timeline",
+    "returning": "Returning · {count, plural, one {# prior visit} other {# prior visits}}",
+    "historyTitle": "Previous visits",
+    "historyHint": "Other visits you've had with this customer.",
     "reportIssue": "Report a safety or access issue",
     "raiseDispute": "Raise a dispute"
   },
@@ -243,6 +266,7 @@
     "fallbackName": "Caregiver",
     "verified": "Verified caregiver",
     "rating": "{rating} · {count, plural, one {# review} other {# reviews}}",
+    "strikesWarning": "You have {count, plural, one {# strike} other {# strikes}}. More strikes can suspend your account — accept bookings you can keep and arrive on time.",
     "documents": "Documents",
     "uploadNew": "Upload a new document",
     "credentials": {
@@ -261,9 +285,14 @@
       "description": "What families see when they choose a caregiver.",
       "saved": "Profile saved",
       "fullName": "Full name",
+      "email": "Email",
+      "emailHint": "For receipts and important updates (optional).",
       "specialty": "Specialty",
       "specialtyHint": "Changing specialty can change your commission rate.",
       "rate": "Rate per visit (Rs)",
+      "rateHint": "Your rate must stay within your min–max bracket.",
+      "minRate": "Minimum rate (Rs)",
+      "maxRate": "Maximum rate (Rs)",
       "years": "Years of experience",
       "cities": "Cities you serve",
       "chooseCities": "Choose cities",
@@ -272,7 +301,10 @@
       "save": "Save profile",
       "errors": {
         "name": "Enter your full name",
+        "email": "Enter a valid email address",
         "rate": "Minimum rate is Rs 10",
+        "bracket": "Min must be at least Rs 10 and not above max",
+        "rateInBracket": "Your rate must be within your min–max bracket",
         "years": "0 to 60 years",
         "cities": "Choose at least one city"
       }
@@ -317,6 +349,7 @@
       "license": "Enter your registration number (3–40 characters)",
       "years": "0 to 60 years",
       "cities": "Choose at least one city",
+      "bracket": "Min must be ≥ Rs 10, max ≥ min, and your rate within the range",
       "rate": "Enter your fee per visit (at least Rs 10)"
     },
     "created": "Profile created. Now upload your documents.",
@@ -334,6 +367,9 @@
     "rate": "Your fee per visit (Rs)",
     "rateHintAmount": "Families pay {amount} per visit; CareSaath's commission is deducted from this.",
     "rateHint": "What families pay per visit. CareSaath's commission is deducted from this.",
+    "minRate": "Minimum rate (Rs, optional)",
+    "maxRate": "Maximum rate (Rs, optional)",
+    "bracketHint": "Optional price range; defaults to your rate. Your rate must sit inside it.",
     "about": "About you",
     "aboutHint": "{count}/2000 · Optional. Experience, skills, languages you speak.",
     "addDocument": "Add a document",
@@ -363,7 +399,8 @@
     },
     "suspended": {
       "title": "Your profile is suspended",
-      "text": "Families can't book you right now. CareSaath support will contact you about next steps."
+      "text": "Families can't book you right now. CareSaath support will contact you about next steps.",
+      "strikes": "{count, plural, one {# strike} other {# strikes}} on your account led to this."
     },
     "reviewing": {
       "title": "We're reviewing your profile",

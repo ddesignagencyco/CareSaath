@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import clsx from "clsx";
+import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarClock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
@@ -9,8 +9,9 @@ import { CaregiverDrawer } from "@/features/admin/components/caregivers/caregive
 import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
-import { Avatar, EmptyState, ErrorState, FilterTabs, TableSkeleton } from "@shared/ui/misc";
-import { Table, Td, Th, Tr } from "@shared/ui/table";
+import { DataTable } from "@shared/ui/data-table";
+import { Avatar, EmptyState, ErrorState } from "@shared/ui/misc";
+import { Select } from "@shared/ui/select";
 import { caregiversApi } from "@/features/admin/lib/api/admin";
 import { keys } from "@/features/admin/lib/api/hooks";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -28,19 +29,22 @@ function DueBadge({ days }: { days: number }) {
 }
 
 /**
- * FR-A2 periodic re-verification. The API has no "due soon" filter, so this
- * pulls approved caregivers (max page size) and sorts by reverifyDueAt.
+ * FR-A2 periodic re-verification. For the actionable windows we use the API's
+ * `reverifyDueBefore` filter (the server then sorts by due date, ascending);
+ * "all" lists every approved caregiver.
  */
 export default function ReverificationPage() {
   const t = useTranslations("adminA.reverification");
   const f = useFmt();
   const L = useLabels();
-  const [dueWindow, setDueWindow] = useState<DueWindow>("30");
+  const [dueWindow, setDueWindow] = useState<DueWindow>("all");
   const [selected, setSelected] = useState<AdminCaregiver | null>(null);
 
+  const scoped = dueWindow !== "all";
   const list = useQuery({
-    queryKey: [...keys.caregivers, "list", "APPROVED", "reverify"],
-    queryFn: () => caregiversApi.list({ status: "APPROVED", limit: 100 }),
+    queryKey: [...keys.caregivers, "list", "APPROVED", "reverify", scoped ? "due90" : "all"],
+    queryFn: () =>
+      caregiversApi.list({ status: "APPROVED", limit: 100, ...(scoped ? { reverifyDueBefore: new Date(Date.now() + 90 * 86_400_000).toISOString() } : {}) }),
   });
 
   const rows = useMemo(() => {
@@ -56,30 +60,64 @@ export default function ReverificationPage() {
     };
   }, [list.data]);
 
-  const shown = rows[dueWindow];
+  const data = rows[dueWindow].map(({ c }) => c);
   const items = list.data?.items ?? [];
   const noDueDate = items.filter((c) => !c.reverifyDueAt).length;
   const total = list.data?.total ?? 0;
 
+  const columns: ColumnDef<AdminCaregiver, unknown>[] = [
+    {
+      id: "caregiver",
+      header: t("columns.caregiver"),
+      accessorFn: (c) => c.user.fullName,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={row.original.user.fullName} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-ink-900">{row.original.user.fullName}</p>
+            <p className="text-xs text-ink-500">{L.specialty(row.original.specialty)}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "license",
+      header: t("columns.license"),
+      meta: { className: "hidden md:table-cell" },
+      accessorFn: (c) => c.licenseNumber,
+      cell: ({ row }) => (
+        <div>
+          <p className="tabular font-medium text-ink-800">{row.original.licenseNumber}</p>
+          <p className="text-xs text-ink-500">{L.licenseBodyShort(row.original.licenseBody)}</p>
+        </div>
+      ),
+    },
+    {
+      id: "approved",
+      header: t("columns.approved"),
+      meta: { className: "hidden sm:table-cell" },
+      accessorFn: (c) => c.approvedAt ?? "",
+      cell: ({ row }) => <span className="text-ink-700">{f.date(row.original.approvedAt)}</span>,
+    },
+    {
+      id: "due",
+      header: t("columns.due"),
+      accessorFn: (c) => c.reverifyDueAt ?? "",
+      cell: ({ row }) => {
+        const days = daysUntil(row.original.reverifyDueAt!);
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <DueBadge days={days} />
+            <span className="text-xs text-ink-500">{f.date(row.original.reverifyDueAt)}</span>
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <>
-      <PageHeader
-        title={t("title")}
-        description={t("description")}
-      />
-
-      <div className="mb-4">
-        <FilterTabs
-          value={dueWindow}
-          onChange={setDueWindow}
-          options={[
-            { value: "overdue", label: t("windows.overdue"), count: rows.overdue.length },
-            { value: "30", label: t("windows.next30"), count: rows["30"].length },
-            { value: "90", label: t("windows.next90"), count: rows["90"].length },
-            { value: "all", label: t("windows.all"), count: rows.all.length },
-          ]}
-        />
-      </div>
+      <PageHeader title={t("title")} description={t("description")} />
 
       {(noDueDate > 0 || total > items.length) && (
         <div className="mb-4 space-y-1 text-sm text-ink-500">
@@ -88,52 +126,38 @@ export default function ReverificationPage() {
         </div>
       )}
 
-      <Card>
-        {list.isError ? (
+      {list.isError ? (
+        <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : !list.data ? (
-          <TableSkeleton />
-        ) : shown.length === 0 ? (
+        </Card>
+      ) : list.data && rows.all.length === 0 && dueWindow === "all" ? (
+        <Card>
           <EmptyState icon={CalendarClock} title={t("empty")} />
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <Th>{t("columns.caregiver")}</Th>
-                <Th className="hidden md:table-cell">{t("columns.license")}</Th>
-                <Th className="hidden sm:table-cell">{t("columns.approved")}</Th>
-                <Th>{t("columns.due")}</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map(({ c, days }) => (
-                <Tr key={c.id} onClick={() => setSelected(c)} className={clsx(days < 0 && "bg-danger-50/40")}>
-                  <Td>
-                    <div className="flex items-center gap-3">
-                      <Avatar name={c.user.fullName} size="sm" />
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-ink-900">{c.user.fullName}</p>
-                        <p className="text-xs text-ink-500">{L.specialty(c.specialty)}</p>
-                      </div>
-                    </div>
-                  </Td>
-                  <Td className="hidden md:table-cell">
-                    <p className="tabular font-medium text-ink-800">{c.licenseNumber}</p>
-                    <p className="text-xs text-ink-500">{L.licenseBodyShort(c.licenseBody)}</p>
-                  </Td>
-                  <Td className="hidden sm:table-cell text-ink-700">{f.date(c.approvedAt)}</Td>
-                  <Td>
-                    <div className="flex flex-col items-start gap-1">
-                      <DueBadge days={days} />
-                      <span className="text-xs text-ink-500">{f.date(c.reverifyDueAt)}</span>
-                    </div>
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={data}
+          loading={!list.data}
+          searchPlaceholder={t("searchPlaceholder")}
+          emptyText={t("empty")}
+          onRowClick={(c) => setSelected(c)}
+          toolbar={() => (
+            <Select<DueWindow>
+              className="w-52"
+              value={dueWindow}
+              isSearchable={false}
+              onChange={(v) => v && setDueWindow(v)}
+              options={[
+                { value: "all", label: `${t("windows.all")} (${rows.all.length})` },
+                { value: "overdue", label: `${t("windows.overdue")} (${rows.overdue.length})` },
+                { value: "30", label: `${t("windows.next30")} (${rows["30"].length})` },
+                { value: "90", label: `${t("windows.next90")} (${rows["90"].length})` },
+              ]}
+            />
+          )}
+        />
+      )}
 
       {selected && <CaregiverDrawer caregiver={selected} onClose={() => setSelected(null)} onChange={setSelected} />}
     </>

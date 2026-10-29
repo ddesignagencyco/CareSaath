@@ -11,13 +11,16 @@ import { formatMoney } from "@shared/lib/format";
 import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
-import { DetailList, EmptyState, ErrorState, FilterTabs, Pagination, Skeleton, TableSkeleton } from "@shared/ui/misc";
+import { DetailList, EmptyState, ErrorState, Skeleton } from "@shared/ui/misc";
+import { DataTable } from "@shared/ui/data-table";
+import { Select } from "@shared/ui/select";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Modal } from "@shared/ui/overlay";
 import { Button } from "@shared/ui/button";
 import { useAction } from "@shared/api/use-action";
 import { saveBlob } from "@shared/api/http";
 import type { PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
-import type { CustomerPayment } from "@shared/customer-types";
+import type { CustomerPayment, CustomerPaymentWithVisit } from "@shared/customer-types";
 import { paymentsApi } from "@/features/customer/lib/api/customer";
 import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
@@ -29,8 +32,7 @@ const ICON: Record<PaymentMethod, React.ComponentType<{ className?: string }>> =
   EASYPAISA: Smartphone,
 };
 const TONE: Record<PaymentStatus, "success" | "accent" | "danger" | "neutral"> = { PAID: "success", PENDING: "accent", FAILED: "danger", REFUNDED: "neutral" };
-const STATUSES = ["ALL", "PAID", "PENDING", "FAILED", "REFUNDED"] as const;
-const LIMIT = 15;
+const PAYMENT_STATUSES: PaymentStatus[] = ["PAID", "PENDING", "FAILED", "REFUNDED"];
 
 /** Status text: a pending cash payment is "cash due"; a pending card/wallet one awaits the gateway. */
 function useStatusText() {
@@ -127,71 +129,117 @@ function Receipt({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
+const METHODS: PaymentMethod[] = ["CASH", "CARD", "JAZZCASH", "EASYPAISA"];
+
 export default function PaymentsPage() {
   const t = useTranslations("customerB.payments");
   const f = useFmt();
   const L = useLabels();
   const statusText = useStatusText();
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<(typeof STATUSES)[number]>("ALL");
   const [viewing, setViewing] = useState<string | null>(null);
-  const list = useQuery({
-    queryKey: [...keys.payments, "page", status, page],
-    queryFn: () => paymentsApi.list({ page, limit: LIMIT, status: status === "ALL" ? undefined : status }),
-  });
+  const list = useQuery({ queryKey: [...keys.payments, "all"], queryFn: () => paymentsApi.list({ limit: 100 }) });
+
+  const columns: ColumnDef<CustomerPaymentWithVisit, unknown>[] = [
+    {
+      id: "visit",
+      header: t("columns.visit"),
+      accessorFn: (p) => p.visit.booking.patient.name,
+      cell: ({ row, getValue }) => {
+        const Icon = ICON[row.original.method];
+        return (
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <Icon className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-ink-900">{t("visitFor", { patient: getValue() as string })}</p>
+              <p className="text-xs text-ink-500 sm:hidden">
+                {f.date(row.original.visit.scheduledDate.slice(0, 10))} · {L.paymentMethod(row.original.method)}
+              </p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "date",
+      header: t("columns.date"),
+      meta: { className: "hidden sm:table-cell" },
+      accessorFn: (p) => p.visit.scheduledDate,
+      cell: ({ row }) => <span className="text-ink-700">{f.date(row.original.visit.scheduledDate.slice(0, 10))}</span>,
+    },
+    {
+      id: "method",
+      header: t("columns.method"),
+      meta: { className: "hidden md:table-cell" },
+      accessorKey: "method",
+      filterFn: "equalsString",
+      cell: ({ row }) => <span className="text-ink-700">{L.paymentMethod(row.original.method)}</span>,
+    },
+    {
+      id: "amount",
+      header: t("columns.amount"),
+      meta: { className: "text-end" },
+      accessorKey: "amount",
+      cell: ({ row }) => <span className="tabular font-bold text-ink-900">{formatMoney(row.original.amount)}</span>,
+    },
+    {
+      id: "status",
+      header: t("columns.status"),
+      accessorKey: "status",
+      filterFn: "equalsString",
+      cell: ({ row }) => <Badge tone={TONE[row.original.status]}>{statusText(row.original)}</Badge>,
+    },
+  ];
+
   return (
     <>
       <Link href="/customer/account" className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900">
         <ArrowLeft className="rtl:-scale-x-100 size-4" /> {t("back")}
       </Link>
       <PageHeader title={t("title")} description={t("description")} />
-      <div className="mb-4">
-        <FilterTabs
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-          options={STATUSES.map((s) => ({ value: s, label: s === "ALL" ? t("all") : L.paymentStatus(s) }))}
-        />
-      </div>
-      <Card>
-        {list.isError ? (
+      {list.isError ? (
+        <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : !list.data ? (
-          <TableSkeleton />
-        ) : list.data.items.length === 0 ? (
+        </Card>
+      ) : list.data && list.data.items.length === 0 ? (
+        <Card>
           <EmptyState icon={Wallet} title={t("emptyTitle")} description={t("emptyHint")} />
-        ) : (
-          <>
-            <ul className="divide-y divide-ink-100">
-              {list.data.items.map((p) => {
-                const Icon = ICON[p.method];
-                return (
-                  <li key={p.id}>
-                    <button onClick={() => setViewing(p.id)} className="flex w-full items-center gap-4 px-5 py-4 text-start hover:bg-ink-25">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                        <Icon className="size-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-ink-900">{t("visitFor", { patient: p.visit.booking.patient.name })}</p>
-                        <p className="text-xs text-ink-500">
-                          {f.date(p.visit.scheduledDate.slice(0, 10))} · {L.paymentMethod(p.method)}
-                        </p>
-                      </div>
-                      <div className="text-end">
-                        <p className="tabular font-bold text-ink-900">{formatMoney(p.amount)}</p>
-                        <Badge tone={TONE[p.status]}>{statusText(p)}</Badge>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <Pagination page={list.data.page} limit={list.data.limit} total={list.data.total} onPage={setPage} />
-          </>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={list.data?.items ?? []}
+          loading={!list.data}
+          searchPlaceholder={t("searchPlaceholder")}
+          emptyText={t("noResults")}
+          onRowClick={(p) => setViewing(p.id)}
+          toolbar={(table) => {
+            const sCol = table.getColumn("status");
+            const mCol = table.getColumn("method");
+            const sVal = (sCol?.getFilterValue() as string) ?? "ALL";
+            const mVal = (mCol?.getFilterValue() as string) ?? "ALL";
+            return (
+              <>
+                <Select<string>
+                  className="w-40"
+                  value={sVal}
+                  isSearchable={false}
+                  onChange={(v) => sCol?.setFilterValue(!v || v === "ALL" ? undefined : v)}
+                  options={[{ value: "ALL", label: t("all") }, ...PAYMENT_STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
+                />
+                <Select<string>
+                  className="w-40"
+                  value={mVal}
+                  isSearchable={false}
+                  onChange={(v) => mCol?.setFilterValue(!v || v === "ALL" ? undefined : v)}
+                  options={[{ value: "ALL", label: t("allMethods") }, ...METHODS.map((m) => ({ value: m, label: L.paymentMethod(m) }))]}
+                />
+              </>
+            );
+          }}
+        />
+      )}
       {viewing && <Receipt id={viewing} onClose={() => setViewing(null)} />}
     </>
   );

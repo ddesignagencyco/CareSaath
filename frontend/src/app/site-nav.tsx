@@ -20,12 +20,17 @@ export function SiteNav() {
             </Link>
           ))}
         </div>
-        <Link
-          href="/login"
-          className="justify-self-end inline-flex items-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
-        >
-          Login
-        </Link>
+        <div className="flex items-center gap-1 justify-self-end sm:gap-2">
+          <Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:text-ink-900">
+            Log in
+          </Link>
+          <Link
+            href="/signup"
+            className="inline-flex items-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+          >
+            Sign up
+          </Link>
+        </div>
       </div>
     </header>
   );

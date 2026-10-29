@@ -7,6 +7,7 @@
   "Too_many_OTP_requests_try_again_later": "Too many OTP requests, try again later",
   "OTP_expired_or_not_requested": "OTP expired or not requested",
   "Account_is_not_active": "Account is not active",
+  "Email_already_in_use": "This email is already in use by another account",
   "Promo_code_is_not_valid": "Promo code is not valid",
   "Promo_code_is_outside_its_validity_window": "Promo code is outside its validity window",
   "Promo_code_has_reached_its_usage_limit": "Promo code has reached its usage limit",

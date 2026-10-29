@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
+import { Switch } from "@shared/ui/switch";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -14,16 +15,34 @@ import { configApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import type { PlatformConfigItem } from "@shared/types";
 
-type Unit = "minutes" | "seconds" | "days";
+type Unit = "minutes" | "seconds" | "days" | "meters" | "strikes";
 type Group = "bookings" | "security" | "data" | "performance" | "other";
-type TitleKey = "respondWindow" | "cancelNotice" | "otpTtl" | "checkinOtpTtl" | "notificationRetention" | "searchCache";
+type TitleKey =
+  | "respondWindow"
+  | "cancelNotice"
+  | "otpTtl"
+  | "checkinOtpTtl"
+  | "notificationRetention"
+  | "searchCache"
+  | "immediateRespond"
+  | "immediateDistance"
+  | "strikeThreshold"
+  | "geofence"
+  | "lateGrace"
+  | "requirePayment";
 
 /** Title keys, units and grouping for the known config keys (labels live in adminB.settings). */
-const META: Record<string, { title: TitleKey; unit: Unit; group: Group }> = {
+const META: Record<string, { title: TitleKey; unit?: Unit; group: Group; kind?: "boolean" }> = {
   "booking.respondWindowMinutes": { title: "respondWindow", unit: "minutes", group: "bookings" },
   "booking.cancelNoticeMinutes": { title: "cancelNotice", unit: "minutes", group: "bookings" },
+  "booking.immediateRespondWindowMinutes": { title: "immediateRespond", unit: "minutes", group: "bookings" },
+  "booking.immediateMaxDistanceMeters": { title: "immediateDistance", unit: "meters", group: "bookings" },
   "otp.ttlSeconds": { title: "otpTtl", unit: "seconds", group: "security" },
   "otp.checkinTtlSeconds": { title: "checkinOtpTtl", unit: "seconds", group: "security" },
+  "caregiver.strikeThreshold": { title: "strikeThreshold", unit: "strikes", group: "security" },
+  "visit.geofenceRadiusMeters": { title: "geofence", unit: "meters", group: "security" },
+  "visit.lateArrivalGraceMinutes": { title: "lateGrace", unit: "minutes", group: "security" },
+  "visit.requirePaymentBeforeComplete": { title: "requirePayment", group: "security", kind: "boolean" },
   "retention.notificationDays": { title: "notificationRetention", unit: "days", group: "data" },
   "search.cacheTtlSeconds": { title: "searchCache", unit: "seconds", group: "performance" },
 };
@@ -38,7 +57,7 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
   const t = useTranslations("adminB.settings");
   const tc = useTranslations("common.actions");
   const known = META[item.key];
-  const meta = { title: known ? t(`titles.${known.title}`) : item.key, unit: known ? t(`units.${known.unit}`) : "" };
+  const meta = { title: known ? t(`titles.${known.title}`) : item.key, unit: known?.unit ? t(`units.${known.unit}`) : "" };
   const [value, setValue] = useState(String(item.value));
   const num = Number(value);
   const valid = value.trim() !== "" && Number.isFinite(num) && num >= 0;
@@ -46,10 +65,34 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
 
   const save = useAction((v: number) => configApi.set(item.key, v), {
     invalidate: [keys.config],
-    success: t("saved", { title: meta.title, value: num, unit: meta.unit }).trim(),
+    success: (_r, v) =>
+      known?.kind === "boolean"
+        ? t("savedToggle", { title: meta.title, state: v ? t("on") : t("off") })
+        : t("saved", { title: meta.title, value: v, unit: meta.unit }).trim(),
+  });
+
+  const reset = useAction(() => configApi.reset(item.key), {
+    invalidate: [keys.config],
+    success: t("resetDone", { title: meta.title }),
   });
 
   const friendly = valid ? humanDuration(num, known?.unit ?? null, t) : null;
+
+  if (known?.kind === "boolean") {
+    const on = item.value === 1;
+    return (
+      <li className="flex items-center justify-between gap-3 px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-ink-900">{meta.title}</p>
+            {item.overridden ? <Badge tone="brand">{t("custom")}</Badge> : <Badge>{t("default")}</Badge>}
+          </div>
+          <p dir="auto" className="mt-0.5 text-sm text-ink-500">{item.description}</p>
+        </div>
+        <Switch checked={on} onCheckedChange={(v) => save.mutate(v ? 1 : 0)} disabled={save.isPending} aria-label={meta.title} />
+      </li>
+    );
+  }
 
   return (
     <li className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center">
@@ -89,9 +132,10 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
             variant="ghost"
             size="sm"
             title={t("reset", { value: item.envDefault })}
+            loading={reset.isPending}
             onClick={() => {
               setValue(String(item.envDefault));
-              save.mutate(item.envDefault);
+              reset.mutate(undefined);
             }}
           >
             <RotateCcw className="size-3.5" />

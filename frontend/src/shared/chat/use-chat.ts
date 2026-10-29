@@ -207,5 +207,9 @@ export function useChat(scope: ChatScope = "customer") {
     [apply],
   );
 
-  return { conversations: state ?? [], loaded: state !== null, send, react, remove, markUploaded };
+  // The mock has no unread concept (incoming messages seed as read); the real
+  // backend overrides this with a PATCH. Kept so both hooks share one surface.
+  const markRead = useCallback((_convId: string) => {}, []);
+
+  return { conversations: state ?? [], loaded: state !== null, send, react, remove, markUploaded, markRead };
 }

@@ -9,7 +9,17 @@
     "emptyActive": "No active bookings",
     "emptyPast": "No past bookings",
     "emptyHint": "Find a verified caregiver and send a request.",
-    "findCare": "Find care"
+    "findCare": "Find care",
+    "searchPlaceholder": "Search by caregiver or patient…",
+    "noResults": "No bookings match.",
+    "allGroups": "All bookings",
+    "allCategories": "All categories",
+    "columns": {
+      "caregiver": "Caregiver",
+      "for": "For",
+      "schedule": "Schedule",
+      "status": "Status"
+    }
   },
   "bookingCard": {
     "caregiverFallback": "Caregiver",
@@ -48,6 +58,8 @@
     "visits": "Visits",
     "reschedule": "Reschedule",
     "viewNote": "Visit note",
+    "repeatVisits": "You've booked them {count, plural, one {# time} other {# times}} before",
+    "messageCaregiver": "Message caregiver",
     "prescriptions": "Prescriptions & care plans",
     "prescriptionsHint": "Shared only with your caregiver.",
     "prescriptionsEmpty": "None added. Upload the doctor's prescription so your caregiver can prepare.",
@@ -76,6 +88,8 @@
   },
   "visit": {
     "back": "Booking",
+    "doctorOrders": "Doctor's orders",
+    "messageCaregiver": "Message caregiver",
     "serviceFor": "{service} for {patient}",
     "waiting": "Waiting for the caregiver to accept this booking.",
     "closed": "This visit was {status, select, DECLINED {declined} other {cancelled}}.",
@@ -239,10 +253,15 @@
     "memberSince": "Member since {date}",
     "fullName": "Full name",
     "namePlaceholder": "Your name",
+    "email": "Email",
+    "emailHint": "For receipts and important updates (optional).",
+    "emailPlaceholder": "you@example.com",
+    "emailInvalid": "Enter a valid email address",
     "languageHint": "Messages and notifications use this language.",
     "languageUr": "اردو (Urdu)",
     "saved": "Profile saved",
     "links": {
+      "messages": "Messages",
       "patients": "Patients",
       "addresses": "Addresses",
       "contacts": "Emergency contacts",
@@ -264,6 +283,15 @@
     "removeConfirm": "Remove",
     "medical": "Medical context",
     "notAdded": "Not added yet.",
+    "searchPlaceholder": "Search patients…",
+    "noResults": "No patients match.",
+    "filterAll": "All relationships",
+    "columns": {
+      "name": "Name",
+      "relationship": "Relationship",
+      "age": "Age",
+      "medical": "Medical"
+    },
     "removed": "{name} removed",
     "hasBookings": "{name} has bookings, so their records are kept for safety and can't be removed.",
     "medicalUnavailable": "Saved, but can't be shown right now."
@@ -281,7 +309,13 @@
     "removeConfirmBody": "This permanently removes the saved address. You can't undo this.",
     "removeConfirm": "Remove",
     "removed": "Address removed",
-    "hasBookings": "This address is used by a booking, so it can't be removed."
+    "hasBookings": "This address is used by a booking, so it can't be removed.",
+    "searchPlaceholder": "Search addresses…",
+    "noResults": "No addresses match.",
+    "columns": {
+      "label": "Label",
+      "address": "Address"
+    }
   },
   "contacts": {
     "back": "Account",
@@ -304,6 +338,16 @@
     "emptyTitle": "No payments yet",
     "emptyHint": "Payments for your visits will appear here.",
     "visitFor": "Visit for {patient}",
+    "columns": {
+      "visit": "Visit",
+      "date": "Date",
+      "method": "Method",
+      "amount": "Amount",
+      "status": "Status"
+    },
+    "searchPlaceholder": "Search by patient…",
+    "noResults": "No payments match.",
+    "allMethods": "All methods",
     "cashDue": "Cash due",
     "all": "All",
     "awaitingGateway": "Awaiting confirmation",
@@ -332,6 +376,15 @@
     "description": "Disputes you've raised, or that were raised about your visits.",
     "emptyTitle": "No disputes",
     "emptyHint": "If something goes wrong with a visit, raise a dispute from the visit page.",
+    "searchPlaceholder": "Search disputes…",
+    "noResults": "No disputes match.",
+    "allStatuses": "All statuses",
+    "columns": {
+      "date": "Date",
+      "description": "Issue",
+      "status": "Status",
+      "resolution": "Resolution"
+    },
     "raisedByYou": "Raised by you · {date}",
     "raisedAgainstYou": "Raised by your caregiver · {date}",
     "resolved": "Resolved",

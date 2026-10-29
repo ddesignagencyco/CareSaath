@@ -23,6 +23,7 @@ const SERVICES: { specialty: Specialty; icon: React.ComponentType<{ className?: 
   { specialty: "PHYSIOTHERAPY", icon: Activity },
   { specialty: "POST_SURGERY_CARE", icon: Bandage },
   { specialty: "ELDERLY_CARE", icon: HeartHandshake },
+  { specialty: "DOCTOR", icon: Stethoscope },
 ];
 
 function period(now: number) {

@@ -51,6 +51,9 @@
     "safety": "حفاظتی واقعات",
     "disputes": "تنازعات",
     "payouts": "ادائیگیاں",
+    "payments": "پیمنٹس",
+    "callLogs": "کال ہسٹری",
+    "auditLogs": "آڈٹ لاگ",
     "commissions": "کمیشن",
     "promos": "پرومو کوڈز",
     "reports": "رپورٹس",
@@ -127,6 +130,7 @@
       "REJECTED": "مسترد",
       "SUSPENDED": "معطل"
     },
+    "allStatuses": "تمام",
     "emptyPendingTitle": "تصدیق کی قطار خالی ہے",
     "emptyPendingText": "نئے کیئرگیورز کی رجسٹریشن جائزے کے لیے یہاں نظر آئے گی۔",
     "emptyTitle": "یہاں کوئی کیئرگیور نہیں",
@@ -151,7 +155,9 @@
       "suspended": "{name} معطل اور سرچ سے پوشیدہ کر دیے گئے",
       "reverify": "{name} کی دوبارہ تصدیق کی درخواست بھیج دی گئی",
       "deactivated": "{name} کا اکاؤنٹ غیر فعال کر دیا گیا",
-      "reactivated": "{name} کو دوبارہ فعال کر دیا گیا"
+      "reactivated": "{name} کو دوبارہ فعال کر دیا گیا",
+      "badge": "{name} کا ٹیئر بیج اپ ڈیٹ ہو گیا",
+      "strikes": "{name} کی اسٹرائیکس اپ ڈیٹ ہو گئیں"
     },
     "actions": {
       "reject": "مسترد کریں",
@@ -162,10 +168,32 @@
       "deactivate": "اکاؤنٹ غیر فعال کریں"
     },
     "reviews": "{rating} · {count} ریویوز",
+    "tier": {
+      "none": "ابھی کوئی ٹیئر نہیں",
+      "auto": "ریٹنگ اور مکمل وزٹس سے خودکار طور پر طے شدہ",
+      "overridden": "ایڈمن نے دستی طور پر مقرر کیا",
+      "overrideLabel": "ٹیئر اوور رائیڈ کریں",
+      "overrideHint": "کارکردگی سے خودکار طور پر طے کرنے کے لیے ”آٹو“ منتخب کریں۔",
+      "optAuto": "آٹو (خودکار)",
+      "overridePending": "دستی ٹیئر اوور رائیڈ بیک اینڈ اینڈ پوائنٹ آنے کے بعد دستیاب ہوگا۔"
+    },
+    "strikes": {
+      "current": "موجودہ اسٹرائیکس: {count}",
+      "addReason": "اس وجہ سے اسٹرائیک شامل کریں",
+      "add": "اسٹرائیک شامل کریں",
+      "reset": "صفر پر بحال کریں",
+      "reason": {
+        "DECLINED": "بکنگ مسترد",
+        "LATE_ARRIVAL": "تاخیر سے آمد",
+        "NO_SHOW": "غیر حاضری"
+      }
+    },
     "sections": {
       "credentials": "اسناد جن کی جانچ کرنی ہے",
       "documents": "دستاویزات",
-      "profile": "پروفائل"
+      "profile": "پروفائل",
+      "tier": "رینکنگ ٹیئر",
+      "strikes": "اسٹرائیکس"
     },
     "fields": {
       "licenseNumber": "لائسنس نمبر",
@@ -175,6 +203,8 @@
       "experience": "تجربہ",
       "experienceYears": "{count} سال",
       "rate": "فی وزٹ ریٹ",
+      "bracket": "ریٹ کی حد",
+      "strikes": "سٹرائیکس",
       "serviceArea": "سروس کا علاقہ",
       "registered": "رجسٹریشن",
       "approved": "منظوری",
@@ -241,6 +271,7 @@
       "all": "تمام منظور شدہ"
     },
     "empty": "اس مدت میں کچھ واجب نہیں",
+    "searchPlaceholder": "کیئرگیور تلاش کریں…",
     "columns": {
       "caregiver": "کیئرگیور",
       "license": "لائسنس",

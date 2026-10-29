@@ -148,6 +148,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
+      {USE_MOCKS && (
+        <div role="alert" className="flex items-center justify-center gap-2 bg-warning-600 px-4 py-1.5 text-center text-xs font-bold text-white">
+          {tStates("mockBanner")}
+        </div>
+      )}
+
       <main className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
     </div>
   );

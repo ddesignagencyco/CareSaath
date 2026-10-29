@@ -27,6 +27,7 @@
     "selectTime": "Select time",
     "optional": "optional",
     "demoReset": "Demo data reset",
+    "mockBanner": "Showing MOCK DATA — this console is not connected to the live API",
     "mockBadge": "Mock data · API not connected"
   },
   "pagination": {
@@ -93,6 +94,12 @@
     "videoCall": "Video call",
     "voiceCall": "Voice call",
     "callSimNote": "Demo call — not connected yet",
+    "sendFailed": "Message not sent. Check your connection and try again.",
+    "calling": "Calling…",
+    "incomingCall": "Incoming call",
+    "connecting": "Connecting…",
+    "accept": "Accept",
+    "decline": "Decline",
     "mute": "Mute",
     "unmute": "Unmute",
     "endCall": "End call",

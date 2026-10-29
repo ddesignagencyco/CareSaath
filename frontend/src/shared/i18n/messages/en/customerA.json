@@ -6,6 +6,8 @@
     "phoneTitle": "Sign in or create an account",
     "phoneDescription": "Enter your mobile number. We'll text you a 6-digit code. No password needed.",
     "footerNote": "We never share your number without your permission.",
+    "newHere": "New to CareSaath?",
+    "createAccount": "Create account",
     "features": {
       "verified": {
         "title": "Verified professionals",
@@ -26,6 +28,14 @@
     "roleOther": "This number can't be used for customer bookings.",
     "devCode": "Dev server: the 6-digit code is printed in the backend console.",
     "devNumbers": "Demo customers: {ayesha} (Ayesha Khan) · {bilal} (Bilal Ahmed) · any new number creates an account"
+  },
+  "signup": {
+    "title": "Create your account",
+    "description": "Enter your name and mobile number. We'll text you a 6-digit code to verify.",
+    "nameLabel": "Full name",
+    "namePlaceholder": "e.g. Ayesha Khan",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign in"
   },
   "shell": {
     "product": "Home care",
@@ -70,7 +80,8 @@
       "NURSING": "Injections, IV, wound care",
       "PHYSIOTHERAPY": "Rehab and mobility",
       "POST_SURGERY_CARE": "Recovery after hospital",
-      "ELDERLY_CARE": "Daily help and company"
+      "ELDERLY_CARE": "Daily help and company",
+      "DOCTOR": "Diagnosis and prescriptions"
     },
     "upcomingTitle": "Upcoming visits",
     "allBookings": "All bookings",
@@ -103,6 +114,10 @@
     "bookHint": "Choose the patient, address and time. {name} will confirm your request.",
     "bookVisit": "Book a visit",
     "bookMobile": "Book {name} · {price}/visit",
+    "visitsTogether": "{count, plural, one {# visit together} other {# visits together}}",
+    "recentVisitsTitle": "Recent visits with you",
+    "recentVisitsHint": "Your most recent visits with this caregiver.",
+    "recentVisitsEmpty": "No visits with this caregiver yet.",
     "safeTitle": "Safe care, every visit",
     "safety": {
       "identity": "Identity and license checked before joining.",
@@ -141,6 +156,11 @@
       "typeAria": "Booking type",
       "single": "One visit",
       "recurring": "Regular visits",
+      "immediate": "Book now",
+      "asapTitle": "Immediate visit (ASAP)",
+      "asapBody": "The caregiver gets a short window to respond and must be nearby. If none can, try scheduling instead.",
+      "asapSummary": "Immediate visit · the caregiver will respond shortly",
+      "asapShort": "Immediate (ASAP)",
       "date": "Date",
       "from": "From",
       "until": "Until",
@@ -271,6 +291,10 @@
       "paymentFailed": {
         "title": "Payment failed",
         "body": "Your payment didn't go through. Try another method."
+      },
+      "medicalOrder": {
+        "title": "Doctor's orders ready",
+        "body": "Your doctor recorded a diagnosis and prescription for this visit."
       }
     }
   }

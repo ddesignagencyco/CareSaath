@@ -91,6 +91,9 @@
       "requested": "Requested {time}",
       "bookedByPatient": "Booked by patient",
       "bookedByFamily": "Booked by family",
+      "returning": "Returning · {count, plural, one {# prior visit} other {# prior visits}}",
+      "newCustomer": "New customer",
+      "asap": "ASAP · nearby & on now",
       "perVisit": "per visit",
       "visitCount": "{count} visits",
       "recurringCare": "Recurring care",
@@ -101,7 +104,15 @@
     },
     "history": {
       "line": "{count, plural, one {# visit} other {# visits}} · from {day}",
-      "reason": " · \"{reason}\""
+      "reason": " · \"{reason}\"",
+      "searchPlaceholder": "Search by patient…",
+      "noResults": "No requests match.",
+      "allStatuses": "All statuses",
+      "columns": {
+        "patient": "Patient",
+        "schedule": "Schedule",
+        "status": "Status"
+      }
     }
   },
   "visits": {
@@ -109,16 +120,30 @@
     "description": "Your schedule of home visits.",
     "upcoming": "Upcoming",
     "past": "Past",
+    "all": "All",
     "noUpcoming": "No upcoming visits",
     "noPast": "No past visits yet",
     "onDate": "Jump to a day",
     "clearDate": "Clear",
-    "noOnDate": "No visits on this day"
+    "noOnDate": "No visits on this day",
+    "searchPlaceholder": "Search by patient or address…",
+    "noResults": "No visits match.",
+    "columns": {
+      "patient": "Patient",
+      "service": "Service",
+      "date": "Date",
+      "time": "Time",
+      "status": "Status"
+    }
   },
   "visitRow": {
     "to": "to {time}",
     "recurring": "Recurring",
     "notStarted": "Not started"
+  },
+  "location": {
+    "title": "Share my live location",
+    "hint": "Lets nearby families book you for immediate (ASAP) visits while the app is open. Turn off to stop sharing."
   },
   "notifications": {
     "title": "Notifications",
@@ -189,6 +214,14 @@
       "sosContact": {
         "title": "Emergency contacts alerted",
         "body": "{contact} was alerted by SMS."
+      },
+      "strikeRecorded": {
+        "title": "Strike recorded",
+        "body": "A strike was added to your account. Repeated strikes lead to suspension."
+      },
+      "suspended": {
+        "title": "Account suspended",
+        "body": "Your account has been suspended — you can't accept new work."
       }
     }
   },

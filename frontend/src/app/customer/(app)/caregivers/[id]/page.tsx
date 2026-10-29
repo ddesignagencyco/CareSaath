@@ -1,15 +1,20 @@
 "use client";
 
-import { ArrowLeft, BadgeCheck, Briefcase, CalendarCheck2, Clock3, MapPin, ShieldCheck, Siren } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, BadgeCheck, Briefcase, CalendarCheck2, ChevronRight, Clock3, History, MapPin, Repeat, ShieldCheck, Siren } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { formatMoney } from "@shared/lib/format";
+import { VisitStatusBadge } from "@shared/status";
+import { Badge } from "@shared/ui/badge";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
-import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
+import { bookingsApi } from "@/features/customer/lib/api/customer";
+import { keys } from "@/features/customer/lib/api/keys";
+import { Rating, TierBadge, useCaregiver } from "@/features/customer/components/caregiver-bits";
 
 /** Monday-first display; availability uses 0 = Sunday … 6 = Saturday. */
 const DAYS = [1, 2, 3, 4, 5, 6, 0];
@@ -20,6 +25,19 @@ export default function CaregiverProfilePage() {
   const t = useTranslations("customerA.profile");
   const f = useFmt();
   const L = useLabels();
+
+  // Visit history with *this* caregiver, drawn from the customer's own bookings.
+  const bookings = useQuery({
+    queryKey: [...keys.bookings, "list", "all"],
+    queryFn: () => bookingsApi.list({ limit: 100 }),
+    enabled: !!id,
+  });
+  const myVisits = (bookings.data?.items ?? [])
+    .filter((b) => b.caregiverId === id)
+    .flatMap((b) => b.visits)
+    .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1));
+  const completedCount = myVisits.filter((v) => v.status === "COMPLETED").length;
+  const recentVisits = myVisits.slice(0, 5);
 
   if (c.isError) {
     return (
@@ -47,8 +65,18 @@ export default function CaregiverProfilePage() {
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{p.user.fullName}</h1>
                   <p className="text-ink-500">{L.specialty(p.specialty)}</p>
-                  <div className="mt-2">
+                  {p.badge && (
+                    <div className="mt-1.5">
+                      <TierBadge badge={p.badge} />
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Rating average={p.ratingAverage} count={p.ratingCount} />
+                    {completedCount > 0 && (
+                      <Badge tone="brand">
+                        <Repeat className="size-3" /> {t("visitsTogether", { count: completedCount })}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="sm:text-end">
@@ -138,6 +166,43 @@ export default function CaregiverProfilePage() {
                     <Siren className="mt-0.5 size-4 shrink-0 text-brand-600" /> {t("safety.sos")}
                   </li>
                 </ul>
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardHeader title={t("recentVisitsTitle")} description={t("recentVisitsHint")} />
+              <CardBody>
+                {!bookings.data ? (
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-10 rounded-lg" />
+                    <Skeleton className="h-10 rounded-lg" />
+                  </div>
+                ) : recentVisits.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-center">
+                    <History className="size-7 text-ink-300" />
+                    <p className="text-sm text-ink-500">{t("recentVisitsEmpty")}</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-ink-100">
+                    {recentVisits.map((v) => (
+                      <li key={v.id}>
+                        <Link
+                          href={`/customer/visits/${v.id}`}
+                          className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-ink-50"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink-800">{f.date(v.scheduledDate)}</p>
+                            <p className="tabular text-xs text-ink-500">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <VisitStatusBadge status={v.status} />
+                            <ChevronRight className="rtl:-scale-x-100 size-4 shrink-0 text-ink-300" />
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardBody>
             </Card>
           </div>

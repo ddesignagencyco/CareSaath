@@ -30,10 +30,12 @@ const COMMISSION_IDS: Record<Specialty, string> = {
   PHYSIOTHERAPY: "cr-physio",
   POST_SURGERY_CARE: "cr-postsurgery",
   ELDERLY_CARE: "cr-elderly",
+  DOCTOR: "cr-doctor",
 };
 
 export const commissionRates: CommissionRate[] = [
   { id: "cr-elderly", category: "ELDERLY_CARE", percentage: "12", effectiveFrom: ago(60), createdAt: ago(120), updatedAt: ago(60) },
+  { id: "cr-doctor", category: "DOCTOR", percentage: "20", effectiveFrom: ago(60), createdAt: ago(120), updatedAt: ago(60) },
   { id: "cr-nursing", category: "NURSING", percentage: "15", effectiveFrom: ago(90), createdAt: ago(120), updatedAt: ago(90) },
   { id: "cr-physio", category: "PHYSIOTHERAPY", percentage: "18", effectiveFrom: ago(30), createdAt: ago(120), updatedAt: ago(30) },
   { id: "cr-postsurgery", category: "POST_SURGERY_CARE", percentage: "15", effectiveFrom: ago(120), createdAt: ago(120), updatedAt: ago(120) },
@@ -337,4 +339,10 @@ export const platformConfig: PlatformConfigItem[] = [
   { key: "otp.checkinTtlSeconds", envVar: "CHECKIN_OTP_TTL_SECONDS", envDefault: 600, description: "Visit check-in OTP lifetime in seconds (FR-CG7).", value: 600, overridden: false },
   { key: "retention.notificationDays", envVar: "RETENTION_NOTIFICATION_DAYS", envDefault: 90, description: "Days to keep delivered notifications before cleanup.", value: 90, overridden: false },
   { key: "search.cacheTtlSeconds", envVar: "SEARCH_CACHE_TTL_SECONDS", envDefault: 30, description: "Redis TTL for cached public caregiver search results.", value: 30, overridden: false },
+  { key: "booking.immediateRespondWindowMinutes", envVar: "BOOKING_IMMEDIATE_RESPOND_WINDOW_MINUTES", envDefault: 10, description: "Minutes a caregiver has to accept an immediate (ASAP) booking.", value: 10, overridden: false },
+  { key: "booking.immediateMaxDistanceMeters", envVar: "BOOKING_IMMEDIATE_MAX_DISTANCE_METERS", envDefault: 10000, description: "Max distance (m) between caregiver and patient for an immediate booking.", value: 10000, overridden: false },
+  { key: "caregiver.strikeThreshold", envVar: "CAREGIVER_STRIKE_THRESHOLD", envDefault: 3, description: "Strikes that auto-suspend a caregiver.", value: 3, overridden: false },
+  { key: "visit.geofenceRadiusMeters", envVar: "VISIT_GEOFENCE_RADIUS_METERS", envDefault: 150, description: "Allowed distance (m) from the address for GPS check-in.", value: 150, overridden: false },
+  { key: "visit.lateArrivalGraceMinutes", envVar: "VISIT_LATE_ARRIVAL_GRACE_MINUTES", envDefault: 15, description: "Grace period (minutes) before an arrival counts as late.", value: 15, overridden: false },
+  { key: "visit.requirePaymentBeforeComplete", envVar: "VISIT_REQUIRE_PAYMENT_BEFORE_COMPLETE", envDefault: 1, description: "Require payment to be settled before a visit can be completed.", value: 1, overridden: false },
 ];

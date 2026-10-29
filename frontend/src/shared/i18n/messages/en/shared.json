@@ -3,6 +3,8 @@
     "progress": "Sign-in progress",
     "stepPhone": "Mobile number",
     "stepVerify": "Verify code",
+    "nameRequired": "Enter your name",
+    "emailInvalid": "Enter a valid email address",
     "sendCode": "Send verification code",
     "couldNotSend": "Could not send code",
     "differentNumber": "Use a different number",
@@ -70,5 +72,11 @@
     "counter": "{count}/{max}",
     "counterOptional": "{count}/{max} · optional",
     "label": "Reason"
+  },
+  "medicalOrders": {
+    "recordedOn": "Recorded {date}",
+    "diagnosis": "Diagnosis",
+    "medicines": "Prescription",
+    "labTests": "Lab tests"
   }
 }

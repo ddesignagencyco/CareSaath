@@ -91,6 +91,9 @@
       "requested": "درخواست {time}",
       "bookedByPatient": "مریض نے بک کیا",
       "bookedByFamily": "خاندان نے بک کیا",
+      "returning": "واپس آنے والا · {count, plural, one {# سابقہ وزٹ} other {# سابقہ وزٹس}}",
+      "newCustomer": "نیا کسٹمر",
+      "asap": "فوری · قریب اور ابھی",
       "perVisit": "فی وزٹ",
       "visitCount": "{count} وزٹ",
       "recurringCare": "باقاعدہ دیکھ بھال",
@@ -101,7 +104,15 @@
     },
     "history": {
       "line": "{count} وزٹ · {day} سے",
-      "reason": " · \"{reason}\""
+      "reason": " · \"{reason}\"",
+      "searchPlaceholder": "مریض سے تلاش کریں…",
+      "noResults": "کوئی درخواست نہیں ملی۔",
+      "allStatuses": "تمام اسٹیٹس",
+      "columns": {
+        "patient": "مریض",
+        "schedule": "شیڈول",
+        "status": "اسٹیٹس"
+      }
     }
   },
   "visits": {
@@ -109,16 +120,30 @@
     "description": "گھر پر وزٹس کا آپ کا شیڈول۔",
     "upcoming": "آنے والے",
     "past": "گزشتہ",
+    "all": "تمام",
     "noUpcoming": "کوئی آنے والا وزٹ نہیں",
     "noPast": "ابھی تک کوئی گزشتہ وزٹ نہیں",
     "onDate": "کسی دن پر جائیں",
     "clearDate": "صاف کریں",
-    "noOnDate": "اس دن کوئی وزٹ نہیں"
+    "noOnDate": "اس دن کوئی وزٹ نہیں",
+    "searchPlaceholder": "مریض یا پتے سے تلاش کریں…",
+    "noResults": "کوئی وزٹ نہیں ملا۔",
+    "columns": {
+      "patient": "مریض",
+      "service": "سروس",
+      "date": "تاریخ",
+      "time": "وقت",
+      "status": "اسٹیٹس"
+    }
   },
   "visitRow": {
     "to": "تا {time}",
     "recurring": "باقاعدہ",
     "notStarted": "شروع نہیں ہوا"
+  },
+  "location": {
+    "title": "میری لائیو لوکیشن شیئر کریں",
+    "hint": "ایپ کھلی ہونے پر قریبی خاندان آپ کو فوری (ASAP) وزٹ کے لیے بک کر سکتے ہیں۔ شیئرنگ روکنے کے لیے بند کریں۔"
   },
   "notifications": {
     "title": "اطلاعات",
@@ -189,6 +214,14 @@
       "sosContact": {
         "title": "ایمرجنسی رابطوں کو اطلاع دی گئی",
         "body": "{contact} کو ایس ایم ایس کے ذریعے مطلع کر دیا گیا۔"
+      },
+      "strikeRecorded": {
+        "title": "سٹرائیک ریکارڈ ہوئی",
+        "body": "آپ کے اکاؤنٹ پر ایک سٹرائیک شامل کی گئی۔ بار بار سٹرائیکس پر اکاؤنٹ معطل ہو سکتا ہے۔"
+      },
+      "suspended": {
+        "title": "اکاؤنٹ معطل",
+        "body": "آپ کا اکاؤنٹ معطل کر دیا گیا ہے — آپ نیا کام قبول نہیں کر سکتے۔"
       }
     }
   },

@@ -3,13 +3,21 @@
     "NURSING": "نرسنگ",
     "PHYSIOTHERAPY": "فزیوتھراپی",
     "POST_SURGERY_CARE": "آپریشن کے بعد کی دیکھ بھال",
-    "ELDERLY_CARE": "بزرگوں کی دیکھ بھال"
+    "ELDERLY_CARE": "بزرگوں کی دیکھ بھال",
+    "DOCTOR": "ڈاکٹر"
   },
   "specialtyHint": {
     "NURSING": "انجیکشن، ڈرپ، زخم کی پٹی، بلڈ پریشر اور شوگر",
     "PHYSIOTHERAPY": "بحالی، چلنے پھرنے میں مدد، فالج کے بعد تھراپی",
     "POST_SURGERY_CARE": "پٹی، ڈرین، صحت یابی میں مدد",
-    "ELDERLY_CARE": "روزمرہ دیکھ بھال اور ساتھ"
+    "ELDERLY_CARE": "روزمرہ دیکھ بھال اور ساتھ",
+    "DOCTOR": "تشخیص، نسخے، لیب ٹیسٹ"
+  },
+  "caregiverBadge": {
+    "BRONZE": "کانسی",
+    "SILVER": "چاندی",
+    "GOLD": "گولڈ",
+    "PLATINUM": "پلاٹینم"
   },
   "licenseBody": {
     "PNC": "پاکستان نرسنگ کونسل",

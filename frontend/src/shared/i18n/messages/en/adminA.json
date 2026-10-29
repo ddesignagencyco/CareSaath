@@ -51,6 +51,9 @@
     "safety": "Safety incidents",
     "disputes": "Disputes",
     "payouts": "Payouts",
+    "payments": "Payments",
+    "callLogs": "Call history",
+    "auditLogs": "Audit log",
     "commissions": "Commissions",
     "promos": "Promo codes",
     "reports": "Reports",
@@ -127,6 +130,7 @@
       "REJECTED": "Rejected",
       "SUSPENDED": "Suspended"
     },
+    "allStatuses": "All",
     "emptyPendingTitle": "Verification queue is clear",
     "emptyPendingText": "New caregiver registrations will appear here for review.",
     "emptyTitle": "No caregivers here",
@@ -151,7 +155,9 @@
       "suspended": "{name} suspended and hidden from search",
       "reverify": "Re-verification requested for {name}",
       "deactivated": "{name}'s account deactivated",
-      "reactivated": "{name} reactivated"
+      "reactivated": "{name} reactivated",
+      "badge": "{name}'s tier badge updated",
+      "strikes": "{name}'s strikes updated"
     },
     "actions": {
       "reject": "Reject",
@@ -162,10 +168,32 @@
       "deactivate": "Deactivate account"
     },
     "reviews": "{rating} · {count} reviews",
+    "tier": {
+      "none": "No tier yet",
+      "auto": "Auto-computed from ratings & completed visits",
+      "overridden": "Manually set by an admin",
+      "overrideLabel": "Override tier",
+      "overrideHint": "Choose “Auto” to let the system compute it from performance.",
+      "optAuto": "Auto (computed)",
+      "overridePending": "Manual tier override becomes available once the backend endpoint ships."
+    },
+    "strikes": {
+      "current": "Current strikes: {count}",
+      "addReason": "Add a strike for",
+      "add": "Add strike",
+      "reset": "Reset to 0",
+      "reason": {
+        "DECLINED": "Declined booking",
+        "LATE_ARRIVAL": "Late arrival",
+        "NO_SHOW": "No-show"
+      }
+    },
     "sections": {
       "credentials": "Credentials to cross-check",
       "documents": "Documents",
-      "profile": "Profile"
+      "profile": "Profile",
+      "tier": "Ranking tier",
+      "strikes": "Strikes"
     },
     "fields": {
       "licenseNumber": "License number",
@@ -175,6 +203,8 @@
       "experience": "Experience",
       "experienceYears": "{count} years",
       "rate": "Rate per visit",
+      "bracket": "Rate bracket",
+      "strikes": "Strikes",
       "serviceArea": "Service area",
       "registered": "Registered",
       "approved": "Approved",
@@ -241,6 +271,7 @@
       "all": "All approved"
     },
     "empty": "Nothing due in this window",
+    "searchPlaceholder": "Search caregivers…",
     "columns": {
       "caregiver": "Caregiver",
       "license": "License",

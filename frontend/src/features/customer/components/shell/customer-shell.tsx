@@ -16,6 +16,7 @@ import { ProfileMenu } from "@shared/ui/profile-menu";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { ApiError, USE_MOCKS, http } from "@/features/customer/lib/api/http";
 import { session } from "@/features/customer/lib/api/session";
+import { CallProvider } from "@shared/chat/call-context";
 import { keys } from "@/features/customer/lib/api/keys";
 import { useRealtime } from "@shared/api/realtime";
 import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
@@ -59,7 +60,6 @@ const SIDEBAR_GROUPS: { label?: "groups.care" | "groups.family" | "groups.accoun
     items: [
       { href: "/customer/account/patients", label: "items.patients", icon: Users },
       { href: "/customer/account/addresses", label: "items.addresses", icon: MapPin },
-      { href: "/customer/account/contacts", label: "items.contacts", icon: Phone },
     ],
   },
   {
@@ -135,6 +135,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const phone = me.data ? formatPkMobile(me.data.phone) : "";
 
   return (
+    <CallProvider session={session} enabled={!USE_MOCKS && !!me.data}>
     <div className={clsx("min-h-dvh transition-[padding] duration-200 ease-out", collapsed ? "lg:ps-20" : "lg:ps-64")}>
       <aside
         className={clsx(
@@ -272,5 +273,6 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
         </ul>
       </nav>
     </div>
+    </CallProvider>
   );
 }

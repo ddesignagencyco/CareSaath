@@ -21,7 +21,7 @@ import { TimePicker } from "@shared/ui/time-picker";
 import { Avatar, Skeleton } from "@shared/ui/misc";
 import { useToast } from "@shared/ui/toast";
 import type { Address, PatientProfile } from "@shared/caregiver-types";
-import type { PromoQuote, PublicCaregiver } from "@shared/customer-types";
+import type { CreateBookingInput, PromoQuote, PublicCaregiver } from "@shared/customer-types";
 import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
 import { AddressForm, PatientForm } from "@/features/customer/components/forms";
 import { addressesApi, bookingsApi, patientsApi, promosApi } from "@/features/customer/lib/api/customer";
@@ -100,6 +100,7 @@ export default function BookPage() {
   const [patientId, setPatientId] = useState<string | null>(null);
   const [addressId, setAddressId] = useState<string | null>(null);
   const [type, setType] = useState<"SINGLE" | "RECURRING">("SINGLE");
+  const [immediate, setImmediate] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -136,7 +137,9 @@ export default function BookPage() {
   const patient = patients.data?.find((p) => p.id === patientId);
   const address = addresses.data?.find((a) => a.id === addressId);
 
-  const whenError = !start
+  const whenError = immediate
+    ? null
+    : !start
     ? t("errors.chooseDate")
     : start < today
       ? t("errors.past")
@@ -163,18 +166,35 @@ export default function BookPage() {
 
   const book = useAction(
     async () => {
-      const booking = await bookingsApi.create({
-        patientId: patientId!,
-        caregiverId: id,
-        addressId: addressId!,
-        type,
-        startDate: start,
-        endDate: type === "SINGLE" ? start : end,
-        timeWindowStart: from,
-        timeWindowEnd: to,
-        ...(type === "RECURRING" ? { weekdays } : {}),
-        ...(promo.trim() ? { promoCode: promo.trim().toUpperCase() } : {}),
-      });
+      const startNow = new Date();
+      const endAt = new Date(startNow.getTime() + 60 * 60_000);
+      const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const payload: CreateBookingInput = immediate
+        ? {
+            patientId: patientId!,
+            caregiverId: id,
+            addressId: addressId!,
+            type: "SINGLE",
+            isImmediate: true,
+            startDate: localDayKey(startNow.getTime()),
+            endDate: localDayKey(startNow.getTime()),
+            timeWindowStart: hhmm(startNow),
+            timeWindowEnd: hhmm(endAt),
+            ...(promo.trim() ? { promoCode: promo.trim().toUpperCase() } : {}),
+          }
+        : {
+            patientId: patientId!,
+            caregiverId: id,
+            addressId: addressId!,
+            type,
+            startDate: start,
+            endDate: type === "SINGLE" ? start : end,
+            timeWindowStart: from,
+            timeWindowEnd: to,
+            ...(type === "RECURRING" ? { weekdays } : {}),
+            ...(promo.trim() ? { promoCode: promo.trim().toUpperCase() } : {}),
+          };
+      const booking = await bookingsApi.create(payload);
       if (rx) {
         try {
           await bookingsApi.uploadPrescription(booking.id, rx);
@@ -339,25 +359,42 @@ export default function BookPage() {
         {step === 2 && (
           <div className="space-y-5">
             <h2 className="text-lg font-extrabold text-ink-900">{t("when.title")}</h2>
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-ink-50 p-1" role="radiogroup" aria-label={t("when.typeAria")}>
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-ink-50 p-1" role="radiogroup" aria-label={t("when.typeAria")}>
               {(
                 [
+                  ["IMMEDIATE", t("when.immediate")],
                   ["SINGLE", t("when.single")],
                   ["RECURRING", t("when.recurring")],
                 ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={type === value}
-                  onClick={() => setType(value)}
-                  className={clsx("rounded-lg py-2.5 text-sm font-semibold transition-colors", type === value ? "bg-white text-ink-900 shadow-card" : "text-ink-500")}
-                >
-                  {label}
-                </button>
-              ))}
+              ).map(([value, label]) => {
+                const active = value === "IMMEDIATE" ? immediate : !immediate && type === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => {
+                      if (value === "IMMEDIATE") setImmediate(true);
+                      else {
+                        setImmediate(false);
+                        setType(value);
+                      }
+                    }}
+                    className={clsx("rounded-lg py-2.5 text-xs font-semibold transition-colors sm:text-sm", active ? "bg-white text-ink-900 shadow-card" : "text-ink-500")}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
+            {immediate && (
+              <div className="rounded-xl bg-accent-50 p-4 text-sm ring-1 ring-accent-400/30">
+                <p className="font-bold text-accent-700">{t("when.asapTitle")}</p>
+                <p dir="auto" className="mt-1 text-ink-600">{t("when.asapBody")}</p>
+              </div>
+            )}
+            {!immediate && (
             <div className={clsx("grid grid-cols-1 gap-4", type === "SINGLE" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
               <Field label={type === "SINGLE" ? t("when.date") : t("when.from")} required>
                 {(fid) => <DatePicker id={fid} min={today} value={start} onChange={pickStartDate} />}
@@ -378,7 +415,8 @@ export default function BookPage() {
                 </>
               )}
             </div>
-            {type === "RECURRING" && (
+            )}
+            {!immediate && type === "RECURRING" && (
               <div>
                 <p className="mb-2 text-sm font-semibold text-ink-800">{t("when.onDays")}</p>
                 <div className="flex flex-wrap gap-2">
@@ -402,7 +440,7 @@ export default function BookPage() {
                 </div>
               </div>
             )}
-            {type === "RECURRING" && (
+            {!immediate && type === "RECURRING" && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label={t("when.arriveBetween")} required>
                   {(fid) => <TimePicker id={fid} min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={setFrom} />}
@@ -414,6 +452,8 @@ export default function BookPage() {
             )}
             {whenError ? (
               start && <p className="text-sm font-medium text-danger-600">{whenError}</p>
+            ) : immediate ? (
+              <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800">{t("when.asapSummary")}</p>
             ) : (
               <div className="space-y-2">
                 <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
@@ -440,7 +480,7 @@ export default function BookPage() {
                 {
                   icon: Check,
                   label: t("review.schedule"),
-                  value: t("review.scheduleValue", { count: dates.length, days: daysText, window: windowText }),
+                  value: immediate ? t("when.asapShort") : t("review.scheduleValue", { count: dates.length, days: daysText, window: windowText }),
                 },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex gap-3 px-4 py-3 text-sm">

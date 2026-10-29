@@ -4,10 +4,14 @@
  * arrive as strings; money is integer minor units (paisa).
  */
 
+import type { PaymentMethod, PaymentStatus } from "./caregiver-types";
+
 export type UserRole = "CUSTOMER" | "CAREGIVER" | "ADMIN";
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
-export type Specialty = "NURSING" | "PHYSIOTHERAPY" | "POST_SURGERY_CARE" | "ELDERLY_CARE";
+export type Specialty = "NURSING" | "PHYSIOTHERAPY" | "POST_SURGERY_CARE" | "ELDERLY_CARE" | "DOCTOR";
 export type LicenseBody = "PNC" | "PMDC" | "OTHER";
+/** Caregiver ranking tier, computed by the backend from experience, rating and completed visits. */
+export type CaregiverBadge = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
 export type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 export type DocType = "LICENSE" | "CERTIFICATE" | "CNIC_COPY" | "OTHER";
 export type BookingStatus = "REQUESTED" | "CONFIRMED" | "DECLINED" | "CANCELLED" | "COMPLETED";
@@ -82,16 +86,68 @@ export interface AdminCaregiver {
   photoKey: string | null;
   serviceArea: { cities: string[] };
   ratePerVisit: number;
+  /** Self-set pricing bracket (nullable); optional on the type so mock fixtures can omit them. */
+  minRatePerVisit?: number | null;
+  maxRatePerVisit?: number | null;
+  /** Accumulated strikes; auto-suspends at the platform threshold. */
+  strikeCount?: number;
   commissionRateId: string;
   verificationStatus: VerificationStatus;
   approvedAt: string | null;
   reverifyDueAt: string | null;
   ratingAverage: string;
   ratingCount: number;
+  /** Effective ranking tier: the admin override when set, otherwise server-computed. Backend must add to the admin payload — see requirement.md. */
+  badge?: CaregiverBadge | null;
+  /** Manual tier override set by an admin; null/absent = auto-computed. */
+  badgeOverride?: CaregiverBadge | null;
   createdAt: string;
   updatedAt: string;
   user: { id: string; phone: string; fullName: string; status: UserStatus };
   documents: CaregiverDocument[];
+}
+
+/** One row of the admin payments ledger — GET /admin/payments (backend list endpoint pending; see requirement.md). */
+export interface AdminPayment {
+  id: string;
+  visitId: string;
+  amount: number;
+  commissionAmount: number;
+  caregiverAmount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  createdAt: string;
+  paidAt: string | null;
+  patientName: string;
+  customer: { id: string; fullName: string };
+  caregiver: { id: string; fullName: string };
+}
+
+export type CallStatus = "INITIATED" | "CONNECTED" | "ENDED" | "MISSED" | "REJECTED";
+export type StrikeReason = "DECLINED" | "LATE_ARRIVAL" | "NO_SHOW";
+
+/** One row of the admin audit log — GET /admin/audit-logs (backend read endpoint pending; see requirement.md). */
+export interface AuditLogEntry {
+  id: string;
+  actorId: string | null;
+  actorName: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: Record<string, unknown> | null;
+  at: string;
+}
+
+/** One persisted in-app call — GET /admin/call-logs (backend read endpoint pending; see requirement.md). */
+export interface CallLogEntry {
+  id: string;
+  visitId: string;
+  status: CallStatus;
+  startedAt: string;
+  endedAt: string | null;
+  durationSec: number | null;
+  caller: { id: string; fullName: string };
+  callee: { id: string; fullName: string };
 }
 
 /**

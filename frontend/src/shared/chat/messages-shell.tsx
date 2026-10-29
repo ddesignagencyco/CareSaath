@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { MessagesSquare } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -54,8 +54,12 @@ export function EmptyScreen() {
 export function ConversationScreen({ conversationId, basePath }: { conversationId: string; basePath: string }) {
   const t = useTranslations("common.chat");
   const router = useRouter();
-  const { conversations, send, react, remove, markUploaded } = useChatContext();
+  const { conversations, send, react, remove, markUploaded, markRead } = useChatContext();
   const conversation = conversations.find((c) => c.id === conversationId);
+  // Opening a thread marks the other party's messages read (real backend); no-op in the mock.
+  useEffect(() => {
+    markRead(conversationId);
+  }, [conversationId, markRead]);
   if (!conversation) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">

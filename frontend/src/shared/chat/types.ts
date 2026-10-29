@@ -38,4 +38,48 @@ export interface ChatConversation {
   role: string;
   online?: boolean;
   messages: ChatMessage[];
+  /** For real WebRTC calls: an active visit shared with the other party. */
+  visitId?: string;
+  /** For real WebRTC calls: the other party's user id (the call callee). */
+  peerUserId?: string;
+}
+
+/* ---- Real backend (booking-scoped, text-only) ---------------------------- */
+
+/** GET/POST /bookings/:bookingId/messages row. */
+export interface BackendChatMessage {
+  id: string;
+  bookingId: string;
+  senderId: string;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** One chat thread = one booking. The app resolves the other party's name/role. */
+export interface ChatThreadMeta {
+  /** bookingId */
+  id: string;
+  name: string;
+  role: string;
+  online?: boolean;
+  /** An active visit shared with the other party (enables WebRTC calls). */
+  visitId?: string;
+  /** The other party's user id, the call callee (available to the caregiver, not the customer). */
+  peerUserId?: string;
+}
+
+/**
+ * Real-backend wiring, supplied per app (customer/caregiver) because each has
+ * its own authenticated http client and its own source for the other party's
+ * name. The shared hook orchestrates fetching, sending and read receipts.
+ */
+export interface ChatTransport {
+  myUserId: string | undefined;
+  threads: ChatThreadMeta[];
+  threadsLoaded: boolean;
+  /** Chronological (oldest first). */
+  listMessages: (bookingId: string) => Promise<BackendChatMessage[]>;
+  send: (bookingId: string, body: string) => Promise<BackendChatMessage>;
+  markRead: (bookingId: string) => Promise<void>;
 }

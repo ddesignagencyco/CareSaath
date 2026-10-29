@@ -1,12 +1,10 @@
-"use client";
+import type { ReactNode } from "react";
+import { CustomerMessages } from "./messages-client";
 
-import { ChatProvider } from "@shared/chat/context";
-import { MessagesShell } from "@shared/chat/messages-shell";
+// The conversation list is fetched on the client, so navigations into the chat
+// subtree are not instant — opt it out of instant-navigation validation.
+export const instant = false;
 
-export default function MessagesLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ChatProvider scope="customer">
-      <MessagesShell basePath="/customer/messages">{children}</MessagesShell>
-    </ChatProvider>
-  );
+export default function MessagesLayout({ children }: { children: ReactNode }) {
+  return <CustomerMessages>{children}</CustomerMessages>;
 }

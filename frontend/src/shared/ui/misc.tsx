@@ -104,7 +104,7 @@ export function Pagination({
   const from = (page - 1) * limit + 1;
   const to = Math.min(page * limit, total);
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-ink-100 px-5 py-3 text-sm text-ink-500">
+    <div className="flex items-center justify-end gap-3 border-t border-ink-100 px-5 py-3 text-sm text-ink-500">
       <span className="tabular">{t("range", { from, to, total })}</span>
       <div className="flex gap-1">
         <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label={t("previous")}>

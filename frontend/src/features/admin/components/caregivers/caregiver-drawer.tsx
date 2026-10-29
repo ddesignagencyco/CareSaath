@@ -9,12 +9,14 @@ import { Button } from "@shared/ui/button";
 import { Field, Input } from "@shared/ui/field";
 import { Avatar, DetailList } from "@shared/ui/misc";
 import { Drawer } from "@shared/ui/overlay";
-import { CAN_DEACTIVATE_CAREGIVER, caregiversApi } from "@/features/admin/lib/api/admin";
+import { Select } from "@shared/ui/select";
+import { TierBadge } from "@shared/ui/tier-badge";
+import { CAN_DEACTIVATE_CAREGIVER, CAN_MANAGE_STRIKES, CAN_OVERRIDE_BADGE, caregiversApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { daysUntil } from "@shared/lib/format";
-import type { AdminCaregiver, AdminCaregiverRecord, UserStatus } from "@shared/types";
+import type { AdminCaregiver, AdminCaregiverRecord, CaregiverBadge, StrikeReason, UserStatus } from "@shared/types";
 import { DocumentList } from "./document-viewer";
 
 type ActionKind = "approve" | "reject" | "suspend" | "reverify" | "deactivate" | "reactivate";
@@ -48,6 +50,7 @@ export function CaregiverDrawer({
   const L = useLabels();
   const [action, setAction] = useState<ActionKind | null>(null);
   const [reverifyDays, setReverifyDays] = useState("365");
+  const [strikeReason, setStrikeReason] = useState<StrikeReason>("LATE_ARRIVAL");
   const name = caregiver.user.fullName || t("unnamed");
 
   // Action responses omit `user` and carry the CNIC still encrypted, so keep
@@ -82,6 +85,11 @@ export function CaregiverDrawer({
     if (result.verificationStatus !== "SUSPENDED") return result;
     return caregiversApi.approve(caregiver.id, auditReason);
   }, opts(t("toast.reactivated", { name }), "ACTIVE"));
+  const setBadge = useAction((badge: CaregiverBadge | null) => caregiversApi.setBadge(caregiver.id, badge), opts(t("toast.badge", { name })));
+  const strikeAction = useAction(
+    (body: { op: "reset" } | { op: "add"; reason: StrikeReason; note?: string }) => caregiversApi.setStrikes(caregiver.id, body),
+    opts(t("toast.strikes", { name })),
+  );
 
   const deactivated = caregiver.user.status === "DEACTIVATED";
   const due = caregiver.reverifyDueAt ? daysUntil(caregiver.reverifyDueAt) : null;
@@ -150,6 +158,68 @@ export function CaregiverDrawer({
             )}
           </div>
 
+          <Section title={t("sections.tier")}>
+            <div className="flex flex-wrap items-center gap-2">
+              {caregiver.badge ? <TierBadge badge={caregiver.badge} /> : <span className="text-sm text-ink-500">{t("tier.none")}</span>}
+              <span className="text-xs text-ink-500">{caregiver.badgeOverride ? t("tier.overridden") : t("tier.auto")}</span>
+            </div>
+            {CAN_OVERRIDE_BADGE ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-ink-700">{t("tier.overrideLabel")}</label>
+                <Select<string>
+                  className="w-full"
+                  isSearchable={false}
+                  value={caregiver.badgeOverride ?? ""}
+                  onChange={(v) => setBadge.mutate(v ? (v as CaregiverBadge) : null)}
+                  options={[
+                    { value: "", label: t("tier.optAuto") },
+                    { value: "BRONZE", label: L.caregiverBadge("BRONZE") },
+                    { value: "SILVER", label: L.caregiverBadge("SILVER") },
+                    { value: "GOLD", label: L.caregiverBadge("GOLD") },
+                    { value: "PLATINUM", label: L.caregiverBadge("PLATINUM") },
+                  ]}
+                />
+                <p className="text-xs text-ink-500">{t("tier.overrideHint")}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-ink-500">{t("tier.overridePending")}</p>
+            )}
+          </Section>
+
+          {CAN_MANAGE_STRIKES && (
+            <Section title={t("sections.strikes")}>
+              <p className="text-sm text-ink-600">{t("strikes.current", { count: caregiver.strikeCount ?? 0 })}</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <label className="text-xs font-semibold text-ink-700">{t("strikes.addReason")}</label>
+                  <Select<StrikeReason>
+                    className="w-full"
+                    isSearchable={false}
+                    value={strikeReason}
+                    onChange={(v) => v && setStrikeReason(v)}
+                    options={[
+                      { value: "DECLINED", label: t("strikes.reason.DECLINED") },
+                      { value: "LATE_ARRIVAL", label: t("strikes.reason.LATE_ARRIVAL") },
+                      { value: "NO_SHOW", label: t("strikes.reason.NO_SHOW") },
+                    ]}
+                  />
+                </div>
+                <Button variant="secondary" loading={strikeAction.isPending} onClick={() => strikeAction.mutate({ op: "add", reason: strikeReason })}>
+                  {t("strikes.add")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="text-danger-600 hover:bg-danger-50"
+                  loading={strikeAction.isPending}
+                  disabled={!caregiver.strikeCount}
+                  onClick={() => strikeAction.mutate({ op: "reset" })}
+                >
+                  {t("strikes.reset")}
+                </Button>
+              </div>
+            </Section>
+          )}
+
           <Section title={t("sections.credentials")}>
             <div className="rounded-xl border border-brand-100 bg-brand-50/50 p-4">
               <DetailList
@@ -182,6 +252,10 @@ export function CaregiverDrawer({
               items={[
                 { label: t("fields.experience"), value: caregiver.experienceYears !== null ? t("fields.experienceYears", { count: caregiver.experienceYears }) : "—" },
                 { label: t("fields.rate"), value: <span className="tabular">{f.money(caregiver.ratePerVisit)}</span> },
+                ...(caregiver.minRatePerVisit != null && caregiver.maxRatePerVisit != null
+                  ? [{ label: t("fields.bracket"), value: <span className="tabular">{`${f.money(caregiver.minRatePerVisit)} – ${f.money(caregiver.maxRatePerVisit)}`}</span> }]
+                  : []),
+                ...(caregiver.strikeCount ? [{ label: t("fields.strikes"), value: <span className="font-semibold text-danger-600">{caregiver.strikeCount}</span> }] : []),
                 { label: t("fields.serviceArea"), value: f.list(caregiver.serviceArea.cities) || "—" },
                 { label: t("fields.registered"), value: f.date(caregiver.createdAt) },
                 { label: t("fields.approved"), value: f.date(caregiver.approvedAt) },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, FileText, FileWarning, HeartPulse, ImageIcon, MapPin, Navigation, Phone, Scale, Siren } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileText, FileWarning, HeartPulse, ImageIcon, MapPin, Navigation, Repeat, Scale, Siren } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -18,8 +18,10 @@ import { useLabels } from "@shared/i18n/use-labels";
 import { DisputeDialog, ReportIssueDialog, SosDialog } from "@/features/caregiver/components/visit/safety-actions";
 import { VisitFlow } from "@/features/caregiver/components/visit/visit-flow";
 import { CashPayment } from "@/features/caregiver/components/visit/cash-payment";
+import { DoctorOrders } from "@/features/caregiver/components/visit/doctor-orders";
 import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
+import { keys } from "@/features/caregiver/lib/api/keys";
 import { ACTIVE_STATUSES, mapsUrl, VISIT_TONE } from "@shared/lib/visit";
 
 /**
@@ -51,6 +53,8 @@ export default function VisitDetailPage() {
     // Poll so a customer reschedule/cancel reflects here (faster while the visit is live).
     refetchInterval: (q) => (["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CONFIRMED"].includes(q.state.data?.status ?? "") ? 15_000 : 30_000),
   });
+  // The caregiver's own bookings — used to list other visits with the same customer.
+  const bookings = useQuery({ queryKey: [...keys.bookings, "list", "all"], queryFn: () => bookingsApi.list({ limit: 50 }) });
   const [rx, setRx] = useState<PrescriptionDocument | null>(null);
   const [dialog, setDialog] = useState<"sos" | "report" | "dispute" | null>(null);
 
@@ -73,6 +77,16 @@ export default function VisitDetailPage() {
   const medical = readableMedical(patient?.medicalContext);
   const patientName = patient?.name ?? t("patient");
 
+  // Other visits this caregiver has with the same customer (for the history card + returning badge).
+  const otherVisits = v
+    ? (bookings.data?.items ?? [])
+        .filter((b) => b.customerId === v.booking.customerId)
+        .flatMap((b) => b.visits)
+        .filter((x) => x.id !== v.id)
+        .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1))
+    : [];
+  const priorCompleted = otherVisits.filter((x) => x.status === "COMPLETED").length;
+
   return (
     <div className="space-y-5">
       <Link href="/caregiver/visits" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900">
@@ -92,6 +106,11 @@ export default function VisitDetailPage() {
               <p className="mt-0.5 text-sm text-ink-500">
                 {f.longDay(v.scheduledDate)} · <span className="tabular">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</span>
               </p>
+              {priorCompleted > 0 && (
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 ring-1 ring-brand-200">
+                  <Repeat className="size-3.5" /> {t("returning", { count: priorCompleted })}
+                </span>
+              )}
             </div>
             <Badge tone={VISIT_TONE[v.status]} dot className="text-sm">
               {L.visitCaregiver(v.status)}
@@ -131,6 +150,8 @@ export default function VisitDetailPage() {
               )}
 
               <CashPayment visit={v} />
+
+              {booking?.serviceType === "DOCTOR" && !["REQUESTED", "DECLINED", "CANCELLED"].includes(v.status) && <DoctorOrders visitId={v.id} />}
 
               <Card>
                 <CardHeader title={t("patient")} />
@@ -205,26 +226,16 @@ export default function VisitDetailPage() {
                         </div>
                       </>
                     )}
-                    <div className="grid grid-cols-2 gap-2">
-                      {address && (
-                        <a
-                          href={mapsUrl(address)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50"
-                        >
-                          <Navigation className="size-4" /> {t("directions")}
-                        </a>
-                      )}
-                      {customer?.phone && (
-                        <a
-                          href={`tel:${customer.phone}`}
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50"
-                        >
-                          <Phone className="size-4" /> {t("callFamily")}
-                        </a>
-                      )}
-                    </div>
+                    {address && (
+                      <a
+                        href={mapsUrl(address)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+                      >
+                        <Navigation className="size-4" /> {t("directions")}
+                      </a>
+                    )}
                     {customer && (
                       <p className="text-sm text-ink-600">
                         {customer.fullName
@@ -233,7 +244,6 @@ export default function VisitDetailPage() {
                               b: (c) => <span className="font-semibold text-ink-900">{c}</span>,
                             })
                           : t("bookedByUnnamed")}
-                        {customer.phone && <span className="tabular text-ink-500"> · {f.phone(customer.phone)}</span>}
                       </p>
                     )}
                   </CardBody>
@@ -259,6 +269,35 @@ export default function VisitDetailPage() {
                   </dl>
                 </CardBody>
               </Card>
+
+              {otherVisits.length > 0 && (
+                <Card>
+                  <CardHeader title={t("historyTitle")} description={t("historyHint")} />
+                  <CardBody>
+                    <ul className="divide-y divide-ink-100">
+                      {otherVisits.slice(0, 5).map((x) => (
+                        <li key={x.id}>
+                          <Link
+                            href={`/caregiver/visits/${x.id}`}
+                            className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-ink-50"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold text-ink-800">{f.date(x.scheduledDate)}</p>
+                              <p className="tabular text-xs text-ink-500">{f.timeWindow(x.timeWindowStart, x.timeWindowEnd)}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Badge tone={VISIT_TONE[x.status]} dot>
+                                {L.visitCaregiver(x.status)}
+                              </Badge>
+                              <ChevronRight className="rtl:-scale-x-100 size-4 shrink-0 text-ink-300" />
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardBody>
+                </Card>
+              )}
 
               {history.length > 0 && (
                 <Card>

@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 import type { CaregiverBookingStatus, PatientRelation, PaymentMethod, PaymentStatus } from "../caregiver-types";
 import type {
+  CaregiverBadge,
   DisputeStatus,
   DocType,
   IncidentPriority,
@@ -25,6 +26,7 @@ export function useLabels() {
     () => ({
       specialty: (v: Specialty) => t(`specialty.${v}`),
       specialtyHint: (v: Specialty) => t(`specialtyHint.${v}`),
+      caregiverBadge: (v: CaregiverBadge) => t(`caregiverBadge.${v}`),
       licenseBody: (v: LicenseBody) => t(`licenseBody.${v}`),
       /** Table sub-lines: "PNC", "PMDC", "Other". */
       licenseBodyShort: (v: LicenseBody) => t(`licenseBodyShort.${v}`),

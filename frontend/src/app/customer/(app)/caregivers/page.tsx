@@ -15,7 +15,7 @@ import { CaregiverCard } from "@/features/customer/components/caregiver-bits";
 import { caregiversApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 
-const SPECIALTIES: (Specialty | "ALL")[] = ["ALL", "NURSING", "PHYSIOTHERAPY", "POST_SURGERY_CARE", "ELDERLY_CARE"];
+const SPECIALTIES: (Specialty | "ALL")[] = ["ALL", "NURSING", "PHYSIOTHERAPY", "POST_SURGERY_CARE", "ELDERLY_CARE", "DOCTOR"];
 const LIMIT = 12;
 
 export default function FindCarePage() {

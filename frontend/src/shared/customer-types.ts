@@ -4,7 +4,7 @@
  * Dates are ISO strings; Decimals are strings; money is integer paisa.
  */
 import type { AvailabilityRule, Booking, CaregiverVisitDetail, PaymentMethod, PaymentStatus, PatientRelation, Visit } from "./caregiver-types";
-import type { LicenseBody, PayoutStatus, Specialty } from "./types";
+import type { CaregiverBadge, LicenseBody, PayoutStatus, Specialty } from "./types";
 
 /* ---- Public caregiver directory (GET /caregivers, @Public) -------------- */
 
@@ -21,6 +21,8 @@ export interface CaregiverSearchItem {
   user: { fullName: string };
   /** Viewable profile photo URL (null when none uploaded). */
   photoUrl: string | null;
+  /** Ranking tier, computed by the backend on every read. */
+  badge?: CaregiverBadge;
 }
 
 /** GET /caregivers/:id */
@@ -67,6 +69,8 @@ export interface CreateBookingInput {
   caregiverId: string;
   addressId: string;
   type?: "SINGLE" | "RECURRING";
+  /** ASAP booking: SINGLE only; the caregiver gets a short response window and must be nearby. */
+  isImmediate?: boolean;
   /** YYYY-MM-DD */
   startDate: string;
   endDate: string;
@@ -84,6 +88,8 @@ export interface CreateBookingInput {
 /** GET /customer/bookings item: booking + visits only. */
 export interface CustomerBookingListItem extends Booking {
   visits: Visit[];
+  /** Completed visits this caregiver already did for this customer's family (excludes this booking). */
+  priorVisitsWithCaregiver?: number;
 }
 
 export interface RescheduleInput {

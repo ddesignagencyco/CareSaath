@@ -3,6 +3,8 @@
     "progress": "سائن اِن کا مرحلہ",
     "stepPhone": "موبائل نمبر",
     "stepVerify": "کوڈ کی تصدیق",
+    "nameRequired": "اپنا نام درج کریں",
+    "emailInvalid": "درست ای میل درج کریں",
     "sendCode": "تصدیقی کوڈ بھیجیں",
     "couldNotSend": "کوڈ نہیں بھیجا جا سکا",
     "differentNumber": "دوسرا نمبر استعمال کریں",
@@ -70,5 +72,11 @@
     "counter": "{count}/{max}",
     "counterOptional": "{count}/{max} · اختیاری",
     "label": "وجہ"
+  },
+  "medicalOrders": {
+    "recordedOn": "ریکارڈ کیا گیا {date}",
+    "diagnosis": "تشخیص",
+    "medicines": "نسخہ",
+    "labTests": "لیب ٹیسٹ"
   }
 }

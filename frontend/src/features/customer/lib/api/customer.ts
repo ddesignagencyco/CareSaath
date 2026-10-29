@@ -9,6 +9,7 @@ import type {
   CaregiverBookingStatus,
   DisputeRow,
   Me,
+  MedicalOrder,
   PatientProfile,
   PaymentMethod,
   PaymentStatus,
@@ -34,6 +35,7 @@ import type {
   ReviewInput,
 } from "@shared/customer-types";
 import type { IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
+import type { BackendChatMessage } from "@shared/chat/types";
 import * as mock from "../mock/handlers";
 import { http, USE_MOCKS } from "./http";
 
@@ -52,8 +54,8 @@ export const meApi = {
   /** GET /customer/me */
   get: () => (M ? mock.me() : http.get<Me>("/customer/me")),
   /** PATCH /customer/me */
-  update: (dto: { fullName?: string; preferredLanguage?: "EN" | "UR" }) =>
-    M ? mock.updateMe(dto) : http.patch<Pick<Me, "id" | "phone" | "fullName" | "preferredLanguage">>("/customer/me", dto),
+  update: (dto: { fullName?: string; email?: string; preferredLanguage?: "EN" | "UR" }) =>
+    M ? mock.updateMe(dto) : http.patch<Pick<Me, "id" | "phone" | "email" | "fullName" | "preferredLanguage">>("/customer/me", dto),
 };
 
 export const contactsApi = {
@@ -137,6 +139,20 @@ export const visitsApi = {
     M ? mock.reportIncident(id, dto) : http.post<SafetyIncidentRow>(`/customer/visits/${id}/safety-reports`, dto),
   /** POST /sos */
   sos: (dto: { visitId: string; note?: string }) => (M ? mock.sos(dto) : http.post<SosResult>("/sos", dto)),
+  /** GET /customer/visits/:id/medical-orders — the doctor's diagnosis/prescription/lab-test records. */
+  medicalOrders: (id: string) => (M ? Promise.resolve<MedicalOrder[]>([]) : http.get<MedicalOrder[]>(`/customer/visits/${id}/medical-orders`)),
+};
+
+/** Booking-scoped in-app chat (shared REST, customer token). */
+export const chatApi = {
+  /** GET /bookings/:bookingId/messages — newest first. */
+  list: (bookingId: string) =>
+    M ? Promise.resolve<Paginated<BackendChatMessage>>({ items: [], page: 1, limit: 100, total: 0 }) : http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
+  /** POST /bookings/:bookingId/messages */
+  send: (bookingId: string, body: string) =>
+    M ? Promise.resolve<BackendChatMessage>({ id: "m", bookingId, senderId: "", body, readAt: null, createdAt: new Date().toISOString() }) : http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body }),
+  /** PATCH /bookings/:bookingId/messages/read */
+  markRead: (bookingId: string) => (M ? Promise.resolve({ updated: 0 }) : http.patch<{ updated: number }>(`/bookings/${bookingId}/messages/read`)),
 };
 
 export const paymentsApi = {

@@ -14,6 +14,8 @@ import type {
   CaregiverPayoutRequest,
   CaregiverProfileRow,
   CaregiverVisitDetail,
+  CreateMedicalOrderInput,
+  MedicalOrder,
   CaregiverVisitListItem,
   CheckInInput,
   DisputeRow,
@@ -30,6 +32,7 @@ import type {
   Visit,
 } from "@shared/caregiver-types";
 import type { CaregiverDocument, DocType, IncidentPriority, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "@shared/types";
+import type { BackendChatMessage } from "@shared/chat/types";
 import * as mock from "../mock/handlers";
 import { http, USE_MOCKS } from "./http";
 
@@ -50,7 +53,7 @@ export const meApi = {
   /** GET /customer/me — works for any role; tells us if a caregiver profile exists. */
   get: () => (M ? mock.me() : http.get<Me>("/customer/me")),
   /** PATCH /customer/me — the only way to set the display name. */
-  update: (dto: { fullName?: string; preferredLanguage?: "EN" | "UR" }) => (M ? mock.updateMe(dto) : http.patch<Pick<Me, "id" | "phone" | "fullName" | "preferredLanguage">>("/customer/me", dto)),
+  update: (dto: { fullName?: string; email?: string; preferredLanguage?: "EN" | "UR" }) => (M ? mock.updateMe(dto) : http.patch<Pick<Me, "id" | "phone" | "email" | "fullName" | "preferredLanguage">>("/customer/me", dto)),
 };
 
 export const profileApi = {
@@ -68,6 +71,8 @@ export const profileApi = {
   uploadPhoto: (file: File) => (M ? mock.uploadPhoto(file) : http.upload<{ photoKey: string }>("/caregiver/photo", file)),
   /** GET /caregiver/photo/url — 404 "No photo uploaded" when photoKey is null. */
   photoUrl: () => (M ? mock.photoUrl() : http.get<{ url: string }>("/caregiver/photo/url")),
+  /** PATCH /caregiver/location — share live location so nearby families can book an immediate visit. */
+  updateLocation: (lat: number, lng: number) => (M ? Promise.resolve() : http.patch<void>("/caregiver/location", { lat, lng })),
 };
 
 export const availabilityApi = {
@@ -111,12 +116,34 @@ export const visitsApi = {
   note: (id: string, summary: string) => (M ? mock.submitNote(id, summary) : http.post<CaregiverVisitDetail>(`/caregiver/visits/${id}/note`, { summary })),
 };
 
+export const medicalOrdersApi = {
+  /** GET /caregiver/visits/:visitId/medical-orders — diagnosis/prescription/lab-test records (newest first). */
+  list: (visitId: string) => (M ? Promise.resolve<MedicalOrder[]>([]) : http.get<MedicalOrder[]>(`/caregiver/visits/${visitId}/medical-orders`)),
+  /** POST /caregiver/visits/:visitId/medical-orders — doctor-only; the customer is notified. */
+  create: (visitId: string, dto: CreateMedicalOrderInput) =>
+    M
+      ? Promise.resolve<MedicalOrder>({ id: "mo-mock", visitId, doctorId: "", patientId: "", diagnosis: dto.diagnosis ?? null, medicines: dto.medicines ?? [], labTests: dto.labTests ?? [], createdAt: new Date().toISOString() })
+      : http.post<MedicalOrder>(`/caregiver/visits/${visitId}/medical-orders`, dto),
+};
+
 export const paymentsApi = {
   /** POST /caregiver/payments/:id/confirm-cash — the caregiver's half of two-sided cash (Phase 15). */
   confirmCash: (paymentId: string) =>
     M ? mock.confirmCash(paymentId) : http.post<CaregiverPaymentRow>(`/caregiver/payments/${paymentId}/confirm-cash`),
   /** GET /caregiver/payments/:id/receipt — PDF blob (Phase 15; real backend only). */
   receipt: (id: string) => http.download(`/caregiver/payments/${id}/receipt`),
+};
+
+/** Booking-scoped in-app chat (shared REST, caregiver token). */
+export const chatApi = {
+  /** GET /bookings/:bookingId/messages — newest first. */
+  list: (bookingId: string) =>
+    M ? Promise.resolve<Paginated<BackendChatMessage>>({ items: [], page: 1, limit: 100, total: 0 }) : http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
+  /** POST /bookings/:bookingId/messages */
+  send: (bookingId: string, body: string) =>
+    M ? Promise.resolve<BackendChatMessage>({ id: "m", bookingId, senderId: "", body, readAt: null, createdAt: new Date().toISOString() }) : http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body }),
+  /** PATCH /bookings/:bookingId/messages/read */
+  markRead: (bookingId: string) => (M ? Promise.resolve({ updated: 0 }) : http.patch<{ updated: number }>(`/bookings/${bookingId}/messages/read`)),
 };
 
 export const moneyApi = {

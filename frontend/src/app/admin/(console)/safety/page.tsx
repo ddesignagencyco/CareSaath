@@ -213,7 +213,7 @@ function IncidentDrawer({
 }
 
 export default function SafetyPage() {
-  const [status, setStatus] = useState<IncidentStatus | "ALL">("OPEN");
+  const [status, setStatus] = useState<IncidentStatus | "ALL">("ALL");
   const [priority, setPriority] = useState<IncidentPriority | "">("");
   const [page, setPage] = useState(1);
   const [picked, setPicked] = useState<SafetyIncident | null>(null);
@@ -256,10 +256,10 @@ export default function SafetyPage() {
             setPage(1);
           }}
           options={[
+            { value: "ALL", label: t("all") },
             { value: "OPEN", label: L.incidentStatus("OPEN") },
             { value: "IN_REVIEW", label: L.incidentStatus("IN_REVIEW") },
             { value: "RESOLVED", label: L.incidentStatus("RESOLVED") },
-            { value: "ALL", label: t("all") },
           ]}
         />
         <div className="w-48">
@@ -269,10 +269,10 @@ export default function SafetyPage() {
             isClearable
             value={priority || null}
             onChange={(v) => {
-              setPriority(v ?? "");
+              setPriority(v && v !== "ALL" ? v : "");
               setPage(1);
             }}
-            options={PRIORITIES.map((p) => ({ value: p, label: L.priority(p) }))}
+            options={[{ value: "ALL", label: t("allPriorities") }, ...PRIORITIES.map((p) => ({ value: p, label: L.priority(p) }))]}
           />
         </div>
       </div>

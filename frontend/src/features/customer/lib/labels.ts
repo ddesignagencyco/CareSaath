@@ -126,6 +126,8 @@ export function useDescribe(): (n: AppNotification) => NotificationView {
           const status = INCIDENT_STATUSES.includes(raw) ? L.incidentStatus(raw as IncidentStatus).toLowerCase() : raw.replace("_", " ").toLowerCase();
           return { title: t("safetyUpdated.title"), body: t("safetyUpdated.body", { status }), href: null, tone: "neutral" };
         }
+        case "medical_order.created":
+          return { title: t("medicalOrder.title"), body: t("medicalOrder.body"), href: visit, tone: "brand" };
         default:
           return { title: n.event.replace(/[._]/g, " "), body: "", href: null, tone: "neutral" };
       }

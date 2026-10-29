@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, Navigation, NotebookPen, Repeat, UploadCloud, XCircle } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, MessagesSquare, Navigation, NotebookPen, Repeat, UploadCloud, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
@@ -13,7 +13,8 @@ import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { formatBytes, formatMoney } from "@shared/lib/format";
 import { mapsUrl, visitStart } from "@shared/lib/visit";
-import { ReasonDialog } from "@shared/reason-dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@shared/ui/alert-dialog";
+import { Field, Textarea } from "@shared/ui/field";
 import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
@@ -50,6 +51,7 @@ export default function BookingDetailPage() {
   };
   const caregiver = useCaregiver(b?.caregiverId);
   const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState("");
   const [moving, setMoving] = useState<Visit | null>(null);
   const [viewing, setViewing] = useState<PrescriptionSummary | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -57,7 +59,10 @@ export default function BookingDetailPage() {
   const cancel = useAction((reason: string) => bookingsApi.cancel(id, reason || undefined), {
     invalidate: [keys.bookings],
     success: t("cancelSuccess"),
-    onSuccess: () => setCancelling(false),
+    onSuccess: () => {
+      setCancelling(false);
+      setReason("");
+    },
   });
   const upload = useAction((file: File) => bookingsApi.uploadPrescription(id, file), {
     invalidate: [keys.bookings],
@@ -94,9 +99,19 @@ export default function BookingDetailPage() {
               </h1>
               <p className="text-sm text-ink-500">{t("requestedAt", { date: f.dateTime(b.createdAt) })}</p>
             </div>
-            <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-sm">
-              {L.bookingCustomer(shownStatus!)}
-            </Badge>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {/* While REQUESTED, the "Waiting for …" banner below already states the status, so skip the redundant pill. */}
+              {b.status !== "REQUESTED" && (
+                <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-sm">
+                  {L.bookingCustomer(shownStatus!)}
+                </Badge>
+              )}
+              {hasCancellableVisits(b) && (
+                <Button variant="danger" size="sm" onClick={() => setCancelling(true)}>
+                  <XCircle className="size-4" /> {t("cancelBooking")}
+                </Button>
+              )}
+            </div>
           </header>
 
           {b.status === "REQUESTED" && (
@@ -258,6 +273,19 @@ export default function BookingDetailPage() {
                   ) : (
                     <Skeleton className="h-12" />
                   )}
+                  {b.priorVisitsWithCaregiver ? (
+                    <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
+                      <Repeat className="size-3.5 shrink-0" /> {t("repeatVisits", { count: b.priorVisitsWithCaregiver })}
+                    </p>
+                  ) : null}
+                  {c && (b.status === "CONFIRMED" || b.status === "COMPLETED") && (
+                    <Link
+                      href={`/customer/messages/${b.id}`}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+                    >
+                      <MessagesSquare className="size-4" /> {t("messageCaregiver")}
+                    </Link>
+                  )}
                 </CardBody>
               </Card>
 
@@ -303,31 +331,32 @@ export default function BookingDetailPage() {
                 </CardBody>
               </Card>
 
-              {hasCancellableVisits(b) && (
-                <Button variant="ghost" className="w-full text-danger-600 hover:bg-danger-50" onClick={() => setCancelling(true)}>
-                  <XCircle className="size-4" /> {t("cancelBooking")}
-                </Button>
-              )}
             </div>
           </div>
         </>
       )}
 
-      {cancelling && (
-        <ReasonDialog
-          open
-          onClose={() => setCancelling(false)}
-          title={t("cancelTitle")}
-          description={t("cancelDescription")}
-          label={ts("reason.label")}
-          placeholder={t("cancelPlaceholder")}
-          maxLength={500}
-          confirmLabel={t("cancelBooking")}
-          confirmVariant="danger"
-          loading={cancel.isPending}
-          onConfirm={(r) => cancel.mutate(r)}
-        />
-      )}
+      <AlertDialog open={cancelling} onOpenChange={setCancelling}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("cancelTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("cancelDescription")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="mt-4">
+            <Field label={ts("reason.label")}>
+              {(fid) => <Textarea id={fid} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder={t("cancelPlaceholder")} />}
+            </Field>
+          </div>
+          <AlertDialogFooter>
+            <Button variant="secondary" onClick={() => setCancelling(false)}>
+              {tc("back")}
+            </Button>
+            <Button variant="danger" loading={cancel.isPending} onClick={() => cancel.mutate(reason)}>
+              {t("cancelBooking")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {moving && b && <RescheduleDialog bookingId={b.id} visit={moving} onClose={() => setMoving(null)} />}
       {viewing && b && (
         <FileViewer

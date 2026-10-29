@@ -9,7 +9,17 @@
     "emptyActive": "کوئی جاری بکنگ نہیں",
     "emptyPast": "کوئی پچھلی بکنگ نہیں",
     "emptyHint": "تصدیق شدہ کیئرگیور تلاش کریں اور درخواست بھیجیں۔",
-    "findCare": "کیئرگیور تلاش کریں"
+    "findCare": "کیئرگیور تلاش کریں",
+    "searchPlaceholder": "کیئرگیور یا مریض سے تلاش کریں…",
+    "noResults": "کوئی بکنگ نہیں ملی۔",
+    "allGroups": "تمام بکنگز",
+    "allCategories": "تمام زمرے",
+    "columns": {
+      "caregiver": "کیئرگیور",
+      "for": "کس کے لیے",
+      "schedule": "شیڈول",
+      "status": "اسٹیٹس"
+    }
   },
   "bookingCard": {
     "caregiverFallback": "کیئرگیور",
@@ -48,6 +58,8 @@
     "visits": "وزٹ",
     "reschedule": "وقت تبدیل کریں",
     "viewNote": "وزٹ نوٹ",
+    "repeatVisits": "آپ انہیں پہلے {count, plural, one {# بار} other {# بار}} بک کر چکے ہیں",
+    "messageCaregiver": "کیئرگیور کو پیغام",
     "prescriptions": "نسخے اور کیئر پلان",
     "prescriptionsHint": "صرف آپ کے کیئرگیور کو دکھائے جاتے ہیں۔",
     "prescriptionsEmpty": "ابھی کچھ شامل نہیں۔ ڈاکٹر کا نسخہ اپ لوڈ کریں تاکہ آپ کا کیئرگیور تیاری کر سکے۔",
@@ -76,6 +88,8 @@
   },
   "visit": {
     "back": "بکنگ",
+    "doctorOrders": "ڈاکٹر کی ہدایات",
+    "messageCaregiver": "کیئرگیور کو پیغام",
     "serviceFor": "{patient} کے لیے {service}",
     "waiting": "کیئرگیور کے یہ بکنگ قبول کرنے کا انتظار ہے۔",
     "closed": "یہ وزٹ {status, select, DECLINED {مسترد} other {منسوخ}} ہو گیا۔",
@@ -239,10 +253,15 @@
     "memberSince": "{date} سے ممبر",
     "fullName": "پورا نام",
     "namePlaceholder": "آپ کا نام",
+    "email": "ای میل",
+    "emailHint": "رسیدوں اور اہم اطلاعات کے لیے (اختیاری)۔",
+    "emailPlaceholder": "you@example.com",
+    "emailInvalid": "درست ای میل درج کریں",
     "languageHint": "پیغامات اور اطلاعات اسی زبان میں آئیں گی۔",
     "languageUr": "اردو (Urdu)",
     "saved": "پروفائل محفوظ ہو گیا",
     "links": {
+      "messages": "پیغامات",
       "patients": "مریض",
       "addresses": "پتے",
       "contacts": "ایمرجنسی رابطے",
@@ -264,6 +283,15 @@
     "removeConfirm": "ہٹائیں",
     "medical": "طبی معلومات",
     "notAdded": "ابھی شامل نہیں کی گئیں۔",
+    "searchPlaceholder": "مریض تلاش کریں…",
+    "noResults": "کوئی مریض نہیں ملا۔",
+    "filterAll": "تمام رشتے",
+    "columns": {
+      "name": "نام",
+      "relationship": "رشتہ",
+      "age": "عمر",
+      "medical": "طبی"
+    },
     "removed": "{name} کو ہٹا دیا گیا",
     "hasBookings": "{name} کی بکنگز موجود ہیں، اس لیے حفاظت کی خاطر ان کا ریکارڈ رکھا جاتا ہے اور ہٹایا نہیں جا سکتا۔",
     "medicalUnavailable": "محفوظ ہے، مگر ابھی دکھائی نہیں جا سکتی۔"
@@ -281,7 +309,13 @@
     "removeConfirmBody": "اس سے محفوظ شدہ پتہ مستقل طور پر حذف ہو جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
     "removeConfirm": "ہٹائیں",
     "removed": "پتہ ہٹا دیا گیا",
-    "hasBookings": "یہ پتہ کسی بکنگ میں استعمال ہوا ہے، اس لیے اسے ہٹایا نہیں جا سکتا۔"
+    "hasBookings": "یہ پتہ کسی بکنگ میں استعمال ہوا ہے، اس لیے اسے ہٹایا نہیں جا سکتا۔",
+    "searchPlaceholder": "پتے تلاش کریں…",
+    "noResults": "کوئی پتہ نہیں ملا۔",
+    "columns": {
+      "label": "لیبل",
+      "address": "پتہ"
+    }
   },
   "contacts": {
     "back": "اکاؤنٹ",
@@ -304,6 +338,16 @@
     "emptyTitle": "ابھی کوئی ادائیگی نہیں",
     "emptyHint": "آپ کے وزٹس کی ادائیگیاں یہاں نظر آئیں گی۔",
     "visitFor": "{patient} کا وزٹ",
+    "columns": {
+      "visit": "وزٹ",
+      "date": "تاریخ",
+      "method": "طریقہ",
+      "amount": "رقم",
+      "status": "اسٹیٹس"
+    },
+    "searchPlaceholder": "مریض سے تلاش کریں…",
+    "noResults": "کوئی ادائیگی نہیں ملی۔",
+    "allMethods": "تمام طریقے",
     "cashDue": "نقد واجب",
     "all": "سب",
     "awaitingGateway": "تصدیق کا انتظار",
@@ -332,6 +376,15 @@
     "description": "آپ کے درج کردہ تنازعات، یا آپ کے وزٹس کے بارے میں درج کیے گئے تنازعات۔",
     "emptyTitle": "کوئی تنازع نہیں",
     "emptyHint": "اگر کسی وزٹ میں مسئلہ ہو تو وزٹ کے صفحے سے تنازع درج کریں۔",
+    "searchPlaceholder": "تنازعات تلاش کریں…",
+    "noResults": "کوئی تنازعہ نہیں ملا۔",
+    "allStatuses": "تمام اسٹیٹس",
+    "columns": {
+      "date": "تاریخ",
+      "description": "مسئلہ",
+      "status": "اسٹیٹس",
+      "resolution": "حل"
+    },
     "raisedByYou": "آپ نے درج کیا · {date}",
     "raisedAgainstYou": "آپ کے کیئرگیور نے درج کیا · {date}",
     "resolved": "حل ہو گیا",

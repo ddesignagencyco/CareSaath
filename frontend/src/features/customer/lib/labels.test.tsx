@@ -103,7 +103,7 @@ describe("useDescribe (notification texts)", () => {
 
   it("formats payment amounts (paisa), SOS contacts and incident statuses", () => {
     const d = describeIn("en");
-    expect(d(n("payment.paid", { amount: 250000 })).body).toBe(`${formatMoney(250000)} paid.`);
+    expect(d(n("payment.paid", { amount: 250000 })).body).toBe(`You paid ${formatMoney(250000)}.`);
     expect(d(n("payment.paid", {})).body).toBe("");
     expect(d(n("safety_incident.sos.contact", { contact: "Sana", visitId: "v1" }))).toMatchObject({ body: "Sana was alerted by SMS.", tone: "danger", href: "/customer/visits/v1" });
     expect(d(n("safety_incident.updated", { status: "IN_REVIEW" })).body).toBe("Status: in review.");

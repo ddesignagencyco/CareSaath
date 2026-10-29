@@ -40,8 +40,14 @@ export function useRealtime(opts: {
     });
     const refetchAll = () => void queryClient.invalidateQueries();
     const refetchNotifs = () => void queryClient.invalidateQueries({ queryKey: notifKeyRef.current });
+    // Chat is the hot path (a message per keystroke-send): only refetch the chat
+    // threads for those, not every query on the current screen.
+    const onEntityUpdated = (payload?: { type?: string }) => {
+      if (payload?.type === "chat_message") void queryClient.invalidateQueries({ queryKey: ["chat"] });
+      else refetchAll();
+    };
 
-    socket.on("entity.updated", refetchAll);
+    socket.on("entity.updated", onEntityUpdated);
     socket.on("notification.created", refetchNotifs);
     socket.on("notification.read", refetchNotifs);
     // Bad/inactive token: don't loop — stop here.

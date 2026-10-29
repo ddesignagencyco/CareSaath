@@ -95,6 +95,7 @@ const rows: Row[] = [
     { description: "Arrived late", priority: "HIGH" },
   ],
   ["visits.sos", () => visitsApi.sos({ visitId: "v1", note: "Help" }), "POST", "/sos", { visitId: "v1", note: "Help" }],
+  ["visits.medicalOrders", () => visitsApi.medicalOrders("v1"), "GET", "/customer/visits/v1/medical-orders", undefined],
   ["payments.list", () => paymentsApi.list({ status: "PENDING", page: 1, limit: 15 }), "GET", "/customer/payments", undefined, { status: "PENDING", page: "1", limit: "15" }],
   ["payments.get", () => paymentsApi.get("pay1"), "GET", "/customer/payments/pay1", undefined],
   ["payments.initiate", () => paymentsApi.initiate({ visitId: "v1", method: "CASH" }), "POST", "/customer/payments", { visitId: "v1", method: "CASH" }],

@@ -1,20 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
-import { useTranslations } from "next-intl";
-import { useFmt } from "@shared/i18n/use-fmt";
-import { Select } from "./select";
+import clsx from "clsx";
 
-/** Every "HH:mm" slot of the day in `step`-minute increments. */
-function slots(step: number): string[] {
-  const out: string[] = [];
-  for (let m = 0; m < 24 * 60; m += step) {
-    out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
-  }
-  return out;
-}
+const CONTROL =
+  "h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-900 shadow-card transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-500";
 
-/** Project-wide time field (a react-select of slots). Use instead of a native `<input type="time">`. Value is "HH:mm". */
+/** Project-wide time field — a native `<input type="time">`. Value is "HH:mm". */
 export function TimePicker({
   id,
   value,
@@ -29,36 +20,30 @@ export function TimePicker({
   id?: string;
   value: string;
   onChange: (value: string) => void;
-  /** Earliest selectable time, "HH:mm" — earlier slots are hidden. */
+  /** Earliest selectable time, "HH:mm". */
   min?: string;
-  /** Slot granularity in minutes (default 5). */
+  /** Slot granularity in minutes (default 5); native inputs use seconds. */
   step?: number;
+  /** Ignored by native time inputs; kept for call-site compatibility. */
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   "aria-label"?: string;
 }) {
-  const f = useFmt();
-  const ts = useTranslations("common.states");
-  const options = useMemo(() => {
-    let list = slots(step);
-    if (min) list = list.filter((s) => s >= min);
-    // Keep the current value selectable even if it is off-grid or before `min`.
-    if (value && !list.includes(value)) list = [...list, value].sort();
-    return list.map((s) => ({ value: s, label: f.time(s) }));
-  }, [step, min, value, f]);
-
+  void placeholder;
   return (
-    <Select<string>
-      inputId={id}
-      options={options}
-      value={value || null}
-      onChange={(v) => onChange(v ?? "")}
-      isSearchable
-      placeholder={placeholder ?? ts("selectTime")}
-      isDisabled={disabled}
-      className={className}
-      aria-label={ariaLabel}
-    />
+    <div className={clsx("relative", className)}>
+      <input
+        id={id}
+        type="time"
+        value={value}
+        min={min}
+        step={step * 60}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+        className={CONTROL}
+      />
+    </div>
   );
 }

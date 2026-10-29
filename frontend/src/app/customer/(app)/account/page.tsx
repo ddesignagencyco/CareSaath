@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, ChevronRight, LogOut, MapPin, Phone, RotateCcw, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, RotateCcw, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -25,9 +25,9 @@ import { resetMockDb } from "@/features/customer/lib/mock/db";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
+  { href: "/customer/messages", key: "messages", icon: MessagesSquare },
   { href: "/customer/account/patients", key: "patients", icon: Users },
   { href: "/customer/account/addresses", key: "addresses", icon: MapPin },
-  { href: "/customer/account/contacts", key: "contacts", icon: Phone },
   { href: "/customer/account/disputes", key: "disputes", icon: Scale },
   { href: "/customer/account/payments", key: "payments", icon: Wallet },
   { href: "/customer/notifications", key: "notifications", icon: Bell },
@@ -38,9 +38,11 @@ function ProfileForm({ me }: { me: Me }) {
   const tc = useTranslations("common");
   const { setLocale } = useLocaleControl();
   const [name, setName] = useState(me.fullName);
+  const [email, setEmail] = useState(me.email ?? "");
   const [language, setLanguage] = useState<"EN" | "UR">(me.preferredLanguage);
-  const dirty = name.trim() !== me.fullName || language !== me.preferredLanguage;
-  const save = useAction(() => meApi.update({ fullName: name.trim(), preferredLanguage: language }), {
+  const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const dirty = name.trim() !== me.fullName || email.trim() !== (me.email ?? "") || language !== me.preferredLanguage;
+  const save = useAction(() => meApi.update({ fullName: name.trim(), email: email.trim() || undefined, preferredLanguage: language }), {
     invalidate: [keys.me],
     success: t("saved"),
     onSuccess: () => setLocale(language === "UR" ? "ur" : "en"),
@@ -51,11 +53,14 @@ function ProfileForm({ me }: { me: Me }) {
       className="grid grid-cols-1 gap-4 sm:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (dirty && name.trim()) save.mutate(undefined);
+        if (dirty && name.trim() && emailValid) save.mutate(undefined);
       }}
     >
       <Field label={t("fullName")} required>
         {(id) => <Input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} placeholder={t("namePlaceholder")} />}
+      </Field>
+      <Field label={t("email")} hint={t("emailHint")} error={email.trim().length > 0 && !emailValid ? t("emailInvalid") : undefined}>
+        {(id) => <Input id={id} type="email" value={email} maxLength={160} onChange={(e) => setEmail(e.target.value)} placeholder={t("emailPlaceholder")} />}
       </Field>
       <Field label={tc("language.appLanguage")} hint={t("languageHint")}>
         {(id) => (
@@ -71,7 +76,7 @@ function ProfileForm({ me }: { me: Me }) {
         )}
       </Field>
       <div className="flex justify-end sm:col-span-2">
-        <Button type="submit" disabled={!dirty || !name.trim()} loading={save.isPending}>
+        <Button type="submit" disabled={!dirty || !name.trim() || !emailValid} loading={save.isPending}>
           {tc("actions.saveChanges")}
         </Button>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, Smartphone, Wallet } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Banknote, Smartphone } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -9,8 +10,9 @@ import { ReasonDialog } from "@shared/reason-dialog";
 import { PayoutStatusBadge } from "@shared/status";
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
-import { Avatar, EmptyState, ErrorState, FilterTabs, Pagination, TableSkeleton } from "@shared/ui/misc";
-import { Table, Td, Th, Tr } from "@shared/ui/table";
+import { DataTable } from "@shared/ui/data-table";
+import { Avatar, ErrorState } from "@shared/ui/misc";
+import { Select } from "@shared/ui/select";
 import { payoutsApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import { USE_MOCKS } from "@/features/admin/lib/api/http";
@@ -23,7 +25,7 @@ const LIMIT = 10;
 type Act = { kind: "approve" | "pay" | "reject"; payout: AdminPayoutRequest };
 
 export default function PayoutsPage() {
-  const [status, setStatus] = useState<PayoutStatus>("REQUESTED");
+  const [status, setStatus] = useState<PayoutStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [act, setAct] = useState<Act | null>(null);
   const t = useTranslations("adminB.payouts");
@@ -32,7 +34,7 @@ export default function PayoutsPage() {
 
   const list = useQuery({
     queryKey: [...keys.payouts, "list", status, page],
-    queryFn: () => payoutsApi.list({ status, page, limit: LIMIT }),
+    queryFn: () => payoutsApi.list({ ...(status === "ALL" ? {} : { status }), page, limit: LIMIT }),
   });
 
   const opts = (success: string) => ({
@@ -54,135 +56,160 @@ export default function PayoutsPage() {
   const name = act?.payout.caregiver.user.fullName;
   const amount = act ? f.money(act.payout.amount) : "";
 
+  const showActions = status === "ALL" || status === "REQUESTED" || status === "PROCESSING" || status === "TRANSFERRED";
+  const baseColumns: ColumnDef<AdminPayoutRequest, unknown>[] = [
+    {
+      id: "caregiver",
+      header: t("colCaregiver"),
+      accessorFn: (p) => p.caregiver.user.fullName,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <Avatar name={row.original.caregiver.user.fullName} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-ink-900">{row.original.caregiver.user.fullName}</p>
+            <p className="text-xs text-ink-500">{L.specialty(row.original.caregiver.specialty)}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "payTo",
+      header: t("colPayTo"),
+      meta: { className: "hidden md:table-cell" },
+      enableSorting: false,
+      cell: ({ row }) => {
+        const p = row.original;
+        const AccountIcon = p.payoutAccount.type === "BANK" ? Banknote : Smartphone;
+        return (
+          <div className="flex items-center gap-2">
+            <AccountIcon className="size-4 text-ink-400" />
+            <div>
+              <p className="font-medium text-ink-800">
+                {p.payoutAccount.provider} <span dir="ltr" className="tabular text-ink-500">{p.payoutAccount.accountNumber}</span>
+              </p>
+              <p className="text-xs text-ink-500">
+                {L.payoutAccount(p.payoutAccount.type)} · {p.payoutAccount.accountTitle}
+              </p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "amount",
+      header: t("colAmount"),
+      accessorFn: (p) => p.amount,
+      cell: ({ row }) => <span dir="ltr" className="tabular font-bold text-ink-900">{f.money(row.original.amount)}</span>,
+    },
+    {
+      id: "requested",
+      header: t("colRequested"),
+      meta: { className: "hidden sm:table-cell" },
+      accessorFn: (p) => p.requestedAt,
+      cell: ({ row }) => (
+        <div>
+          <p className="text-ink-700">{f.date(row.original.requestedAt)}</p>
+          <p className="text-xs text-ink-500">{f.relativeTime(row.original.requestedAt)}</p>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: t("colStatus"),
+      enableSorting: false,
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <div className="flex items-center gap-2">
+            <PayoutStatusBadge status={p.status} />
+            {!USE_MOCKS && (p.status === "TRANSFERRED" || p.status === "PAID") && (
+              <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
+                {t("receipt")}
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+  const actionsColumn: ColumnDef<AdminPayoutRequest, unknown> = {
+    id: "actions",
+    header: t("colAction"),
+    enableSorting: false,
+    cell: ({ row }) => {
+      const p = row.original;
+      // Branch per-row (not on the filter) so the "All" view renders the right control for each status.
+      if (p.status === "PAID" || p.status === "REJECTED") return <span className="text-ink-300">—</span>;
+      if (p.status === "TRANSFERRED") {
+        return p.issueReportedAt ? (
+          <div className="flex flex-col items-start gap-1">
+            <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
+              {t("resend")}
+            </Button>
+            {p.issueNote && <span className="max-w-48 truncate text-xs text-danger-600" title={p.issueNote}>{p.issueNote}</span>}
+          </div>
+        ) : (
+          <span className="text-xs text-ink-400">{t("awaitingConfirm")}</span>
+        );
+      }
+      return (
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50" onClick={() => setAct({ kind: "reject", payout: p })}>
+            {t("reject")}
+          </Button>
+          {p.status === "REQUESTED" ? (
+            <Button size="sm" onClick={() => setAct({ kind: "approve", payout: p })}>
+              {t("approve")}
+            </Button>
+          ) : (
+            <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
+              {t("markTransferred")}
+            </Button>
+          )}
+        </div>
+      );
+    },
+  };
+  const columns = showActions ? [...baseColumns, actionsColumn] : baseColumns;
+
   return (
     <>
-      <PageHeader
-        title={t("title")}
-        description={t("description")}
-      />
+      <PageHeader title={t("title")} description={t("description")} />
 
-      <div className="mb-4">
-        <FilterTabs
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-          options={[
-            { value: "REQUESTED", label: L.payout("REQUESTED") },
-            { value: "PROCESSING", label: L.payout("PROCESSING") },
-            { value: "TRANSFERRED", label: L.payout("TRANSFERRED") },
-            { value: "PAID", label: L.payout("PAID") },
-            { value: "REJECTED", label: L.payout("REJECTED") },
-          ]}
-        />
-      </div>
-
-      <Card>
-        {list.isError ? (
+      {list.isError ? (
+        <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : !list.data ? (
-          <TableSkeleton />
-        ) : list.data.items.length === 0 ? (
-          <EmptyState icon={Wallet} title={t("empty")} />
-        ) : (
-          <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>{t("colCaregiver")}</Th>
-                  <Th className="hidden md:table-cell">{t("colPayTo")}</Th>
-                  <Th>{t("colAmount")}</Th>
-                  <Th className="hidden sm:table-cell">{t("colRequested")}</Th>
-                  <Th>{t("colStatus")}</Th>
-                  {(status === "REQUESTED" || status === "PROCESSING" || status === "TRANSFERRED") && <Th>{t("colAction")}</Th>}
-                </tr>
-              </thead>
-              <tbody>
-                {list.data.items.map((p) => {
-                  const AccountIcon = p.payoutAccount.type === "BANK" ? Banknote : Smartphone;
-                  return (
-                    <Tr key={p.id}>
-                      <Td>
-                        <div className="flex items-center gap-3">
-                          <Avatar name={p.caregiver.user.fullName} size="sm" />
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-ink-900">{p.caregiver.user.fullName}</p>
-                            <p className="text-xs text-ink-500">{L.specialty(p.caregiver.specialty)}</p>
-                          </div>
-                        </div>
-                      </Td>
-                      <Td className="hidden md:table-cell">
-                        <div className="flex items-center gap-2">
-                          <AccountIcon className="size-4 text-ink-400" />
-                          <div>
-                            <p className="font-medium text-ink-800">
-                              {p.payoutAccount.provider} <span dir="ltr" className="tabular text-ink-500">{p.payoutAccount.accountNumber}</span>
-                            </p>
-                            <p className="text-xs text-ink-500">
-                              {L.payoutAccount(p.payoutAccount.type)} · {p.payoutAccount.accountTitle}
-                            </p>
-                          </div>
-                        </div>
-                      </Td>
-                      <Td className="tabular font-bold text-ink-900">
-                        <span dir="ltr">{f.money(p.amount)}</span>
-                      </Td>
-                      <Td className="hidden sm:table-cell">
-                        <p className="text-ink-700">{f.date(p.requestedAt)}</p>
-                        <p className="text-xs text-ink-500">{f.relativeTime(p.requestedAt)}</p>
-                      </Td>
-                      <Td>
-                        <div className="flex items-center gap-2">
-                          <PayoutStatusBadge status={p.status} />
-                          {!USE_MOCKS && (p.status === "TRANSFERRED" || p.status === "PAID") && (
-                            <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
-                              {t("receipt")}
-                            </Button>
-                          )}
-                        </div>
-                      </Td>
-                      {status === "TRANSFERRED" && (
-                        <Td>
-                          {p.issueReportedAt ? (
-                            <div className="flex flex-col items-start gap-1">
-                              <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
-                                {t("resend")}
-                              </Button>
-                              {p.issueNote && <span className="max-w-48 truncate text-xs text-danger-600" title={p.issueNote}>{p.issueNote}</span>}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-ink-400">{t("awaitingConfirm")}</span>
-                          )}
-                        </Td>
-                      )}
-                      {(status === "REQUESTED" || status === "PROCESSING") && (
-                        <Td>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="ghost" className="text-danger-600 hover:bg-danger-50" onClick={() => setAct({ kind: "reject", payout: p })}>
-                              {t("reject")}
-                            </Button>
-                            {p.status === "REQUESTED" ? (
-                              <Button size="sm" onClick={() => setAct({ kind: "approve", payout: p })}>
-                                {t("approve")}
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="success" onClick={() => setAct({ kind: "pay", payout: p })}>
-                                {t("markTransferred")}
-                              </Button>
-                            )}
-                          </div>
-                        </Td>
-                      )}
-                    </Tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-            <Pagination page={list.data.page} limit={list.data.limit} total={list.data.total} onPage={setPage} />
-          </>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={list.data?.items ?? []}
+          loading={!list.data}
+          emptyText={t("empty")}
+          serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
+          toolbar={() => (
+            <Select<PayoutStatus | "ALL">
+              className="w-52"
+              value={status}
+              isSearchable={false}
+              onChange={(v) => {
+                if (v) {
+                  setStatus(v);
+                  setPage(1);
+                }
+              }}
+              options={[
+                { value: "ALL", label: t("allStatuses") },
+                { value: "REQUESTED", label: L.payout("REQUESTED") },
+                { value: "PROCESSING", label: L.payout("PROCESSING") },
+                { value: "TRANSFERRED", label: L.payout("TRANSFERRED") },
+                { value: "PAID", label: L.payout("PAID") },
+                { value: "REJECTED", label: L.payout("REJECTED") },
+              ]}
+            />
+          )}
+        />
+      )}
 
       {act?.kind === "approve" && (
         <ReasonDialog
@@ -204,7 +231,7 @@ export default function PayoutsPage() {
           open
           onClose={() => setAct(null)}
           title={t("payTitle", { amount })}
-          description={t("payDescription", { account: `\u2066${act.payout.payoutAccount.provider} ${act.payout.payoutAccount.accountNumber}\u2069` })}
+          description={t("payDescription", { account: `⁦${act.payout.payoutAccount.provider} ${act.payout.payoutAccount.accountNumber}⁩` })}
           label={t("settlementReference")}
           placeholder={t("settlementPlaceholder")}
           maxLength={500}

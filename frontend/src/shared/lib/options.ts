@@ -7,6 +7,7 @@ export const SPECIALTY_OPTIONS: SelectOption<Specialty>[] = [
   { value: "PHYSIOTHERAPY", label: SPECIALTY_LABEL.PHYSIOTHERAPY, description: "Rehab, mobility, post-stroke therapy" },
   { value: "POST_SURGERY_CARE", label: SPECIALTY_LABEL.POST_SURGERY_CARE, description: "Dressings, drains, recovery support" },
   { value: "ELDERLY_CARE", label: SPECIALTY_LABEL.ELDERLY_CARE, description: "Daily care and companionship" },
+  { value: "DOCTOR", label: SPECIALTY_LABEL.DOCTOR, description: "Diagnosis, prescriptions, lab orders" },
 ];
 
 export const LICENSE_BODY_OPTIONS: SelectOption<LicenseBody>[] = [

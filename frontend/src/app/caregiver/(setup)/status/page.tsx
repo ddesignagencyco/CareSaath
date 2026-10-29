@@ -113,6 +113,9 @@ export default function StatusPage() {
               <span className="block text-xs text-ink-500">{f.dateTime(rejection.decidedAt)}</span>
             </p>
           )}
+          {status === "SUSPENDED" && !!p.strikeCount && (
+            <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-ink-800">{t("suspended.strikes", { count: p.strikeCount })}</p>
+          )}
         </div>
         <Button variant="ghost" size="sm" onClick={() => profile.refetch()} loading={profile.isFetching} aria-label={t("checkStatus")} className="shrink-0">
           {!profile.isFetching && <RefreshCw className="size-4" />}

@@ -20,6 +20,7 @@ const ICON: Record<Specialty, React.ComponentType<{ className?: string }>> = {
   PHYSIOTHERAPY: Activity,
   POST_SURGERY_CARE: Bandage,
   ELDERLY_CARE: HeartHandshake,
+  DOCTOR: Stethoscope,
 };
 
 const EXAMPLE_FEE = 3000_00; // Rs 3,000 visit, for the worked example

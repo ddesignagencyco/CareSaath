@@ -6,6 +6,7 @@
   "Too_many_OTP_requests_try_again_later": "بہت زیادہ کوڈ منگوائے گئے، کچھ دیر بعد کوشش کریں",
   "OTP_expired_or_not_requested": "کوڈ کی میعاد ختم ہو گئی یا کوڈ منگوایا نہیں گیا",
   "Account_is_not_active": "یہ اکاؤنٹ فعال نہیں ہے",
+  "Email_already_in_use": "یہ ای میل پہلے سے کسی اور اکاؤنٹ میں استعمال ہو رہا ہے",
   "Promo_code_is_not_valid": "پرومو کوڈ درست نہیں ہے",
   "Promo_code_is_outside_its_validity_window": "یہ پرومو کوڈ اس وقت قابلِ استعمال نہیں",
   "Promo_code_has_reached_its_usage_limit": "اس پرومو کوڈ کی استعمال کی حد پوری ہو چکی ہے",

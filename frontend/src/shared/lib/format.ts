@@ -87,6 +87,7 @@ export const SPECIALTY_LABEL: Record<Specialty, string> = {
   PHYSIOTHERAPY: "Physiotherapy",
   POST_SURGERY_CARE: "Post-surgery care",
   ELDERLY_CARE: "Elderly care",
+  DOCTOR: "Doctor",
 };
 
 export const LICENSE_BODY_LABEL: Record<LicenseBody, string> = {

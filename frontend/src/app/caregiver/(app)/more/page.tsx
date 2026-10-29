@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Languages, LogOut, RotateCcw } from "lucide-react";
+import { ChevronRight, Languages, LogOut, MapPin, RotateCcw } from "lucide-react";
+import { Switch } from "@shared/ui/switch";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
@@ -14,6 +15,7 @@ import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { useMe, useSignOut } from "@/features/caregiver/lib/auth";
+import { useLocationSharing } from "@/features/caregiver/lib/use-live-location";
 import { resetMockDb } from "@/features/caregiver/lib/mock/db";
 
 /** Mobile overflow menu (the desktop sidebar lists these directly). */
@@ -25,6 +27,7 @@ export default function MorePage() {
   const toast = useToast();
   const t = useTranslations("caregiverA");
   const tc = useTranslations("common");
+  const [shareLocation, setShareLocation] = useLocationSharing();
 
   return (
     <div className="space-y-5">
@@ -48,6 +51,18 @@ export default function MorePage() {
           <Languages className="size-5 text-ink-400" />
           <span className="flex-1">{tc("language.label")}</span>
           <LanguageToggle onChange={(l) => meApi.update({ preferredLanguage: l === "ur" ? "UR" : "EN" }).catch(() => undefined)} />
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <MapPin className="size-4 text-ink-400" /> {t("location.title")}
+            </p>
+            <p className="mt-1 text-xs text-ink-500">{t("location.hint")}</p>
+          </div>
+          <Switch checked={shareLocation} onCheckedChange={setShareLocation} aria-label={t("location.title")} />
         </div>
       </Card>
 

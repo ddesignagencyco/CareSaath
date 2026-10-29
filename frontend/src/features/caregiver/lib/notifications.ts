@@ -89,6 +89,10 @@ export function useDescribe(): (n: AppNotification) => NotificationView {
           return { title: t("events.paymentPaid.title"), body: typeof p.amount === "number" ? t("events.paymentPaid.body", { amount: amount(p) }) : "", href: visit, tone: "success" };
         case "safety_incident.sos.contact":
           return { title: t("events.sosContact.title"), body: typeof p.contact === "string" ? t("events.sosContact.body", { contact: p.contact }) : "", href: "/caregiver/reports", tone: "danger" };
+        case "caregiver.strike.recorded":
+          return { title: t("events.strikeRecorded.title"), body: t("events.strikeRecorded.body"), href: null, tone: "danger" };
+        case "caregiver.suspended":
+          return { title: t("events.suspended.title"), body: t("events.suspended.body"), href: "/caregiver/status", tone: "danger" };
         default:
           // Unknown event: show its technical name.
           return { title: n.event.replace(/[._]/g, " "), body: "", href: null, tone: "neutral" };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BadgeCheck, CalendarClock, ChevronRight, FileWarning, NotebookPen, Phone, Scale, Siren } from "lucide-react";
+import { ArrowLeft, BadgeCheck, CalendarClock, ChevronRight, FileWarning, MessagesSquare, NotebookPen, Phone, Scale, Siren } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
@@ -13,6 +13,7 @@ import { visitStart } from "@shared/lib/visit";
 import { Badge } from "@shared/ui/badge";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
+import { MedicalOrdersView } from "@shared/ui/medical-orders";
 import { SosDialog } from "@shared/ui/sos-dialog";
 import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
 import { RescheduleDialog } from "@/features/customer/components/reschedule-dialog";
@@ -49,6 +50,13 @@ export default function CustomerVisitPage() {
   const caregiver = useCaregiver(v?.booking.caregiverId);
   const disputes = useMyDisputes();
   const visitDisputes = (disputes.data ?? []).filter((d) => d.visitId === id);
+  // Doctor visits only: the diagnosis / prescription / lab-test records the doctor recorded.
+  const medicalOrders = useQuery({
+    queryKey: [...keys.visit, id, "medical-orders"],
+    queryFn: () => visitsApi.medicalOrders(id),
+    enabled: v?.booking.serviceType === "DOCTOR",
+    refetchInterval: 20_000,
+  });
   const [dialog, setDialog] = useState<"sos" | "concern" | "dispute" | "reschedule" | null>(null);
 
   if (visit.isError) {
@@ -126,6 +134,15 @@ export default function CustomerVisitPage() {
                 </Card>
               )}
 
+              {medicalOrders.data && medicalOrders.data.length > 0 && (
+                <Card>
+                  <CardHeader title={t("doctorOrders")} />
+                  <CardBody>
+                    <MedicalOrdersView orders={medicalOrders.data} />
+                  </CardBody>
+                </Card>
+              )}
+
               {(v.status === "COMPLETED" || v.review) && (
                 <Card>
                   <CardBody>
@@ -149,6 +166,14 @@ export default function CustomerVisitPage() {
                         </div>
                         <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
                       </Link>
+                      {!["REQUESTED", "DECLINED", "CANCELLED"].includes(v.status) && (
+                        <Link
+                          href={`/customer/messages/${v.bookingId}`}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+                        >
+                          <MessagesSquare className="size-4" /> {t("messageCaregiver")}
+                        </Link>
+                      )}
                       <p className="flex items-start gap-2 rounded-xl bg-brand-50/60 p-3 text-xs text-brand-800">
                         <BadgeCheck className="mt-px size-4 shrink-0" />
                         <span>

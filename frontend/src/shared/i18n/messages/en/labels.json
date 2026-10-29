@@ -3,13 +3,21 @@
     "NURSING": "Nursing",
     "PHYSIOTHERAPY": "Physiotherapy",
     "POST_SURGERY_CARE": "Post-surgery care",
-    "ELDERLY_CARE": "Elderly care"
+    "ELDERLY_CARE": "Elderly care",
+    "DOCTOR": "Doctor"
   },
   "specialtyHint": {
     "NURSING": "Injections, IV, wound care, vitals",
     "PHYSIOTHERAPY": "Rehab, mobility, post-stroke therapy",
     "POST_SURGERY_CARE": "Dressings, drains, recovery support",
-    "ELDERLY_CARE": "Daily care and companionship"
+    "ELDERLY_CARE": "Daily care and companionship",
+    "DOCTOR": "Diagnosis, prescriptions, lab orders"
+  },
+  "caregiverBadge": {
+    "BRONZE": "Bronze",
+    "SILVER": "Silver",
+    "GOLD": "Gold",
+    "PLATINUM": "Platinum"
   },
   "licenseBody": {
     "PNC": "Pakistan Nursing Council",
