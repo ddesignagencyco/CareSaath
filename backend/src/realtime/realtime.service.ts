@@ -38,6 +38,8 @@ export const RealtimeEvents = {
   entityUpdated: 'entity.updated',
   notificationCreated: 'notification.created',
   notificationRead: 'notification.read',
+  /** A caregiver's live GPS fix while EN_ROUTE, pushed to the visit's customer only. */
+  visitLocation: 'visit.location',
 } as const;
 
 /**

@@ -314,4 +314,105 @@ describe('CaregiversService', () => {
       });
     });
   });
+
+  describe('service areas', () => {
+    it('full-replaces zones and resets them to whole-city coverage on an empty list', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findMany.mockResolvedValue([]);
+      await service.setServiceAreas(user, { areas: [] });
+      expect(prisma.caregiverServiceArea.deleteMany).toHaveBeenCalledWith({ where: { caregiverId: 'cg-1' } });
+      expect(prisma.caregiverServiceArea.createMany).not.toHaveBeenCalled();
+    });
+
+    it('creates every zone in the replace list', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findMany.mockResolvedValue([]);
+      await service.setServiceAreas(user, {
+        areas: [{ city: 'Lahore', label: 'DHA', lat: 31.47, lng: 74.41, radiusMeters: 3000 }],
+      });
+      expect(prisma.caregiverServiceArea.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            caregiverId: 'cg-1',
+            city: 'Lahore',
+            label: 'DHA',
+            latitude: 31.47,
+            longitude: 74.41,
+            radiusMeters: 3000,
+          },
+        ],
+      });
+    });
+
+    it('adds one zone without touching the others', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.create.mockResolvedValue({ id: 'area-1' });
+      await service.addServiceArea(user, { city: 'Lahore', lat: 31.47, lng: 74.41 });
+      expect(prisma.caregiverServiceArea.create).toHaveBeenCalledWith({
+        data: {
+          caregiverId: 'cg-1',
+          city: 'Lahore',
+          label: null,
+          latitude: 31.47,
+          longitude: 74.41,
+          radiusMeters: 5000,
+        },
+      });
+    });
+
+    it('404s removing a zone owned by another caregiver', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findFirst.mockResolvedValue(null);
+      await expect(service.removeServiceArea(user, 'area-1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('removes an owned zone', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findFirst.mockResolvedValue({ id: 'area-1' });
+      prisma.caregiverServiceArea.delete.mockResolvedValue({});
+      await expect(service.removeServiceArea(user, 'area-1')).resolves.toEqual({ ok: true });
+    });
+  });
+
+  describe('search with sub-city precision (lat/lng)', () => {
+    it('includes a caregiver with no zones for that city (whole-city coverage)', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        { id: 'cg-1', ratingAverage: '4.5', ratingCount: 10, experienceYears: 5, serviceAreas: [] },
+      ]);
+      prisma.visit.count.mockResolvedValue(0);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.52, lng: 74.35, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+
+    it('excludes a caregiver whose zones for that city do not reach the point', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        {
+          id: 'cg-1',
+          ratingAverage: '4.5',
+          ratingCount: 10,
+          experienceYears: 5,
+          serviceAreas: [{ city: 'Lahore', latitude: 31.62, longitude: 74.3587, radiusMeters: 2000 }],
+        },
+      ]);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.5204, lng: 74.3587, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
+    it('includes a caregiver whose zone reaches the point', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        {
+          id: 'cg-1',
+          ratingAverage: '4.5',
+          ratingCount: 10,
+          experienceYears: 5,
+          serviceAreas: [{ city: 'Lahore', latitude: 31.5204, longitude: 74.3587, radiusMeters: 2000 }],
+        },
+      ]);
+      prisma.visit.count.mockResolvedValue(0);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.5204, lng: 74.3587, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(1);
+    });
+  });
 });

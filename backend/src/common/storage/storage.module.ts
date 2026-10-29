@@ -43,6 +43,19 @@ const IMAGE_MIME_TYPES = ALLOWED_MIME_TYPES.filter((m) => m.startsWith('image/')
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+/** Chat media additionally allows voice notes and short videos. */
+const CHAT_MEDIA_MIME_TYPES = [
+  ...ALLOWED_MIME_TYPES,
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/webm',
+  'audio/ogg',
+  'video/mp4',
+  'video/webm',
+];
+const AUDIO_VIDEO_EXTENSIONS = ['mp3', 'm4a', 'weba', 'webm', 'ogg', 'mp4'];
+const CHAT_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+
 /**
  * File storage backed by Cloudinary (TRD §7). Images are uploaded as public
  * `image` resources and PDFs as public `raw` resources (public_id ends in
@@ -135,9 +148,12 @@ export class StorageService implements OnModuleInit {
     };
   }
 
-  /** Resource type a stored key was uploaded as: PDFs are raw, everything else image. */
-  resourceTypeFor(fileKey: string): 'image' | 'raw' {
-    return fileKey.toLowerCase().endsWith('.pdf') ? 'raw' : 'image';
+  /** Resource type a stored key was uploaded as: PDFs are raw, audio/video keep their extension, everything else image. */
+  resourceTypeFor(fileKey: string): 'image' | 'raw' | 'video' {
+    const lower = fileKey.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'raw';
+    if (AUDIO_VIDEO_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`))) return 'video';
+    return 'image';
   }
 
   /** URL to view a stored file; PDFs get a signed download link valid for `ttlSeconds`. */
@@ -152,6 +168,10 @@ export class StorageService implements OnModuleInit {
         type: 'upload',
         expires_at: Math.floor(Date.now() / 1000) + ttlSeconds,
       });
+    }
+    if (resourceType === 'video') {
+      // Cloudinary serves both audio and video notes under the 'video' resource type.
+      return cloudinary.url(fileKey, { resource_type: 'video', type: 'upload', secure: true });
     }
     // Keys stored before extensions were stripped still end in one; it must be given as the format.
     const legacyExt = IMAGE_EXTENSIONS.find((ext) => fileKey.toLowerCase().endsWith(`.${ext}`));
@@ -178,6 +198,75 @@ export class StorageService implements OnModuleInit {
     if (size > MAX_UPLOAD_BYTES) {
       throw new BadRequestException('File must be 10MB or smaller');
     }
+  }
+
+  /** Chat attachments: images, PDFs, voice notes, and short videos. */
+  validateChatMediaUpload(mimetype: string, size: number): void {
+    if (!CHAT_MEDIA_MIME_TYPES.includes(mimetype)) {
+      throw new BadRequestException('Unsupported attachment type for chat');
+    }
+    if (size > CHAT_MEDIA_MAX_BYTES) {
+      throw new BadRequestException(`File must be ${CHAT_MEDIA_MAX_BYTES / (1024 * 1024)}MB or smaller`);
+    }
+  }
+
+  /** Resource type Cloudinary needs for an upload, from the mime type rather than a stored key's extension. */
+  private resourceTypeForMime(mimeType: string): 'image' | 'raw' | 'video' {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('audio/') || mimeType.startsWith('video/')) return 'video';
+    return 'raw';
+  }
+
+  /** Like `put`, but for chat attachments (image/voice/video/pdf), picking the right Cloudinary resource type. */
+  async putChatMedia(
+    prefix: string,
+    filename: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<StoredFile> {
+    this.validateChatMediaUpload(mimeType, buffer.length);
+    const resourceType = this.resourceTypeForMime(mimeType);
+    const isPdf = mimeType === 'application/pdf';
+    const safeName = filename.replace(/[^\w.-]/g, '_');
+    // Raw/video resources keep their extension in the public_id (needed to infer
+    // the resource type back from the key alone); images drop it, same as `put`.
+    const baseName =
+      resourceType === 'image'
+        ? safeName.replace(/\.[A-Za-z0-9]+$/, '')
+        : isPdf
+          ? (safeName.toLowerCase().endsWith('.pdf') ? safeName : `${safeName}.pdf`)
+          : safeName;
+    const publicId = `${prefix}/${Date.now()}-${baseName}`;
+
+    if (!this.configured) {
+      this.fallback.set(publicId, { buffer, mimeType });
+      return { fileKey: publicId, mimeType, sizeBytes: buffer.length };
+    }
+
+    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          public_id: publicId,
+          resource_type: resourceType,
+          folder: this.folder,
+          overwrite: false,
+        },
+        (error, uploaded) => {
+          if (error || !uploaded) {
+            reject(error ?? new Error('Cloudinary upload failed'));
+            return;
+          }
+          resolve(uploaded);
+        },
+      );
+      stream.end(buffer);
+    });
+
+    return {
+      fileKey: result.public_id,
+      mimeType,
+      sizeBytes: result.bytes ?? buffer.length,
+    };
   }
 }
 

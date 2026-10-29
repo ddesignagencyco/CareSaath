@@ -341,6 +341,31 @@ export class BookingsService {
     }
   }
 
+  /**
+   * Sub-city precision: a caregiver with no zones defined for the address's
+   * city covers the whole city (backward compatible); one with zones must
+   * actually have a zone whose radius reaches the address.
+   */
+  private async assertCaregiverCoversAddress(
+    caregiverId: string,
+    address: { city: string; latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string },
+  ): Promise<void> {
+    const zones = await this.prisma.caregiverServiceArea.findMany({
+      where: { caregiverId, city: address.city },
+    });
+    if (zones.length === 0) {
+      return;
+    }
+    const covered = zones.some(
+      (z) =>
+        distanceMeters(Number(address.latitude), Number(address.longitude), Number(z.latitude), Number(z.longitude)) <=
+        z.radiusMeters,
+    );
+    if (!covered) {
+      throw new BadRequestException('This caregiver does not cover your address area');
+    }
+  }
+
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
       where: { userId: user.sub },
@@ -406,6 +431,7 @@ export class BookingsService {
       throw new BadRequestException('The recurrence rule produces no visits');
     }
     await this.assertCaregiverAvailable(caregiver.id, occurrences, dto.timeWindowStart, dto.timeWindowEnd);
+    await this.assertCaregiverCoversAddress(caregiver.id, address);
 
     const now = new Date();
     const respondWindowMinutes = await this.config.getNumber(

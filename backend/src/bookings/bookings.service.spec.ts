@@ -16,6 +16,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
     address: { findFirst: vi.fn() },
     availabilityRule: { findMany: vi.fn().mockResolvedValue([]) },
     availabilityBlock: { findMany: vi.fn().mockResolvedValue([]) },
+    caregiverServiceArea: { findMany: vi.fn().mockResolvedValue([]) },
     booking: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -282,6 +283,53 @@ describe('BookingsService.createCustomerBooking', () => {
     const { service, prisma, config } = makeService();
     setHappyPath(prisma);
     config.getNumber.mockResolvedValue(60);
+    await expect(service.createCustomerBooking(customer, baseDto)).resolves.toBeDefined();
+  });
+
+  it('rejects a booking when the caregiver has zones in that city but none cover the address', async () => {
+    const { service, prisma } = makeService();
+    setHappyPath(prisma);
+    prisma.address.findFirst.mockResolvedValue({
+      id: 'addr-1',
+      city: 'Lahore',
+      latitude: 31.5204,
+      longitude: 74.3587,
+    });
+    prisma.caregiverServiceArea.findMany.mockResolvedValue([
+      { latitude: 31.62, longitude: 74.3587, radiusMeters: 2000 }, // ~11km away
+    ]);
+    await expect(service.createCustomerBooking(customer, baseDto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('accepts a booking within a defined zone\'s radius', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma);
+    config.getNumber.mockResolvedValue(60);
+    prisma.address.findFirst.mockResolvedValue({
+      id: 'addr-1',
+      city: 'Lahore',
+      latitude: 31.5204,
+      longitude: 74.3587,
+    });
+    prisma.caregiverServiceArea.findMany.mockResolvedValue([
+      { latitude: 31.5204, longitude: 74.3587, radiusMeters: 2000 },
+    ]);
+    await expect(service.createCustomerBooking(customer, baseDto)).resolves.toBeDefined();
+  });
+
+  it('does not restrict booking when the caregiver has no zones defined for that city', async () => {
+    const { service, prisma, config } = makeService();
+    setHappyPath(prisma);
+    config.getNumber.mockResolvedValue(60);
+    prisma.address.findFirst.mockResolvedValue({
+      id: 'addr-1',
+      city: 'Lahore',
+      latitude: 31.5204,
+      longitude: 74.3587,
+    });
+    prisma.caregiverServiceArea.findMany.mockResolvedValue([]);
     await expect(service.createCustomerBooking(customer, baseDto)).resolves.toBeDefined();
   });
 

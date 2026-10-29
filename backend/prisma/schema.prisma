@@ -226,6 +226,7 @@ model User {
   resolvedDisputes        Dispute[]                @relation("DisputeResolvedBy")
   credentialReviews       CredentialReview[]       @relation("CredentialReviewer")
   sentChatMessages        ChatMessage[]
+  messageReactions        MessageReaction[]
   callsPlaced             CallLog[]                @relation("CallCaller")
   callsReceived           CallLog[]                @relation("CallCallee")
   notificationPreferences NotificationPreference[]
@@ -337,8 +338,8 @@ model CaregiverProfile {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  user                User                @relation(fields: [userId], references: [id])
-  commissionRate      CommissionRate      @relation(fields: [commissionRateId], references: [id])
+  user                User                   @relation(fields: [userId], references: [id])
+  commissionRate      CommissionRate         @relation(fields: [commissionRateId], references: [id])
   documents           CaregiverDocument[]
   credentialReviews   CredentialReview[]
   availabilityRules   AvailabilityRule[]
@@ -350,11 +351,32 @@ model CaregiverProfile {
   visitNotes          VisitNote[]
   strikes             CaregiverStrike[]
   medicalOrdersIssued MedicalOrder[]
+  serviceAreas        CaregiverServiceArea[]
 
   @@index([verificationStatus, specialty])
   // GIN index for the city filter: the search matches `serviceArea @> {"cities":[...]}`
   // (jsonb_path_ops) and needs an index for it to scale past a single pilot city.
   @@index([serviceArea(ops: JsonbPathOps)], type: Gin)
+}
+
+/// Sub-city coverage: a named zone as a radius around a point, within one of the
+/// caregiver's cities. A caregiver with no zones for a city is read as covering
+/// the whole city (backward compatible with the city-only `serviceArea` field).
+model CaregiverServiceArea {
+  id           String   @id @default(uuid())
+  caregiverId  String
+  city         String
+  /// e.g. "DHA Phase 5", "Gulberg" — display label, not matched on.
+  label        String?
+  latitude     Decimal  @db.Decimal(9, 6)
+  longitude    Decimal  @db.Decimal(9, 6)
+  radiusMeters Int      @default(5000)
+  createdAt    DateTime @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@index([caregiverId])
+  @@index([city])
 }
 
 model CaregiverDocument {
@@ -534,18 +556,52 @@ model VisitNote {
 }
 
 /// One text message between the customer and caregiver on a booking (FR: in-app chat).
+enum ChatMessageType {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+}
+
 model ChatMessage {
-  id        String    @id @default(uuid())
+  id        String          @id @default(uuid())
   bookingId String
   senderId  String
-  body      String
+  type      ChatMessageType @default(TEXT)
+  /// Text body; optional because a media-only message (e.g. a voice note) may carry none.
+  body      String?
+  mediaKey  String?
+  mimeType  String?
+  sizeBytes Int?
+  replyToId String?
+  editedAt  DateTime?
+  deletedAt DateTime?
   readAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime        @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id])
-  sender  User    @relation(fields: [senderId], references: [id])
+  booking   Booking           @relation(fields: [bookingId], references: [id])
+  sender    User              @relation(fields: [senderId], references: [id])
+  replyTo   ChatMessage?      @relation("MessageReply", fields: [replyToId], references: [id])
+  replies   ChatMessage[]     @relation("MessageReply")
+  reactions MessageReaction[]
 
   @@index([bookingId, createdAt])
+  @@index([replyToId])
+}
+
+/// One emoji reaction by one user on one message (FR: in-app chat reactions).
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id])
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 /// A doctor-authored diagnosis / prescription / lab-test order for a visit.

@@ -223,6 +223,27 @@ describe('RealtimeGateway call signaling', () => {
     expect(realtimeEmit).toHaveBeenCalledWith({ users: ['u-caller'] }, 'call:rejected', { callId: 'call-1' });
   });
 
+  it('relays a typing indicator to the booking\'s other participant', async () => {
+    prisma.booking.findFirst.mockResolvedValue({
+      customerId: 'u-cust',
+      caregiver: { userId: 'u-cg' },
+    });
+    const socket = fakeAuthedSocket('u-cust');
+    await gateway.handleChatTyping(socket as never, { bookingId: 'b-1', isTyping: true });
+    expect(realtimeEmit).toHaveBeenCalledWith(
+      { users: ['u-cg'] },
+      'chat:typing',
+      { bookingId: 'b-1', userId: 'u-cust', isTyping: true },
+    );
+  });
+
+  it('drops a typing indicator from someone not on the booking', async () => {
+    prisma.booking.findFirst.mockResolvedValue(null);
+    const socket = fakeAuthedSocket('u-stranger');
+    await gateway.handleChatTyping(socket as never, { bookingId: 'b-1', isTyping: true });
+    expect(realtimeEmit).not.toHaveBeenCalled();
+  });
+
   it('does nothing for an unauthenticated socket', async () => {
     const socket = { ...fakeSocket(), data: {} };
     await gateway.handleCallInvite(socket as never, { visitId: 'v-1', calleeId: 'u-callee', sdp: {} });
