@@ -311,8 +311,12 @@ export class PaymentsService {
         `Card payments require a minimum of PKR ${STRIPE_MIN_CHARGE_PKR} (this visit is PKR ${amount / 100})`,
       );
     }
+    // The platform funds promo discounts: the caregiver is paid commission on the
+    // full undiscounted rate, and the discount comes entirely out of the
+    // platform's commission share (which can go negative on a steep promo).
     const percentage = Number(visit.booking.caregiver.commissionRate.percentage);
-    const { commissionAmount, caregiverAmount } = splitCommission(amount, percentage);
+    const { caregiverAmount } = splitCommission(visit.booking.rateSnapshot, percentage);
+    const commissionAmount = amount - caregiverAmount;
 
     const payment = await this.prisma.payment.create({
       data: {
@@ -731,6 +735,44 @@ export class PaymentsService {
     return { filename: `caresaath-receipt-${paymentReceiptNumber(payment)}.pdf`, pdf };
   }
 
+  /** Operator view: caregiver + customer context alongside the commission breakdown. */
+  private adminPaymentInclude() {
+    return {
+      visit: {
+        include: {
+          booking: {
+            include: {
+              patient: { select: { id: true, name: true } },
+              customer: { select: { id: true, phone: true, fullName: true } },
+              caregiver: {
+                select: { id: true, specialty: true, user: { select: { fullName: true } } },
+              },
+            },
+          },
+        },
+      },
+      payoutRequest: { select: { id: true, status: true } },
+    } satisfies Prisma.PaymentInclude;
+  }
+
+  async listForAdmin(query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
+    const where: Prisma.PaymentWhereInput = {
+      ...(query.visitId ? { visitId: query.visitId } : {}),
+      ...(query.status ? { status: query.status } : {}),
+    };
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.payment.count({ where }),
+      this.prisma.payment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        include: this.adminPaymentInclude(),
+      }),
+    ]);
+    return paginate(items, query.page, query.limit, total);
+  }
+
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       visit: { booking: { customerId: user.sub } },
@@ -872,6 +914,15 @@ export class CaregiverPaymentsController {
 @Controller('admin/payments')
 export class AdminPaymentsController {
   constructor(private readonly payments: PaymentsService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'List all payments',
+    description: 'Operator view of payments across every visit, with the per-visit commission breakdown (amount / commissionAmount / caregiverAmount) and caregiver + customer context. Filter with ?status= / ?visitId=.',
+  })
+  list(@Query() query: ListPaymentsQueryDto) {
+    return this.payments.listForAdmin(query);
+  }
 
   @Get(':id/receipt')
   @ApiOperation({

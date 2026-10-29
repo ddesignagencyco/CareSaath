@@ -120,13 +120,17 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   @SubscribeMessage('call:invite')
   async handleCallInvite(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { visitId: string; calleeId: string; sdp: unknown },
+    @MessageBody() body: { visitId: string; calleeId?: string; sdp: unknown },
   ): Promise<void> {
     const callerId = (client.data as SocketData).userId;
     if (!callerId) return;
     try {
-      const call = await this.calls.startCall(body.visitId, callerId, body.calleeId);
-      this.realtime.emit({ users: [body.calleeId] }, 'call:incoming', {
+      // calleeId is optional: the customer has no public way to learn the
+      // caregiver's user id, so when it's omitted the callee is derived from
+      // the visit's other participant instead.
+      const calleeId = body.calleeId ?? (await this.calls.resolveCallee(body.visitId, callerId));
+      const call = await this.calls.startCall(body.visitId, callerId, calleeId);
+      this.realtime.emit({ users: [calleeId] }, 'call:incoming', {
         callId: call.id,
         visitId: body.visitId,
         callerId,
@@ -205,6 +209,37 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
+  }
+
+  /**
+   * Chat typing indicator (ephemeral, never persisted). Client event:
+   * chat:typing { bookingId, isTyping }. Server relays it as chat:typing
+   * { bookingId, userId, isTyping } to the booking's other participant only.
+   */
+  @SubscribeMessage('chat:typing')
+  async handleChatTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { bookingId: string; isTyping: boolean },
+  ): Promise<void> {
+    const userId = (client.data as SocketData).userId;
+    if (!userId) return;
+    const otherUserId = await this.otherBookingParticipant(body.bookingId, userId);
+    if (!otherUserId) return;
+    this.realtime.emit({ users: [otherUserId] }, 'chat:typing', {
+      bookingId: body.bookingId,
+      userId,
+      isTyping: body.isTyping,
+    });
+  }
+
+  /** The booking's other participant (customer<->caregiver), or null if the caller isn't on it. */
+  private async otherBookingParticipant(bookingId: string, userId: string): Promise<string | null> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, OR: [{ customerId: userId }, { caregiver: { userId } }] },
+      select: { customerId: true, caregiver: { select: { userId: true } } },
+    });
+    if (!booking) return null;
+    return booking.customerId === userId ? booking.caregiver.userId : booking.customerId;
   }
 
   private extractToken(client: Socket): string | null {

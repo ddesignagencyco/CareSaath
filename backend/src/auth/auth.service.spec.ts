@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import type { PrismaService } from '../common/prisma/prisma.service.js';
 
@@ -115,6 +121,158 @@ describe('AuthService.verifyOtp', () => {
     await expect(service.verifyOtp('+923001234567', '123456')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('requires an existing account and never auto-creates one', async () => {
+    const { service, redis, prisma } = makeService();
+    const { createHash } = await import('node:crypto');
+    redis.client.get.mockResolvedValue(createHash('sha256').update('123456').digest('hex'));
+    redis.client.incr.mockResolvedValue(1);
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(service.verifyOtp('+923001234567', '123456')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.signup', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects an already-registered phone', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'u-1' });
+    await expect(
+      service.signup({ phone: '+923001234567', fullName: 'Test User', role: 'CUSTOMER' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('stores a SIGNUP-purpose OTP and the pending signup payload, separate from LOGIN', async () => {
+    const { service, redis, prisma, sms } = makeService();
+    prisma.user.findUnique.mockResolvedValue(null);
+    const result = await service.signup({
+      phone: '+923001234567',
+      fullName: 'Test User',
+      role: 'CAREGIVER',
+    });
+    expect(result.ttlSeconds).toBeGreaterThan(0);
+    expect(redis.client.set).toHaveBeenCalledWith(
+      'otp:SIGNUP:+923001234567',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
+    expect(redis.client.set).toHaveBeenCalledWith(
+      'signup:pending:+923001234567',
+      expect.stringContaining('"role":"CAREGIVER"'),
+      'EX',
+      expect.any(Number),
+    );
+    expect(sms.sendOtp).toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.signupVerify', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('creates the account with the role chosen at signup once the OTP matches', async () => {
+    const { service, redis, prisma } = makeService();
+    const { createHash } = await import('node:crypto');
+    const hash = createHash('sha256').update('123456').digest('hex');
+    redis.client.get.mockImplementation((key: string) => {
+      if (key === 'otp:SIGNUP:+923001234567') return Promise.resolve(hash);
+      if (key === 'signup:pending:+923001234567') {
+        return Promise.resolve(JSON.stringify({ fullName: 'Test User', email: null, role: 'CAREGIVER' }));
+      }
+      return Promise.resolve(null);
+    });
+    redis.client.incr.mockResolvedValue(1);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      id: 'u-new',
+      phone: '+923001234567',
+      role: 'CAREGIVER',
+      fullName: 'Test User',
+    });
+
+    const result = await service.signupVerify('+923001234567', '123456');
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: 'CAREGIVER', fullName: 'Test User' }),
+      }),
+    );
+    expect(result.user).toMatchObject({ id: 'u-new', role: 'CAREGIVER' });
+  });
+
+  it('rejects once the signup session has expired', async () => {
+    const { service, redis } = makeService();
+    const { createHash } = await import('node:crypto');
+    const hash = createHash('sha256').update('123456').digest('hex');
+    redis.client.get.mockImplementation((key: string) => {
+      if (key === 'otp:SIGNUP:+923001234567') return Promise.resolve(hash);
+      return Promise.resolve(null);
+    });
+    redis.client.incr.mockResolvedValue(1);
+    await expect(service.signupVerify('+923001234567', '123456')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
+describe('AuthService.requestPhoneChange / verifyPhoneChange', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('rejects a new number that is already registered', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'other' });
+    await expect(service.requestPhoneChange('u-1', '+923009990001')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('sends a CHANGE_PHONE OTP keyed by the user, not the phone', async () => {
+    const { service, redis, prisma, sms } = makeService();
+    prisma.user.findUnique.mockResolvedValue(null);
+    const result = await service.requestPhoneChange('u-1', '+923009990001');
+    expect(result.ttlSeconds).toBeGreaterThan(0);
+    expect(redis.client.set).toHaveBeenCalledWith(
+      'otp:CHANGE_PHONE:u-1',
+      expect.stringContaining('+923009990001'),
+      'EX',
+      expect.any(Number),
+    );
+    expect(sms.sendOtp).toHaveBeenCalledWith('+923009990001', expect.any(String));
+  });
+
+  it('moves the account to the new number once the OTP matches', async () => {
+    const { service, redis, prisma } = makeService();
+    const { createHash } = await import('node:crypto');
+    const codeHash = createHash('sha256').update('123456').digest('hex');
+    redis.client.get.mockResolvedValue(JSON.stringify({ phone: '+923009990001', codeHash }));
+    redis.client.incr.mockResolvedValue(1);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.update.mockResolvedValue({ phone: '+923009990001' });
+
+    const result = await service.verifyPhoneChange('u-1', '123456');
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-1' },
+      data: { phone: '+923009990001' },
+    });
+    expect(result).toEqual({ phone: '+923009990001' });
+  });
+
+  it('rejects an invalid OTP without touching the account', async () => {
+    const { service, redis, prisma } = makeService();
+    const { createHash } = await import('node:crypto');
+    const codeHash = createHash('sha256').update('123456').digest('hex');
+    redis.client.get.mockResolvedValue(JSON.stringify({ phone: '+923009990001', codeHash }));
+    redis.client.incr.mockResolvedValue(1);
+    await expect(service.verifyPhoneChange('u-1', '000000')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
 

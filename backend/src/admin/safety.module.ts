@@ -109,7 +109,10 @@ export class AdminSafetyService {
       this.prisma.safetyIncident.count({ where }),
       this.prisma.safetyIncident.findMany({
         where,
-        orderBy: { createdAt: 'asc' },
+        // IncidentPriority is declared LOW..CRITICAL, so Postgres enum ordering
+        // sorts 'desc' as CRITICAL first; a fresh CRITICAL/SOS can never be
+        // buried on a later page behind older low-priority incidents.
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         include: INCIDENT_INCLUDE,

@@ -113,6 +113,8 @@ enum NotificationStatus {
 
 enum OtpPurpose {
   LOGIN
+  SIGNUP
+  CHANGE_PHONE
   VISIT_CHECKIN
 }
 
@@ -195,36 +197,39 @@ enum CallStatus {
 // ---------------------------------------------------------------------------
 
 model User {
-  id                String       @id @default(uuid())
-  phone             String       @unique
-  email             String?      @unique
-  role              UserRole     @default(CUSTOMER)
-  fullName          String       @default("")
-  preferredLanguage Language     @default(EN)
-  status            UserStatus   @default(ACTIVE)
+  id                String     @id @default(uuid())
+  phone             String     @unique
+  email             String?    @unique
+  role              UserRole   @default(CUSTOMER)
+  fullName          String     @default("")
+  preferredLanguage Language   @default(EN)
+  status            UserStatus @default(ACTIVE)
   lastLoginAt       DateTime?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  otpCodes             OtpCode[]
-  patientProfiles      PatientProfile[]
-  addresses            Address[]
-  caregiverProfile     CaregiverProfile?
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  emergencyContacts    EmergencyContact[]
-  bookings              Booking[]
-  uploadedPrescriptions PrescriptionDocument[] @relation("PrescriptionUploader")
-  reportedIncidents    SafetyIncident[]        @relation("IncidentReporter")
-  assignedIncidents    SafetyIncident[]        @relation("IncidentAssignee")
-  incidentEvents       IncidentEvent[]
-  raisedDisputes       Dispute[]               @relation("DisputeRaisedBy")
-  againstDisputes      Dispute[]               @relation("DisputeAgainst")
-  resolvedDisputes     Dispute[]               @relation("DisputeResolvedBy")
-  credentialReviews    CredentialReview[]      @relation("CredentialReviewer")
-  sentChatMessages     ChatMessage[]
-  callsPlaced          CallLog[]               @relation("CallCaller")
-  callsReceived        CallLog[]               @relation("CallCallee")
+  otpCodes                OtpCode[]
+  patientProfiles         PatientProfile[]
+  addresses               Address[]
+  caregiverProfile        CaregiverProfile?
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+  emergencyContacts       EmergencyContact[]
+  bookings                Booking[]
+  uploadedPrescriptions   PrescriptionDocument[]   @relation("PrescriptionUploader")
+  reportedIncidents       SafetyIncident[]         @relation("IncidentReporter")
+  assignedIncidents       SafetyIncident[]         @relation("IncidentAssignee")
+  incidentEvents          IncidentEvent[]
+  raisedDisputes          Dispute[]                @relation("DisputeRaisedBy")
+  againstDisputes         Dispute[]                @relation("DisputeAgainst")
+  assignedDisputes        Dispute[]                @relation("DisputeAssignee")
+  resolvedDisputes        Dispute[]                @relation("DisputeResolvedBy")
+  credentialReviews       CredentialReview[]       @relation("CredentialReviewer")
+  sentChatMessages        ChatMessage[]
+  messageReactions        MessageReaction[]
+  callsPlaced             CallLog[]                @relation("CallCaller")
+  callsReceived           CallLog[]                @relation("CallCallee")
+  notificationPreferences NotificationPreference[]
 }
 
 model OtpCode {
@@ -273,23 +278,23 @@ model PatientProfile {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  user     User      @relation(fields: [ownerUserId], references: [id])
-  bookings Booking[]
+  user          User           @relation(fields: [ownerUserId], references: [id])
+  bookings      Booking[]
   medicalOrders MedicalOrder[]
 
   @@index([ownerUserId])
 }
 
 model Address {
-  id        String   @id @default(uuid())
-  userId    String
-  label     String?
+  id          String   @id @default(uuid())
+  userId      String
+  label       String?
   addressLine String
-  city      String
-  latitude  Decimal  @db.Decimal(9, 6)
-  longitude Decimal  @db.Decimal(9, 6)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  city        String
+  latitude    Decimal  @db.Decimal(9, 6)
+  longitude   Decimal  @db.Decimal(9, 6)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user     User      @relation(fields: [userId], references: [id])
   bookings Booking[]
@@ -333,24 +338,45 @@ model CaregiverProfile {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  user             User                @relation(fields: [userId], references: [id])
-  commissionRate   CommissionRate      @relation(fields: [commissionRateId], references: [id])
-  documents        CaregiverDocument[]
-  credentialReviews CredentialReview[]
-  availabilityRules AvailabilityRule[]
-  availabilityBlocks AvailabilityBlock[]
-  payoutAccounts   PayoutAccount[]
-  payoutRequests   PayoutRequest[]
-  bookings         Booking[]
-  reviews          Review[]
-  visitNotes       VisitNote[]
-  strikes          CaregiverStrike[]
+  user                User                   @relation(fields: [userId], references: [id])
+  commissionRate      CommissionRate         @relation(fields: [commissionRateId], references: [id])
+  documents           CaregiverDocument[]
+  credentialReviews   CredentialReview[]
+  availabilityRules   AvailabilityRule[]
+  availabilityBlocks  AvailabilityBlock[]
+  payoutAccounts      PayoutAccount[]
+  payoutRequests      PayoutRequest[]
+  bookings            Booking[]
+  reviews             Review[]
+  visitNotes          VisitNote[]
+  strikes             CaregiverStrike[]
   medicalOrdersIssued MedicalOrder[]
+  serviceAreas        CaregiverServiceArea[]
 
   @@index([verificationStatus, specialty])
   // GIN index for the city filter: the search matches `serviceArea @> {"cities":[...]}`
   // (jsonb_path_ops) and needs an index for it to scale past a single pilot city.
   @@index([serviceArea(ops: JsonbPathOps)], type: Gin)
+}
+
+/// Sub-city coverage: a named zone as a radius around a point, within one of the
+/// caregiver's cities. A caregiver with no zones for a city is read as covering
+/// the whole city (backward compatible with the city-only `serviceArea` field).
+model CaregiverServiceArea {
+  id           String   @id @default(uuid())
+  caregiverId  String
+  city         String
+  /// e.g. "DHA Phase 5", "Gulberg" — display label, not matched on.
+  label        String?
+  latitude     Decimal  @db.Decimal(9, 6)
+  longitude    Decimal  @db.Decimal(9, 6)
+  radiusMeters Int      @default(5000)
+  createdAt    DateTime @default(now())
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
+
+  @@index([caregiverId])
+  @@index([city])
 }
 
 model CaregiverDocument {
@@ -368,13 +394,13 @@ model CaregiverDocument {
 }
 
 model CredentialReview {
-  id          String             @id @default(uuid())
+  id          String               @id @default(uuid())
   caregiverId String
   reviewerId  String
   kind        CredentialReviewKind
   decision    CredentialDecision
   reason      String?
-  decidedAt   DateTime           @default(now())
+  decidedAt   DateTime             @default(now())
 
   caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
   reviewer  User             @relation("CredentialReviewer", fields: [reviewerId], references: [id])
@@ -383,7 +409,7 @@ model CredentialReview {
 }
 
 model AvailabilityRule {
-  id          String   @id @default(uuid())
+  id          String @id @default(uuid())
   caregiverId String
   dayOfWeek   Int // 0–6
   startTime   String // HH:mm
@@ -396,12 +422,12 @@ model AvailabilityRule {
 }
 
 model AvailabilityBlock {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   caregiverId String
-  startDate   DateTime  @db.Date
-  endDate     DateTime  @db.Date
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
   reason      String?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime @default(now())
 
   caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
 
@@ -413,38 +439,38 @@ model AvailabilityBlock {
 // ---------------------------------------------------------------------------
 
 model Booking {
-  id               String        @id @default(uuid())
-  customerId       String
-  patientId        String
-  caregiverId      String
-  addressId        String
-  type             BookingType   @default(SINGLE)
-  recurrenceRule   Json?
-  startDate        DateTime      @db.Date
-  endDate          DateTime      @db.Date
-  timeWindowStart  String // HH:mm
-  timeWindowEnd    String // HH:mm
-  serviceType      Specialty
-  rateSnapshot     Int
-  promoCodeId      String?
-  discountAmount   Int           @default(0)
-  status           BookingStatus @default(REQUESTED)
+  id              String        @id @default(uuid())
+  customerId      String
+  patientId       String
+  caregiverId     String
+  addressId       String
+  type            BookingType   @default(SINGLE)
+  recurrenceRule  Json?
+  startDate       DateTime      @db.Date
+  endDate         DateTime      @db.Date
+  timeWindowStart String // HH:mm
+  timeWindowEnd   String // HH:mm
+  serviceType     Specialty
+  rateSnapshot    Int
+  promoCodeId     String?
+  discountAmount  Int           @default(0)
+  status          BookingStatus @default(REQUESTED)
   /// ASAP request: shorter respond window (booking.immediateRespondWindowMinutes)
   /// and the caregiver must be within booking.immediateMaxDistanceMeters.
-  isImmediate      Boolean       @default(false)
-  respondBy        DateTime
-  cancelledAt      DateTime?
-  cancelledById    String?
-  cancelReason     String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  isImmediate     Boolean       @default(false)
+  respondBy       DateTime
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelReason    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  customer   User            @relation(fields: [customerId], references: [id])
-  patient    PatientProfile  @relation(fields: [patientId], references: [id])
-  caregiver  CaregiverProfile @relation(fields: [caregiverId], references: [id])
-  address    Address         @relation(fields: [addressId], references: [id])
-  promoCode  PromoCode?      @relation(fields: [promoCodeId], references: [id])
-  visits     Visit[]
+  customer      User                   @relation(fields: [customerId], references: [id])
+  patient       PatientProfile         @relation(fields: [patientId], references: [id])
+  caregiver     CaregiverProfile       @relation(fields: [caregiverId], references: [id])
+  address       Address                @relation(fields: [addressId], references: [id])
+  promoCode     PromoCode?             @relation(fields: [promoCodeId], references: [id])
+  visits        Visit[]
   prescriptions PrescriptionDocument[]
   chatMessages  ChatMessage[]
   strikes       CaregiverStrike[]
@@ -454,49 +480,49 @@ model Booking {
 }
 
 model Visit {
-  id                 String       @id @default(uuid())
-  bookingId          String
-  scheduledDate      DateTime     @db.Date
-  timeWindowStart    String
-  timeWindowEnd      String
-  status             VisitStatus  @default(REQUESTED)
-  enRouteAt          DateTime?
-  checkInAt          DateTime?
-  checkOutAt         DateTime?
-  checkInMethod      CheckMethod?
-  checkOutMethod     CheckMethod?
-  checkInLat         Decimal?     @db.Decimal(9, 6)
-  checkInLng         Decimal?     @db.Decimal(9, 6)
-  checkOutLat        Decimal?     @db.Decimal(9, 6)
-  checkOutLng        Decimal?     @db.Decimal(9, 6)
-  rescheduledFromId  String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                String       @id @default(uuid())
+  bookingId         String
+  scheduledDate     DateTime     @db.Date
+  timeWindowStart   String
+  timeWindowEnd     String
+  status            VisitStatus  @default(REQUESTED)
+  enRouteAt         DateTime?
+  checkInAt         DateTime?
+  checkOutAt        DateTime?
+  checkInMethod     CheckMethod?
+  checkOutMethod    CheckMethod?
+  checkInLat        Decimal?     @db.Decimal(9, 6)
+  checkInLng        Decimal?     @db.Decimal(9, 6)
+  checkOutLat       Decimal?     @db.Decimal(9, 6)
+  checkOutLng       Decimal?     @db.Decimal(9, 6)
+  rescheduledFromId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  booking          Booking           @relation(fields: [bookingId], references: [id])
-  rescheduledFrom  Visit?            @relation("VisitReschedule", fields: [rescheduledFromId], references: [id])
-  rescheduledTo    Visit[]           @relation("VisitReschedule")
-  statusHistory    VisitStatusHistory[]
-  note             VisitNote?
-  review           Review?
-  payments         Payment[]
-  safetyIncidents  SafetyIncident[]
-  disputes         Dispute[]
-  otpCodes         OtpCode[]
-  medicalOrders    MedicalOrder[]
-  callLogs         CallLog[]
+  booking         Booking              @relation(fields: [bookingId], references: [id])
+  rescheduledFrom Visit?               @relation("VisitReschedule", fields: [rescheduledFromId], references: [id])
+  rescheduledTo   Visit[]              @relation("VisitReschedule")
+  statusHistory   VisitStatusHistory[]
+  note            VisitNote?
+  review          Review?
+  payments        Payment[]
+  safetyIncidents SafetyIncident[]
+  disputes        Dispute[]
+  otpCodes        OtpCode[]
+  medicalOrders   MedicalOrder[]
+  callLogs        CallLog[]
 
   @@index([bookingId])
   @@index([scheduledDate, status])
 }
 
 model VisitStatusHistory {
-  id         String      @id @default(uuid())
+  id         String       @id @default(uuid())
   visitId    String
   fromStatus VisitStatus?
   toStatus   VisitStatus
   actorId    String?
-  at         DateTime    @default(now())
+  at         DateTime     @default(now())
 
   visit Visit @relation(fields: [visitId], references: [id])
 
@@ -525,23 +551,57 @@ model VisitNote {
   summary     String
   submittedAt DateTime @default(now())
 
-  visit     Visit             @relation(fields: [visitId], references: [id])
-  caregiver CaregiverProfile  @relation(fields: [caregiverId], references: [id])
+  visit     Visit            @relation(fields: [visitId], references: [id])
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id])
 }
 
 /// One text message between the customer and caregiver on a booking (FR: in-app chat).
+enum ChatMessageType {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+}
+
 model ChatMessage {
-  id        String    @id @default(uuid())
+  id        String          @id @default(uuid())
   bookingId String
   senderId  String
-  body      String
+  type      ChatMessageType @default(TEXT)
+  /// Text body; optional because a media-only message (e.g. a voice note) may carry none.
+  body      String?
+  mediaKey  String?
+  mimeType  String?
+  sizeBytes Int?
+  replyToId String?
+  editedAt  DateTime?
+  deletedAt DateTime?
   readAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime        @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id])
-  sender  User    @relation(fields: [senderId], references: [id])
+  booking   Booking           @relation(fields: [bookingId], references: [id])
+  sender    User              @relation(fields: [senderId], references: [id])
+  replyTo   ChatMessage?      @relation("MessageReply", fields: [replyToId], references: [id])
+  replies   ChatMessage[]     @relation("MessageReply")
+  reactions MessageReaction[]
 
   @@index([bookingId, createdAt])
+  @@index([replyToId])
+}
+
+/// One emoji reaction by one user on one message (FR: in-app chat reactions).
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id])
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 /// A doctor-authored diagnosis / prescription / lab-test order for a visit.
@@ -623,25 +683,25 @@ model Review {
 // ---------------------------------------------------------------------------
 
 model Payment {
-  id               String        @id @default(uuid())
-  visitId          String
-  method           PaymentMethod
-  status           PaymentStatus @default(PENDING)
-  amount           Int
-  commissionAmount Int           @default(0)
-  caregiverAmount  Int           @default(0)
-  gatewayRef       String?
-  paidAt           DateTime?
+  id                   String        @id @default(uuid())
+  visitId              String
+  method               PaymentMethod
+  status               PaymentStatus @default(PENDING)
+  amount               Int
+  commissionAmount     Int           @default(0)
+  caregiverAmount      Int           @default(0)
+  gatewayRef           String?
+  paidAt               DateTime?
   /// Cash is only PAID once BOTH sides confirm: the customer that they handed it over, the caregiver that they received it.
   customerConfirmedAt  DateTime?
   caregiverConfirmedAt DateTime?
   confirmationNote     String?
-  payoutRequestId  String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  payoutRequestId      String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  visit          Visit          @relation(fields: [visitId], references: [id])
-  payoutRequest  PayoutRequest? @relation(fields: [payoutRequestId], references: [id])
+  visit         Visit          @relation(fields: [visitId], references: [id])
+  payoutRequest PayoutRequest? @relation(fields: [payoutRequestId], references: [id])
 
   @@index([visitId])
   @@index([status])
@@ -664,15 +724,15 @@ model PayoutAccount {
 }
 
 model PayoutRequest {
-  id              String       @id @default(uuid())
-  caregiverId     String
-  payoutAccountId String
-  amount          Int
-  status          PayoutStatus @default(REQUESTED)
-  requestedAt     DateTime     @default(now())
-  processedAt     DateTime?
-  note            String?
-  rejectionReason String?
+  id                   String       @id @default(uuid())
+  caregiverId          String
+  payoutAccountId      String
+  amount               Int
+  status               PayoutStatus @default(REQUESTED)
+  requestedAt          DateTime     @default(now())
+  processedAt          DateTime?
+  note                 String?
+  rejectionReason      String?
   transferredAt        DateTime?
   transferReference    String?
   /// A payout is PAID only after the caregiver confirms the money arrived.
@@ -680,36 +740,36 @@ model PayoutRequest {
   issueReportedAt      DateTime?
   issueNote            String?
 
-  caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id])
-  payoutAccount   PayoutAccount    @relation(fields: [payoutAccountId], references: [id])
-  payments        Payment[]
+  caregiver     CaregiverProfile @relation(fields: [caregiverId], references: [id])
+  payoutAccount PayoutAccount    @relation(fields: [payoutAccountId], references: [id])
+  payments      Payment[]
 
   @@index([caregiverId])
 }
 
 model CommissionRate {
-  id            String     @id @default(uuid())
+  id            String    @id @default(uuid())
   category      Specialty @unique
-  percentage    Decimal    @db.Decimal(5, 2)
-  effectiveFrom DateTime   @default(now())
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  percentage    Decimal   @db.Decimal(5, 2)
+  effectiveFrom DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   caregivers CaregiverProfile[]
 }
 
 model PromoCode {
-  id           String            @id @default(uuid())
-  code         String            @unique
-  discountType PromoDiscountType
+  id            String            @id @default(uuid())
+  code          String            @unique
+  discountType  PromoDiscountType
   discountValue Int
-  validFrom    DateTime
-  validTo      DateTime
-  maxUses      Int?
-  usesCount    Int               @default(0)
-  active       Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  validFrom     DateTime
+  validTo       DateTime
+  maxUses       Int?
+  usesCount     Int               @default(0)
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   bookings Booking[]
 }
@@ -733,9 +793,9 @@ model SafetyIncident {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  visit         Visit? @relation(fields: [visitId], references: [id])
-  reportedBy    User   @relation("IncidentReporter", fields: [reportedById], references: [id])
-  assignedAdmin User?  @relation("IncidentAssignee", fields: [assignedAdminId], references: [id])
+  visit         Visit?          @relation(fields: [visitId], references: [id])
+  reportedBy    User            @relation("IncidentReporter", fields: [reportedById], references: [id])
+  assignedAdmin User?           @relation("IncidentAssignee", fields: [assignedAdminId], references: [id])
   events        IncidentEvent[]
 
   @@index([status])
@@ -757,45 +817,68 @@ model IncidentEvent {
 }
 
 model Dispute {
-  id             String        @id @default(uuid())
-  visitId        String
-  raisedById     String
-  againstUserId  String
-  description    String
-  status         DisputeStatus @default(OPEN)
-  resolutionNote String?
-  resolvedById   String?
-  resolvedAt     DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                 String           @id @default(uuid())
+  visitId            String
+  raisedById         String
+  againstUserId      String
+  description        String
+  status             DisputeStatus    @default(OPEN)
+  /// Triage priority, same scale as SafetyIncident, so a CRITICAL dispute never gets buried.
+  priority           IncidentPriority @default(MEDIUM)
+  assignedAdminId    String?
+  resolutionNote     String?
+  /// Compensation/refund the admin decided on at resolution (paisa); a record of the
+  /// mediation decision, not itself a payment-gateway refund transaction.
+  compensationAmount Int?
+  resolvedById       String?
+  resolvedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
-  visit       Visit @relation(fields: [visitId], references: [id])
-  raisedBy    User  @relation("DisputeRaisedBy", fields: [raisedById], references: [id])
-  againstUser User  @relation("DisputeAgainst", fields: [againstUserId], references: [id])
-  resolvedBy  User? @relation("DisputeResolvedBy", fields: [resolvedById], references: [id])
+  visit         Visit @relation(fields: [visitId], references: [id])
+  raisedBy      User  @relation("DisputeRaisedBy", fields: [raisedById], references: [id])
+  againstUser   User  @relation("DisputeAgainst", fields: [againstUserId], references: [id])
+  assignedAdmin User? @relation("DisputeAssignee", fields: [assignedAdminId], references: [id])
+  resolvedBy    User? @relation("DisputeResolvedBy", fields: [resolvedById], references: [id])
 
   @@index([status])
+  @@index([assignedAdminId])
 }
 
 model Notification {
-  id        String             @id @default(uuid())
-  userId    String
-  channel   NotificationChannel
-  event     String
-  payload   Json
-  status    NotificationStatus @default(QUEUED)
+  id           String              @id @default(uuid())
+  userId       String
+  channel      NotificationChannel
+  event        String
+  payload      Json
+  status       NotificationStatus  @default(QUEUED)
   title        String?
   body         String?
-  /** Role of the recipient when sent; feeds only show rows for the caller's current role. */
+  /**
+   * Role of the recipient when sent; feeds only show rows for the caller's current role.
+   */
   audienceRole UserRole?
-  sentAt    DateTime?
-  readAt    DateTime?
-  createdAt DateTime           @default(now())
+  sentAt       DateTime?
+  readAt       DateTime?
+  createdAt    DateTime            @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([userId, audienceRole, channel, readAt])
+}
+
+/// Per-user, per-channel opt-in/opt-out. A channel with no row defaults to enabled.
+model NotificationPreference {
+  id        String              @id @default(uuid())
+  userId    String
+  channel   NotificationChannel
+  enabled   Boolean             @default(true)
+  updatedAt DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel])
 }
 
 model AuditLog {

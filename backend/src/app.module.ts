@@ -32,6 +32,10 @@ import { PromosModule } from './promos/promos.module.js';
 import { DisputesModule } from './disputes/disputes.module.js';
 import { AdminAnalyticsModule } from './admin/analytics.module.js';
 import { AdminSafetyModule } from './admin/safety.module.js';
+import { AdminCallLogsModule } from './admin/call-logs.module.js';
+import { AdminCustomersModule } from './admin/customers.module.js';
+import { AdminBookingsModule } from './admin/bookings.module.js';
+import { IceServersModule } from './realtime/ice-servers.module.js';
 import { PlatformConfigModule } from './config/platform-config.module.js';
 import { RetentionModule } from './common/retention/retention.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
@@ -66,6 +70,10 @@ import { EmailModule } from './email/email.module.js';
     DisputesModule,
     AdminAnalyticsModule,
     AdminSafetyModule,
+    AdminCallLogsModule,
+    AdminCustomersModule,
+    AdminBookingsModule,
+    IceServersModule,
     PlatformConfigModule,
     RetentionModule,
     EmailModule,

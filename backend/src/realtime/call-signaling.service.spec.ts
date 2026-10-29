@@ -31,6 +31,34 @@ describe('CallSignalingService.startCall', () => {
   });
 });
 
+describe('CallSignalingService.resolveCallee', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves the caregiver as callee when the customer calls', async () => {
+    const { service, prisma } = makeService();
+    prisma.visit.findFirst.mockResolvedValue({
+      booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } },
+    });
+    await expect(service.resolveCallee('v-1', 'u-cust')).resolves.toBe('u-cg');
+  });
+
+  it('resolves the customer as callee when the caregiver calls', async () => {
+    const { service, prisma } = makeService();
+    prisma.visit.findFirst.mockResolvedValue({
+      booking: { customerId: 'u-cust', caregiver: { userId: 'u-cg' } },
+    });
+    await expect(service.resolveCallee('v-1', 'u-cg')).resolves.toBe('u-cust');
+  });
+
+  it('rejects when the caller has no active visit to call on', async () => {
+    const { service, prisma } = makeService();
+    prisma.visit.findFirst.mockResolvedValue(null);
+    await expect(service.resolveCallee('v-1', 'u-stranger')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
 describe('CallSignalingService.loadForRouting', () => {
   beforeEach(() => vi.clearAllMocks());
 

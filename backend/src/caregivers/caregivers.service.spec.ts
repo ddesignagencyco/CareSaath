@@ -159,6 +159,47 @@ describe('CaregiversService', () => {
     expect(result.cnic).toBe('***********67-1');
   });
 
+  it('deletes an unverified caregiver\'s wrongly-uploaded document', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1', verificationStatus: 'PENDING' });
+    prisma.caregiverDocument.findFirst.mockResolvedValue({ id: 'doc-1', type: 'LICENSE' });
+    prisma.caregiverDocument.delete.mockResolvedValue({});
+    await expect(service.deleteDocument(user, 'doc-1')).resolves.toEqual({ ok: true });
+    expect(prisma.caregiverDocument.delete).toHaveBeenCalledWith({ where: { id: 'doc-1' } });
+  });
+
+  it('refuses to delete a document once the profile is verified', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1', verificationStatus: 'APPROVED' });
+    prisma.caregiverDocument.findFirst.mockResolvedValue({ id: 'doc-1', type: 'LICENSE' });
+    await expect(service.deleteDocument(user, 'doc-1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.caregiverDocument.delete).not.toHaveBeenCalled();
+  });
+
+  it('clears the live GPS fix to stop sharing location entirely', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.caregiverProfile.update.mockResolvedValue({});
+    await expect(service.stopSharingLocation(user)).resolves.toEqual({ ok: true });
+    expect(prisma.caregiverProfile.update).toHaveBeenCalledWith({
+      where: { id: 'cg-1' },
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+    });
+  });
+
+  it('lists the caller\'s own strikes, most recent first', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.caregiverStrike.findMany.mockResolvedValue([{ id: 's-1', reason: 'LATE_ARRIVAL' }]);
+    const result = await service.listOwnStrikes(user);
+    expect(result).toEqual([{ id: 's-1', reason: 'LATE_ARRIVAL' }]);
+    expect(prisma.caregiverStrike.findMany).toHaveBeenCalledWith({
+      where: { caregiverId: 'cg-1' },
+      orderBy: { createdAt: 'desc' },
+    });
+  });
+
+  it('404s listing strikes for a user with no caregiver profile', async () => {
+    prisma.caregiverProfile.findUnique.mockResolvedValue(null);
+    await expect(service.listOwnStrikes(user)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   describe('pricing bracket', () => {
     it('register: defaults the bracket to ratePerVisit when no bracket is given', async () => {
       prisma.caregiverProfile.findUnique.mockResolvedValue(null);
@@ -271,6 +312,107 @@ describe('CaregiversService', () => {
       await expect(service.updateProfile(user, { bio: 'Updated bio' })).resolves.toMatchObject({
         bio: 'Updated bio',
       });
+    });
+  });
+
+  describe('service areas', () => {
+    it('full-replaces zones and resets them to whole-city coverage on an empty list', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findMany.mockResolvedValue([]);
+      await service.setServiceAreas(user, { areas: [] });
+      expect(prisma.caregiverServiceArea.deleteMany).toHaveBeenCalledWith({ where: { caregiverId: 'cg-1' } });
+      expect(prisma.caregiverServiceArea.createMany).not.toHaveBeenCalled();
+    });
+
+    it('creates every zone in the replace list', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findMany.mockResolvedValue([]);
+      await service.setServiceAreas(user, {
+        areas: [{ city: 'Lahore', label: 'DHA', lat: 31.47, lng: 74.41, radiusMeters: 3000 }],
+      });
+      expect(prisma.caregiverServiceArea.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            caregiverId: 'cg-1',
+            city: 'Lahore',
+            label: 'DHA',
+            latitude: 31.47,
+            longitude: 74.41,
+            radiusMeters: 3000,
+          },
+        ],
+      });
+    });
+
+    it('adds one zone without touching the others', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.create.mockResolvedValue({ id: 'area-1' });
+      await service.addServiceArea(user, { city: 'Lahore', lat: 31.47, lng: 74.41 });
+      expect(prisma.caregiverServiceArea.create).toHaveBeenCalledWith({
+        data: {
+          caregiverId: 'cg-1',
+          city: 'Lahore',
+          label: null,
+          latitude: 31.47,
+          longitude: 74.41,
+          radiusMeters: 5000,
+        },
+      });
+    });
+
+    it('404s removing a zone owned by another caregiver', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findFirst.mockResolvedValue(null);
+      await expect(service.removeServiceArea(user, 'area-1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('removes an owned zone', async () => {
+      prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+      prisma.caregiverServiceArea.findFirst.mockResolvedValue({ id: 'area-1' });
+      prisma.caregiverServiceArea.delete.mockResolvedValue({});
+      await expect(service.removeServiceArea(user, 'area-1')).resolves.toEqual({ ok: true });
+    });
+  });
+
+  describe('search with sub-city precision (lat/lng)', () => {
+    it('includes a caregiver with no zones for that city (whole-city coverage)', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        { id: 'cg-1', ratingAverage: '4.5', ratingCount: 10, experienceYears: 5, serviceAreas: [] },
+      ]);
+      prisma.visit.count.mockResolvedValue(0);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.52, lng: 74.35, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+
+    it('excludes a caregiver whose zones for that city do not reach the point', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        {
+          id: 'cg-1',
+          ratingAverage: '4.5',
+          ratingCount: 10,
+          experienceYears: 5,
+          serviceAreas: [{ city: 'Lahore', latitude: 31.62, longitude: 74.3587, radiusMeters: 2000 }],
+        },
+      ]);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.5204, lng: 74.3587, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
+    it('includes a caregiver whose zone reaches the point', async () => {
+      prisma.caregiverProfile.findMany.mockResolvedValue([
+        {
+          id: 'cg-1',
+          ratingAverage: '4.5',
+          ratingCount: 10,
+          experienceYears: 5,
+          serviceAreas: [{ city: 'Lahore', latitude: 31.5204, longitude: 74.3587, radiusMeters: 2000 }],
+        },
+      ]);
+      prisma.visit.count.mockResolvedValue(0);
+      const { result } = await service.search({ city: 'Lahore', lat: 31.5204, lng: 74.3587, page: 1, limit: 20 } as never);
+      expect(result.items).toHaveLength(1);
     });
   });
 });

@@ -12,6 +12,7 @@ import {
 } from '../../test/test-helpers.js';
 
 const caregiver: AuthUser = { sub: 'u-cg', role: 'CAREGIVER', phone: '+923001234567' };
+const customer: AuthUser = { sub: 'u-cust', role: 'CUSTOMER', phone: '+923000000001' };
 
 function visitFixture(overrides: Record<string, unknown> = {}) {
   return {
@@ -41,6 +42,7 @@ describe('VisitsService transitions', () => {
   let notifications: ReturnType<typeof createNotificationsMock>;
   let redis: ReturnType<typeof createRedisMock>;
   let sms: ReturnType<typeof createSmsMock>;
+  let realtimeEmit: ReturnType<typeof vi.fn>;
   let service: VisitsService;
 
   beforeEach(() => {
@@ -48,6 +50,7 @@ describe('VisitsService transitions', () => {
     notifications = createNotificationsMock();
     redis = createRedisMock();
     sms = createSmsMock();
+    realtimeEmit = vi.fn();
     wireTransaction(prisma);
     service = new VisitsService(
       prisma as never,
@@ -57,8 +60,85 @@ describe('VisitsService transitions', () => {
       sms as never,
       { getNumber: () => Promise.resolve(600) } as never,
       { recordStrike: vi.fn().mockResolvedValue(undefined) } as never,
+      undefined,
+      { emit: realtimeEmit, entityUpdated: vi.fn() } as never,
     );
     prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+  });
+
+  it('strips the customer phone from the caregiver-facing visit response', async () => {
+    prisma.visit.findFirst.mockResolvedValue(visitFixture());
+    const result = await service.getCaregiver(caregiver, 'v-1');
+    expect(result.booking.customer).toEqual({ id: 'u-cust' });
+    expect(result.booking.customer).not.toHaveProperty('phone');
+  });
+
+  describe('live location tracking', () => {
+    function enRouteVisitFixture(overrides: Record<string, unknown> = {}) {
+      return {
+        status: 'EN_ROUTE',
+        booking: {
+          customerId: 'u-cust',
+          address: { latitude: '31.5204', longitude: '74.3587' },
+        },
+        ...overrides,
+      };
+    }
+
+    it('rejects a location push once the visit is no longer EN_ROUTE', async () => {
+      prisma.visit.findFirst.mockResolvedValue(enRouteVisitFixture({ status: 'CHECKED_IN' }));
+      await expect(
+        service.updateLocation(caregiver, 'v-1', { lat: 31.52, lng: 74.36 }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('caches and relays a location fix to the customer only, while EN_ROUTE', async () => {
+      prisma.visit.findFirst.mockResolvedValue(enRouteVisitFixture());
+
+      await service.updateLocation(caregiver, 'v-1', { lat: 31.521, lng: 74.359 });
+
+      expect(redis.client.set).toHaveBeenCalledWith(
+        'visit:location:v-1',
+        expect.stringContaining('"lat":31.521'),
+        'EX',
+        expect.any(Number),
+      );
+      expect(realtimeEmit).toHaveBeenCalledWith(
+        { users: ['u-cust'] },
+        'visit.location',
+        expect.objectContaining({ visitId: 'v-1', lat: 31.521, lng: 74.359 }),
+      );
+    });
+
+    it('returns the last cached fix to the owning customer', async () => {
+      prisma.visit.findFirst.mockResolvedValue({ id: 'v-1' });
+      redis.client.get.mockResolvedValue(
+        JSON.stringify({ visitId: 'v-1', lat: 31.52, lng: 74.36, at: '2026-10-29T10:00:00.000Z', etaMinutes: 5 }),
+      );
+      await expect(service.getLocation(customer, 'v-1')).resolves.toMatchObject({ lat: 31.52 });
+    });
+
+    it('returns null once no fix is cached', async () => {
+      prisma.visit.findFirst.mockResolvedValue({ id: 'v-1' });
+      redis.client.get.mockResolvedValue(null);
+      await expect(service.getLocation(customer, 'v-1')).resolves.toBeNull();
+    });
+
+    it('404s getLocation for a visit the customer does not own', async () => {
+      prisma.visit.findFirst.mockResolvedValue(null);
+      await expect(service.getLocation(customer, 'v-1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('purges the cached fix once the caregiver checks in', async () => {
+      prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+      prisma.visit.findUnique.mockResolvedValue(visitFixture({ status: 'EN_ROUTE' }));
+      prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
+      prisma.visitStatusHistory.create.mockResolvedValue({});
+
+      await service.checkIn(caregiver, 'v-1', { lat: 31.5204, lng: 74.3587 });
+
+      expect(redis.client.del).toHaveBeenCalledWith('visit:location:v-1');
+    });
   });
 
   it('throws when the visit is not assigned to the caregiver', async () => {

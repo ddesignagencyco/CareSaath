@@ -29,6 +29,31 @@ describe('StorageService (in-memory fallback)', () => {
   });
 });
 
+describe('StorageService chat media (in-memory fallback)', () => {
+  const storage = new StorageService();
+
+  it('derives video for voice/video extensions, raw for pdf, image otherwise', () => {
+    expect(storage.resourceTypeFor('bookings/b-1/media/1-note.webm')).toBe('video');
+    expect(storage.resourceTypeFor('bookings/b-1/media/1-clip.mp4')).toBe('video');
+    expect(storage.resourceTypeFor('bookings/b-1/media/1-receipt.pdf')).toBe('raw');
+    expect(storage.resourceTypeFor('bookings/b-1/media/1-photo.png')).toBe('image');
+  });
+
+  it('accepts images, pdf, audio, and video, within the larger chat size cap', () => {
+    expect(() => storage.validateChatMediaUpload('audio/webm', 20 * 1024 * 1024)).not.toThrow();
+    expect(() => storage.validateChatMediaUpload('video/mp4', 20 * 1024 * 1024)).not.toThrow();
+    expect(() => storage.validateChatMediaUpload('video/mp4', 30 * 1024 * 1024)).toThrow(BadRequestException);
+    expect(() => storage.validateChatMediaUpload('application/zip', 10)).toThrow(BadRequestException);
+  });
+
+  it('keeps the extension on voice/video media keys but drops it on images', async () => {
+    const voice = await storage.putChatMedia('bookings/b-1/media', 'note.webm', Buffer.from('x'), 'audio/webm');
+    const image = await storage.putChatMedia('bookings/b-1/media', 'photo.png', Buffer.from('x'), 'image/png');
+    expect(voice.fileKey).toMatch(/-note\.webm$/);
+    expect(image.fileKey).toMatch(/-photo$/);
+  });
+});
+
 describe('withFileUrl', () => {
   it('adds a viewable url to a stored-file record', async () => {
     const storage = { presignedGet: async (key: string) => `https://files.test/${key}` };

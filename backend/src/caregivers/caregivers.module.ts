@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   Injectable,
   Module,
@@ -12,6 +13,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UploadedFile,
@@ -30,6 +32,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsArray,
   IsEnum,
   IsInt,
@@ -40,6 +43,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import {
   LicenseBody,
@@ -67,6 +71,8 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
+import { todayInPakistan } from '../availability/availability.module.js';
+import { distanceMeters } from '../common/geo.js';
 import { computeCaregiverBadge } from './badge.js';
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
@@ -226,6 +232,51 @@ export class UpdateLocationDto {
   lng!: number;
 }
 
+export class ServiceAreaDto {
+  @ApiProperty({ example: 'Lahore', description: 'City this zone is within (must be one of serviceCities)' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  city!: string;
+
+  @ApiPropertyOptional({ example: 'DHA Phase 5', description: 'Display label for the zone (not matched on)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  label?: string;
+
+  @ApiProperty({ example: 31.4697 })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat!: number;
+
+  @ApiProperty({ example: 74.4142 })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng!: number;
+
+  @ApiPropertyOptional({ example: 5000, default: 5000, description: 'Coverage radius around the point, in metres' })
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  @Max(50_000)
+  radiusMeters?: number;
+}
+
+export class SetServiceAreasDto {
+  @ApiProperty({
+    type: [ServiceAreaDto],
+    description: 'Full replace of sub-city coverage zones. An empty list means "whole city" coverage for every serviceCities entry.',
+  })
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ServiceAreaDto)
+  areas!: ServiceAreaDto[];
+}
+
 export class SearchQueryDto {
   @ApiPropertyOptional({ enum: Specialty, example: Specialty.NURSING, description: 'Filter by specialty' })
   @IsOptional()
@@ -236,6 +287,25 @@ export class SearchQueryDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @ApiPropertyOptional({
+    example: 31.4697,
+    description: 'Customer address latitude. With lng, narrows results to caregivers whose sub-city zones (if any) actually cover this point, not just the city.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @ApiPropertyOptional({ example: 74.4142, description: 'Customer address longitude (see lat).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
 
   @ApiPropertyOptional({ example: 1, default: 1, description: 'Page number' })
   @IsOptional()
@@ -277,6 +347,15 @@ export class CaregiversService {
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  /** Public search results are cached in Redis; any coverage/visibility change must drop them. */
+  private async invalidateSearchCache(): Promise<void> {
+    try {
+      await this.redis.deleteByPattern('search:caregivers:*');
+    } catch {
+      // The cache is short-lived; never fail the caregiver action over it.
+    }
+  }
 
   async register(user: AuthUser, dto: RegisterCaregiverDto) {
     const existing = await this.prisma.caregiverProfile.findUnique({
@@ -433,6 +512,102 @@ export class CaregiversService {
     return updated;
   }
 
+  /** Sub-city coverage zones, so search/booking can tell which part of a city a caregiver actually serves. */
+  async listServiceAreas(user: AuthUser) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    return this.prisma.caregiverServiceArea.findMany({
+      where: { caregiverId: profile.id },
+      orderBy: { city: 'asc' },
+    });
+  }
+
+  /** Full replace, mirroring AvailabilityService.setRules. An empty list reverts to whole-city coverage. */
+  async setServiceAreas(user: AuthUser, dto: SetServiceAreasDto) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.caregiverServiceArea.deleteMany({ where: { caregiverId: profile.id } });
+      if (dto.areas.length > 0) {
+        await tx.caregiverServiceArea.createMany({
+          data: dto.areas.map((a) => ({
+            caregiverId: profile.id,
+            city: a.city,
+            label: a.label ?? null,
+            latitude: a.lat,
+            longitude: a.lng,
+            radiusMeters: a.radiusMeters ?? 5000,
+          })),
+        });
+      }
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'caregiver.service_areas.set',
+      entityType: 'CaregiverProfile',
+      entityId: profile.id,
+      metadata: { areas: dto.areas.length },
+    });
+    await this.invalidateSearchCache();
+    return this.listServiceAreas(user);
+  }
+
+  async addServiceArea(user: AuthUser, dto: ServiceAreaDto) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    const area = await this.prisma.caregiverServiceArea.create({
+      data: {
+        caregiverId: profile.id,
+        city: dto.city,
+        label: dto.label ?? null,
+        latitude: dto.lat,
+        longitude: dto.lng,
+        radiusMeters: dto.radiusMeters ?? 5000,
+      },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'caregiver.service_area.added',
+      entityType: 'CaregiverServiceArea',
+      entityId: area.id,
+    });
+    await this.invalidateSearchCache();
+    return area;
+  }
+
+  async removeServiceArea(user: AuthUser, id: string) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    const area = await this.prisma.caregiverServiceArea.findFirst({
+      where: { id, caregiverId: profile.id },
+    });
+    if (!area) {
+      throw new NotFoundException('Service area not found');
+    }
+    await this.prisma.caregiverServiceArea.delete({ where: { id } });
+    await this.invalidateSearchCache();
+    return { ok: true as const };
+  }
+
   async uploadDocument(
     user: AuthUser,
     type: string,
@@ -495,9 +670,38 @@ export class CaregiversService {
     return { url: await this.storage.presignedGet(doc.fileKey) };
   }
 
+  /** Lets a caregiver remove a wrongly-uploaded document and re-upload, before verification locks it in. */
+  async deleteDocument(user: AuthUser, documentId: string) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    const doc = await this.prisma.caregiverDocument.findFirst({
+      where: { id: documentId, caregiverId: profile.id },
+    });
+    if (!doc) {
+      throw new NotFoundException('Document not found');
+    }
+    if (profile.verificationStatus === VerificationStatus.APPROVED) {
+      throw new BadRequestException('Cannot remove a document once your profile is verified');
+    }
+    await this.prisma.caregiverDocument.delete({ where: { id: documentId } });
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'caregiver.document.deleted',
+      entityType: 'CaregiverDocument',
+      entityId: documentId,
+      metadata: { type: doc.type },
+    });
+    return { ok: true as const };
+  }
+
   /** Public search (FR-C3, FR-C4): only APPROVED caregivers of ACTIVE users. */
   async search(query: SearchQueryDto): Promise<SearchResult> {
-    const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${query.page}:${query.limit}`;
+    const hasPoint = query.lat !== undefined && query.lng !== undefined;
+    const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${hasPoint ? `${query.lat},${query.lng}` : 'any'}:${query.page}:${query.limit}`;
     const ttlSeconds = await this.config.getNumber('search.cacheTtlSeconds');
     if (ttlSeconds > 0) {
       const cached = await this.redis.client.get(cacheKey);
@@ -514,27 +718,58 @@ export class CaregiversService {
         ? { serviceArea: { path: ['cities'], array_contains: [query.city] } }
         : {}),
     };
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.caregiverProfile.count({ where }),
-      this.prisma.caregiverProfile.findMany({
+    const baseSelect = {
+      id: true,
+      specialty: true,
+      ratePerVisit: true,
+      experienceYears: true,
+      bio: true,
+      ratingAverage: true,
+      ratingCount: true,
+      serviceArea: true,
+      photoKey: true,
+      user: { select: { fullName: true } },
+    } satisfies Prisma.CaregiverProfileSelect;
+
+    let total: number;
+    let items: Array<Prisma.CaregiverProfileGetPayload<{ select: typeof baseSelect }>>;
+    if (hasPoint) {
+      // Pilot-scale precision filter: there's no PostGIS here, so a true DB-level
+      // radius query isn't available. Instead, fetch every city/specialty-matching
+      // candidate (bounded at pilot-city scale), filter by sub-city coverage in
+      // memory, then paginate the filtered set so the page is accurate.
+      const candidates = await this.prisma.caregiverProfile.findMany({
         where,
         orderBy: { ratingAverage: 'desc' },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
         select: {
-          id: true,
-          specialty: true,
-          ratePerVisit: true,
-          experienceYears: true,
-          bio: true,
-          ratingAverage: true,
-          ratingCount: true,
-          serviceArea: true,
-          photoKey: true,
-          user: { select: { fullName: true } },
+          ...baseSelect,
+          serviceAreas: { select: { city: true, latitude: true, longitude: true, radiusMeters: true } },
         },
-      }),
-    ]);
+      });
+      const covering = candidates.filter((c) => {
+        const zones = query.city ? c.serviceAreas.filter((z) => z.city === query.city) : c.serviceAreas;
+        // No zones for the relevant city/at all means whole-area coverage (backward compatible).
+        if (zones.length === 0) return true;
+        return zones.some(
+          (z) => distanceMeters(query.lat!, query.lng!, Number(z.latitude), Number(z.longitude)) <= z.radiusMeters,
+        );
+      });
+      total = covering.length;
+      items = covering
+        .slice((query.page - 1) * query.limit, (query.page - 1) * query.limit + query.limit)
+        .map(({ serviceAreas: _serviceAreas, ...rest }) => rest);
+    } else {
+      [total, items] = await this.prisma.$transaction([
+        this.prisma.caregiverProfile.count({ where }),
+        this.prisma.caregiverProfile.findMany({
+          where,
+          orderBy: { ratingAverage: 'desc' },
+          skip: (query.page - 1) * query.limit,
+          take: query.limit,
+          select: baseSelect,
+        }),
+      ]);
+    }
     const withPhotos = await Promise.all(
       items.map(async ({ photoKey, ...rest }) => {
         const completedVisits = await this.completedVisitsCount(rest.id);
@@ -568,7 +803,9 @@ export class CaregiversService {
       select: {
         id: true,
         specialty: true,
-        licenseNumber: true,
+        // Customers never see the raw license number (privacy); the council
+        // (licenseBody) plus the APPROVED-only filter above is enough to show
+        // "License verified by CareSaath". The number stays on admin/verification endpoints.
         licenseBody: true,
         experienceYears: true,
         bio: true,
@@ -582,6 +819,18 @@ export class CaregiversService {
         availabilityRules: {
           orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
           select: { dayOfWeek: true, startTime: true, endTime: true },
+        },
+        // Upcoming blackout dates, so the booking screen can warn before the
+        // customer picks a date the caregiver already marked unavailable.
+        availabilityBlocks: {
+          where: { endDate: { gte: todayInPakistan() } },
+          orderBy: { startDate: 'asc' },
+          select: { startDate: true, endDate: true, reason: true },
+        },
+        // Sub-city coverage; no rows for a city means the caregiver covers it in full.
+        serviceAreas: {
+          orderBy: { city: 'asc' },
+          select: { city: true, label: true, latitude: true, longitude: true, radiusMeters: true },
         },
       },
     });
@@ -652,6 +901,22 @@ export class CaregiversService {
     return { ok: true as const };
   }
 
+  /** Hard off: clears the last-known GPS fix so location sharing is fully stopped server-side, not just paused on the client. */
+  async stopSharingLocation(user: AuthUser) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    await this.prisma.caregiverProfile.update({
+      where: { id: profile.id },
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+    });
+    return { ok: true as const };
+  }
+
   /**
    * Record a decline / late-arrival / no-show strike. Crossing
    * caregiver.strikeThreshold auto-suspends the caregiver (reuses
@@ -710,6 +975,21 @@ export class CaregiversService {
       { type: 'caregiver', id: caregiverId, action: 'suspended', status: VerificationStatus.SUSPENDED },
     );
   }
+
+  /** The caregiver's own strike history (reason/date), so they understand why they were struck/suspended. */
+  async listOwnStrikes(user: AuthUser) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    return this.prisma.caregiverStrike.findMany({
+      where: { caregiverId: profile.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
 
 @ApiTags('Caregiver - Profile')
@@ -735,6 +1015,50 @@ export class CaregiverController {
   })
   updateLocation(@CurrentUser() user: AuthUser, @Body() dto: UpdateLocationDto) {
     return this.caregivers.updateLocation(user, dto);
+  }
+
+  @Delete('location')
+  @ApiOperation({
+    summary: 'Stop sharing live location',
+    description: "Clears the caregiver's last known GPS fix so location sharing is turned off entirely, not just paused on the client.",
+  })
+  stopSharingLocation(@CurrentUser() user: AuthUser) {
+    return this.caregivers.stopSharingLocation(user);
+  }
+
+  @Get('service-areas')
+  @ApiOperation({
+    summary: 'List my sub-city coverage zones',
+    description: 'Named radius-around-a-point zones within a city. No zones for a city means whole-city coverage.',
+  })
+  listServiceAreas(@CurrentUser() user: AuthUser) {
+    return this.caregivers.listServiceAreas(user);
+  }
+
+  @Put('service-areas')
+  @ApiOperation({
+    summary: 'Set my sub-city coverage zones',
+    description: 'Full replace of coverage zones. An empty list reverts to whole-city coverage.',
+  })
+  setServiceAreas(@CurrentUser() user: AuthUser, @Body() dto: SetServiceAreasDto) {
+    return this.caregivers.setServiceAreas(user, dto);
+  }
+
+  @Post('service-areas')
+  @ApiOperation({
+    summary: 'Add a sub-city coverage zone',
+    description: 'Adds one zone without replacing the existing ones.',
+  })
+  addServiceArea(@CurrentUser() user: AuthUser, @Body() dto: ServiceAreaDto) {
+    return this.caregivers.addServiceArea(user, dto);
+  }
+
+  @Delete('service-areas/:id')
+  @ApiOperation({
+    summary: 'Remove a sub-city coverage zone',
+  })
+  removeServiceArea(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.caregivers.removeServiceArea(user, id);
   }
 
   @Get('profile')
@@ -803,6 +1127,18 @@ export class CaregiverController {
     return this.caregivers.documentUrl(user, id);
   }
 
+  @Delete('documents/:id')
+  @ApiOperation({
+    summary: 'Delete a credential document',
+    description: 'Removes a wrongly-uploaded document so it can be replaced. Only available before your profile is verified (APPROVED).',
+  })
+  deleteDocument(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.caregivers.deleteDocument(user, id);
+  }
+
   @Post('photo')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
@@ -835,6 +1171,15 @@ export class CaregiverController {
   })
   photoUrl(@CurrentUser() user: AuthUser) {
     return this.caregivers.photoUrl(user);
+  }
+
+  @Get('strikes')
+  @ApiOperation({
+    summary: 'View my strike history',
+    description: 'Lists declines, late arrivals and no-shows recorded on the caregiver\'s own account, most recent first.',
+  })
+  listStrikes(@CurrentUser() user: AuthUser) {
+    return this.caregivers.listOwnStrikes(user);
   }
 }
 

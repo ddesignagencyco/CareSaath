@@ -271,7 +271,12 @@ await prisma.incidentEvent.deleteMany({
 await prisma.safetyIncident.deleteMany({ where: { reportedById: { in: customerIds } } });
 await prisma.dispute.deleteMany({ where: { raisedById: { in: customerIds } } });
 await prisma.review.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
-await prisma.visitNote.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
+// Scoped by the visit (via its booking's customer) rather than by caregiverId:
+// a note's caregiverId can drift from its visit's current caregiver on a dirty
+// re-seed, which would otherwise leave it behind and break the visit delete below.
+await prisma.visitNote.deleteMany({
+  where: { visit: { booking: { customerId: { in: customerIds } } } },
+});
 await prisma.payment.deleteMany({
   where: { visit: { booking: { customerId: { in: customerIds } } } },
 });

@@ -2,7 +2,13 @@ import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator.js';
 import { AuthService } from './auth.service.js';
-import { RefreshTokenDto, RequestOtpDto, VerifyOtpDto } from './dto/auth.dto.js';
+import {
+  RefreshTokenDto,
+  RequestOtpDto,
+  SignupDto,
+  SignupVerifyDto,
+  VerifyOtpDto,
+} from './dto/auth.dto.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -52,6 +58,35 @@ export class AuthController {
   })
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.auth.verifyOtp(dto.phone, dto.code, dto.audience);
+  }
+
+  @Public()
+  @Post('signup')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Start sign-up',
+    description:
+      'Creates a pending sign-up for a new phone number and sends a SIGNUP-purpose OTP. Returns 409 if the number is already registered (sign in instead).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent to complete the sign-up.',
+    schema: { example: { ttlSeconds: 300 } },
+  })
+  signup(@Body() dto: SignupDto) {
+    return this.auth.signup(dto);
+  }
+
+  @Public()
+  @Post('signup/verify')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Complete sign-up & obtain JWT tokens',
+    description:
+      'Verifies the SIGNUP OTP and creates the account with the role chosen at POST /auth/signup. Returns JWT access & refresh tokens.',
+  })
+  signupVerify(@Body() dto: SignupVerifyDto) {
+    return this.auth.signupVerify(dto.phone, dto.code);
   }
 
   @Public()

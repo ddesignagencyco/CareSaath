@@ -27,6 +27,15 @@ describe('AdminSafetyService', () => {
     );
   });
 
+  it('orders the queue by priority rank then oldest first, server-side', async () => {
+    prisma.safetyIncident.count.mockResolvedValue(0);
+    prisma.safetyIncident.findMany.mockResolvedValue([]);
+    await service.list({ page: 1, limit: 20 } as never);
+    expect(prisma.safetyIncident.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }] }),
+    );
+  });
+
   it('404s when updating a missing incident', async () => {
     prisma.safetyIncident.findUnique.mockResolvedValue(null);
     await expect(service.update(admin, 'i-1', { status: 'RESOLVED' as never })).rejects.toBeInstanceOf(

@@ -138,6 +138,54 @@ describe('PayoutsService', () => {
     });
   });
 
+  it('locks the full overshooting payment instead of forfeiting the remainder', async () => {
+    // Two Rs 400 PAID visits (available Rs 800); requesting Rs 500 must lock
+    // both whole payments and record amount=800, never amount=500 (which would
+    // otherwise strand Rs 300 that was already locked but never paid out).
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    prisma.payoutAccount.findFirst.mockResolvedValue({ id: 'acct-1' });
+    prisma.payment.findMany.mockResolvedValue([
+      { id: 'pay-1', caregiverAmount: 40000 },
+      { id: 'pay-2', caregiverAmount: 40000 },
+    ]);
+    prisma.payoutRequest.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      id: 'pr-1',
+      ...data,
+    }));
+    prisma.payment.updateMany.mockResolvedValue({ count: 2 });
+
+    const result = await service.createPayoutRequest(caregiver, {
+      payoutAccountId: 'acct-1',
+      amount: 50000,
+    });
+
+    expect(result).toMatchObject({ amount: 80000 });
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['pay-1', 'pay-2'] } },
+      data: { payoutRequestId: 'pr-1' },
+    });
+  });
+
+  it('searches the admin payout queue by caregiver name or phone', async () => {
+    prisma.payoutRequest.count.mockResolvedValue(0);
+    prisma.payoutRequest.findMany.mockResolvedValue([]);
+    await service.listAll({ q: 'Fatima', page: 1, limit: 20 } as never);
+    expect(prisma.payoutRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          caregiver: {
+            user: {
+              OR: [
+                { fullName: { contains: 'Fatima', mode: 'insensitive' } },
+                { phone: { contains: 'Fatima' } },
+              ],
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it('advances a REQUESTED payout to PROCESSING on approval', async () => {
     prisma.payoutRequest.findUnique.mockResolvedValue({
       id: 'pr-1',

@@ -54,11 +54,12 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
-import { RealtimeService } from '../realtime/realtime.service.js';
+import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
+import { distanceMeters } from '../common/geo.js';
 
 /** FR-CG7 check-in OTP verification limits. */
 const CHECKIN_OTP_MAX_ATTEMPTS = 5;
@@ -69,6 +70,16 @@ const VISIT_OTP_STATUSES: VisitStatus[] = [
   VisitStatus.CHECKED_IN,
   VisitStatus.IN_PROGRESS,
 ];
+/**
+ * Live GPS tracking while EN_ROUTE (FR: "track the visit live"). The caregiver
+ * app posts a fix roughly every 10-15s; the last one is cached briefly so a
+ * reconnecting customer gets it immediately, and purged once the caregiver
+ * checks in (no long-term location retention).
+ */
+const VISIT_LOCATION_TTL_SECONDS = Number(process.env['VISIT_LOCATION_TTL_SECONDS'] ?? 60);
+/** Rough average travel speed used only for the ETA estimate shown to the customer. */
+const VISIT_LOCATION_AVERAGE_SPEED_KMH = Number(process.env['VISIT_LOCATION_AVERAGE_SPEED_KMH'] ?? 25);
+
 /** A booking is complete once none of its visits is in one of these states. */
 const OPEN_VISIT_STATUSES: VisitStatus[] = [
   VisitStatus.REQUESTED,
@@ -87,14 +98,8 @@ export function scheduledStartAt(visit: { scheduledDate: Date; timeWindowStart: 
   return start;
 }
 
-/** Great-circle distance in metres between two WGS84 points. */
-export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const rad = (deg: number) => (deg * Math.PI) / 180;
-  const a =
-    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
-    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
-  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+/** Re-exported so existing `from '../visits/visits.module.js'` imports keep working. */
+export { distanceMeters };
 
 /** Must match the key used by PatientsModule to encrypt medical context. */
 const MEDICAL_KEY = deriveKey('MEDICAL_ENCRYPTION_KEY', 'caresaath-dev-medical-key');
@@ -113,6 +118,19 @@ function presentVisit<T extends { booking: { patient: { medicalContext: string |
       },
     },
   };
+}
+
+/**
+ * Privacy (customer<->caregiver boundary): the caregiver never sees the
+ * customer's phone number; the two parties contact each other via in-app
+ * chat/call instead. The internal `loadForCaregiver` still selects it (needed
+ * server-side to send the check-in OTP), so this strips it only from
+ * responses actually returned to the caregiver.
+ */
+function omitCustomerPhone<T extends { booking: { customer: { phone: string } } }>(visit: T) {
+  const { phone, ...customer } = visit.booking.customer;
+  void phone;
+  return { ...visit, booking: { ...visit.booking, customer } };
 }
 
 /**
@@ -170,6 +188,20 @@ export class VisitNoteDto {
   @MinLength(1)
   @MaxLength(4000)
   summary!: string;
+}
+
+export class UpdateVisitLocationDto {
+  @ApiProperty({ example: 31.5204, description: 'Caregiver current latitude' })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat!: number;
+
+  @ApiProperty({ example: 74.3587, description: 'Caregiver current longitude' })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng!: number;
 }
 
 export class ListVisitsQueryDto {
@@ -277,7 +309,7 @@ export class VisitsService {
           caregiver: {
             select: {
               id: true,
-              licenseNumber: true,
+              // No raw license number in customer/caregiver-facing visit responses (privacy).
               licenseBody: true,
               specialty: true,
               ratingAverage: true,
@@ -378,8 +410,8 @@ export class VisitsService {
   }
 
   /** FR-CG6, FR-C9, FR-C11: full visit context for the assigned caregiver. */
-  getCaregiver(user: AuthUser, id: string) {
-    return this.loadForCaregiver(user, id);
+  async getCaregiver(user: AuthUser, id: string) {
+    return omitCustomerPhone(await this.loadForCaregiver(user, id));
   }
 
   /** FR-C9, FR-C11: customer view of a visit, including the note when present. */
@@ -435,6 +467,11 @@ export class VisitsService {
       }
       return result;
     });
+    if (from === VisitStatus.EN_ROUTE && to !== VisitStatus.EN_ROUTE) {
+      // Leaving EN_ROUTE (normally CHECKED_IN) stops the live-location stream
+      // and purges the cached fix; location is never retained beyond this window.
+      await this.redis.client.del(this.visitLocationKey(visitId));
+    }
     await this.audit.log({
       actorId: actor.sub,
       action: `visit.${to.toLowerCase()}`,
@@ -492,6 +529,71 @@ export class VisitsService {
     return this.runCaregiverTransition(user, id, VisitStatus.EN_ROUTE, {
       enRouteAt: new Date(),
     });
+  }
+
+  private visitLocationKey(visitId: string): string {
+    return `visit:location:${visitId}`;
+  }
+
+  /**
+   * Live GPS fix while the caregiver is EN_ROUTE. Relayed to the customer only
+   * (never persisted in Postgres) and cached briefly in Redis so a
+   * reconnecting customer can fetch the last fix immediately.
+   */
+  async updateLocation(user: AuthUser, id: string, dto: UpdateVisitLocationDto) {
+    const caregiverId = await this.caregiverProfileId(user);
+    const visit = await this.prisma.visit.findFirst({
+      where: { id, booking: { caregiverId } },
+      select: {
+        status: true,
+        booking: {
+          select: {
+            customerId: true,
+            address: { select: { latitude: true, longitude: true } },
+          },
+        },
+      },
+    });
+    if (!visit) {
+      throw new NotFoundException('Visit not found');
+    }
+    if (visit.status !== VisitStatus.EN_ROUTE) {
+      throw new BadRequestException(
+        `Location can only be shared while the visit is EN_ROUTE (now ${visit.status})`,
+      );
+    }
+    const meters = distanceMeters(
+      dto.lat,
+      dto.lng,
+      Number(visit.booking.address.latitude),
+      Number(visit.booking.address.longitude),
+    );
+    const etaMinutes = Math.max(0, Math.round(meters / 1000 / VISIT_LOCATION_AVERAGE_SPEED_KMH * 60));
+    const payload = { visitId: id, lat: dto.lat, lng: dto.lng, at: new Date().toISOString(), etaMinutes };
+    await this.redis.client.set(
+      this.visitLocationKey(id),
+      JSON.stringify(payload),
+      'EX',
+      VISIT_LOCATION_TTL_SECONDS,
+    );
+    this.realtime?.emit({ users: [visit.booking.customerId] }, RealtimeEvents.visitLocation, payload);
+    return { ok: true as const };
+  }
+
+  /** Last-known fix for the customer's own visit tracker (e.g. on reconnect); null once stale or not EN_ROUTE yet. */
+  async getLocation(user: AuthUser, id: string) {
+    const visit = await this.prisma.visit.findFirst({
+      where: { id, booking: { customerId: user.sub } },
+      select: { id: true },
+    });
+    if (!visit) {
+      throw new NotFoundException('Visit not found');
+    }
+    const cached = await this.redis.client.get(this.visitLocationKey(id));
+    if (!cached) {
+      return null;
+    }
+    return JSON.parse(cached) as { visitId: string; lat: number; lng: number; at: string; etaMinutes: number };
   }
 
   /**
@@ -675,7 +777,7 @@ export class VisitsService {
       entityType: 'Visit',
       entityId: id,
     });
-    return this.loadForCaregiver(user, updated.id);
+    return omitCustomerPhone(await this.loadForCaregiver(user, updated.id));
   }
 
   private async runCaregiverTransition(
@@ -721,6 +823,19 @@ export class CaregiverVisitsController {
   })
   enRoute(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.visits.enRoute(user, id);
+  }
+
+  @Post(':id/location')
+  @ApiOperation({
+    summary: 'Push a live GPS fix while en route',
+    description: 'Caregiver app posts its current position roughly every 10-15s while the visit is EN_ROUTE; relayed live to the customer and briefly cached for reconnects. Rejected once the visit is no longer EN_ROUTE.',
+  })
+  updateLocation(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateVisitLocationDto,
+  ) {
+    return this.visits.updateLocation(user, id, dto);
   }
 
   @Post(':id/check-in-otp')
@@ -789,6 +904,15 @@ export class CustomerVisitsController {
   })
   get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.visits.getCustomer(user, id);
+  }
+
+  @Get(':id/location')
+  @ApiOperation({
+    summary: 'Last-known caregiver location',
+    description: "Last GPS fix cached while the caregiver is EN_ROUTE (plus an ETA estimate), so a reconnecting client gets the live map's current state immediately. Null once the caregiver has checked in or no fix has arrived yet.",
+  })
+  getLocation(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.visits.getLocation(user, id);
   }
 }
 

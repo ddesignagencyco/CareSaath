@@ -302,6 +302,70 @@ export class BookingsService {
     }
   }
 
+  /**
+   * Rejects a booking that falls outside the caregiver's weekly availability
+   * rules or on a blacked-out date. A caregiver with no rules at all is
+   * treated as unrestricted (so caregivers who never set up a schedule are
+   * not retroactively blocked); once they have rules for some days, a day
+   * with no matching rule is unavailable.
+   */
+  private async assertCaregiverAvailable(
+    caregiverId: string,
+    occurrences: Date[],
+    timeWindowStart: string,
+    timeWindowEnd: string,
+  ): Promise<void> {
+    const [rules, blocks] = await Promise.all([
+      this.prisma.availabilityRule.findMany({ where: { caregiverId } }),
+      this.prisma.availabilityBlock.findMany({ where: { caregiverId } }),
+    ]);
+    for (const date of occurrences) {
+      const iso = date.toISOString().slice(0, 10);
+      const blocked = blocks.some((b) => date >= b.startDate && date <= b.endDate);
+      if (blocked) {
+        throw new BadRequestException(`The caregiver is unavailable on ${iso} (blacked-out date)`);
+      }
+      if (rules.length === 0) {
+        continue;
+      }
+      // AvailabilityRule.dayOfWeek and getUTCDay() share the 0=Sunday..6=Saturday convention.
+      const dayOfWeek = date.getUTCDay();
+      const covered = rules.some(
+        (r) => r.dayOfWeek === dayOfWeek && timeWindowStart >= r.startTime && timeWindowEnd <= r.endTime,
+      );
+      if (!covered) {
+        throw new BadRequestException(
+          `The caregiver is not available on ${iso} between ${timeWindowStart}-${timeWindowEnd}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Sub-city precision: a caregiver with no zones defined for the address's
+   * city covers the whole city (backward compatible); one with zones must
+   * actually have a zone whose radius reaches the address.
+   */
+  private async assertCaregiverCoversAddress(
+    caregiverId: string,
+    address: { city: string; latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string },
+  ): Promise<void> {
+    const zones = await this.prisma.caregiverServiceArea.findMany({
+      where: { caregiverId, city: address.city },
+    });
+    if (zones.length === 0) {
+      return;
+    }
+    const covered = zones.some(
+      (z) =>
+        distanceMeters(Number(address.latitude), Number(address.longitude), Number(z.latitude), Number(z.longitude)) <=
+        z.radiusMeters,
+    );
+    if (!covered) {
+      throw new BadRequestException('This caregiver does not cover your address area');
+    }
+  }
+
   private async caregiverProfileId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
       where: { userId: user.sub },
@@ -366,6 +430,8 @@ export class BookingsService {
     if (occurrences.length === 0) {
       throw new BadRequestException('The recurrence rule produces no visits');
     }
+    await this.assertCaregiverAvailable(caregiver.id, occurrences, dto.timeWindowStart, dto.timeWindowEnd);
+    await this.assertCaregiverCoversAddress(caregiver.id, address);
 
     const now = new Date();
     const respondWindowMinutes = await this.config.getNumber(
@@ -442,7 +508,12 @@ export class BookingsService {
 
   private bookingInclude() {
     return {
-      visits: { orderBy: { scheduledDate: 'asc' as const } },
+      visits: {
+        orderBy: { scheduledDate: 'asc' as const },
+        // Lets the booking list flag/preview a visit note without inferring it
+        // from status (a visit can be COMPLETED without a note on old data).
+        include: { note: { select: { summary: true, submittedAt: true } } },
+      },
       patient: { select: { id: true, name: true, relationship: true } },
       address: true,
       caregiver: {
@@ -450,7 +521,7 @@ export class BookingsService {
           id: true,
           specialty: true,
           userId: true,
-          licenseNumber: true,
+          // No raw license number in customer/caregiver-facing booking responses (privacy).
           licenseBody: true,
           ratingAverage: true,
           ratingCount: true,
@@ -488,10 +559,18 @@ export class BookingsService {
   /**
    * Prescriptions carry a viewable `url` (the internal storage key is not
    * exposed), and `priorVisitsWithCaregiver` surfaces how many completed
-   * visits this caregiver already has with this customer's family.
+   * visits this caregiver already has with this customer's family. Each visit
+   * gets `hasNote` so the list can flag/preview a note without inferring it
+   * from status.
    */
   private async presentBooking<
-    T extends { id: string; customerId: string; caregiverId: string; prescriptions: Array<{ fileKey: string }> },
+    T extends {
+      id: string;
+      customerId: string;
+      caregiverId: string;
+      prescriptions: Array<{ fileKey: string }>;
+      visits?: Array<{ note: { summary: string; submittedAt: Date } | null }>;
+    },
   >(booking: T) {
     const [prescriptions, priorVisitsWithCaregiver] = await Promise.all([
       Promise.all(
@@ -502,7 +581,8 @@ export class BookingsService {
       ),
       this.priorVisitsWithCaregiver(booking.customerId, booking.caregiverId, booking.id),
     ]);
-    return { ...booking, prescriptions, priorVisitsWithCaregiver };
+    const visits = booking.visits?.map((visit) => ({ ...visit, hasNote: visit.note !== null }));
+    return { ...booking, prescriptions, priorVisitsWithCaregiver, ...(visits ? { visits } : {}) };
   }
 
   async getBooking(id: string) {

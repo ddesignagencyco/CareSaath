@@ -42,6 +42,32 @@ export class CallSignalingService {
     }
   }
 
+  /**
+   * Resolves the visit's other participant, so a caller who doesn't know the
+   * other side's internal user id (the customer never learns the caregiver's
+   * userId from any public shape) can still start a call with just the
+   * visitId. The caregiver already has `booking.customerId` and can keep
+   * passing an explicit calleeId; this is for the direction that couldn't.
+   */
+  async resolveCallee(visitId: string, callerId: string): Promise<string> {
+    const visit = await this.prisma.visit.findFirst({
+      where: {
+        id: visitId,
+        status: { notIn: CLOSED_VISIT_STATUSES },
+        booking: { OR: [{ customerId: callerId }, { caregiver: { userId: callerId } }] },
+      },
+      select: {
+        booking: { select: { customerId: true, caregiver: { select: { userId: true } } } },
+      },
+    });
+    if (!visit) {
+      throw new BadRequestException('No active visit to call on');
+    }
+    return visit.booking.customerId === callerId
+      ? visit.booking.caregiver.userId
+      : visit.booking.customerId;
+  }
+
   async startCall(visitId: string, callerId: string, calleeId: string) {
     await this.assertSharedActiveVisit(visitId, callerId, calleeId);
     return this.prisma.callLog.create({
