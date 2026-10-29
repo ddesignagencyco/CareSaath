@@ -1,4 +1,58 @@
 {
+  "customers": {
+    "title": "کسٹمرز",
+    "description": "کسی بھی کسٹمر کو تلاش کریں، ان کی بکنگز دیکھیں، اور اکاؤنٹ غیر فعال یا دوبارہ فعال کریں۔",
+    "searchPlaceholder": "نام، فون یا ای میل سے تلاش کریں…",
+    "empty": "کوئی کسٹمر نہیں ملا۔",
+    "noEmail": "کوئی ای میل درج نہیں",
+    "joinedOn": "{date} کو شامل ہوئے",
+    "lastLogin": "آخری بار {when}",
+    "neverLoggedIn": "کبھی سائن اِن نہیں کیا",
+    "recentBookings": "حالیہ بکنگز",
+    "bookingsCount": "{count, plural, =0 {کوئی بکنگ نہیں} one {# بکنگ} other {# بکنگز}}",
+    "noBookings": "ابھی کوئی بکنگ نہیں۔",
+    "deactivateTitle": "{name} کو غیر فعال کریں؟",
+    "deactivateDesc": "دوبارہ فعال کرنے تک یہ کسٹمر سائن اِن نہیں کر سکے گا۔",
+    "deactivatePlaceholder": "آڈٹ لاگ کے لیے اختیاری نوٹ…",
+    "columns": {
+      "customer": "کسٹمر",
+      "contact": "رابطہ",
+      "joined": "شمولیت",
+      "status": "اسٹیٹس"
+    },
+    "actions": {
+      "deactivate": "اکاؤنٹ غیر فعال کریں",
+      "reactivate": "اکاؤنٹ دوبارہ فعال کریں"
+    },
+    "toast": {
+      "deactivated": "{name} کا اکاؤنٹ غیر فعال کر دیا گیا",
+      "reactivated": "{name} کا اکاؤنٹ دوبارہ فعال کر دیا گیا"
+    }
+  },
+  "operations": {
+    "title": "بکنگز اور وزٹس",
+    "description": "پلیٹ فارم کی ہر بکنگ اور وزٹ کا صرف پڑھنے کا منظر، چیک اِن/آؤٹ اور منسوخیوں کے ساتھ۔",
+    "tabs": { "bookings": "بکنگز", "visits": "وزٹس" },
+    "allStatuses": "تمام",
+    "allBookings": "تمام بکنگز",
+    "asapOnly": "صرف فوری",
+    "asap": "فوری",
+    "from": "سے",
+    "to": "تک",
+    "forPatient": "برائے {name}",
+    "checkedIn": "اِن: {time}",
+    "checkedOut": "آؤٹ: {time}",
+    "emptyBookings": "کوئی بکنگ نہیں ملی۔",
+    "emptyVisits": "کوئی وزٹ نہیں ملی۔",
+    "columns": {
+      "customer": "کسٹمر",
+      "caregiver": "کیئرگیور",
+      "schedule": "شیڈول",
+      "scheduled": "شیڈول شدہ",
+      "checkIn": "چیک اِن / آؤٹ",
+      "status": "اسٹیٹس"
+    }
+  },
   "safety": {
     "title": "حفاظتی واقعات",
     "description": "SOS الرٹس، کسٹمر کی شکایات اور کیئرگیور کی رپورٹس۔ ہر تبدیلی وقت اور کرنے والے کے نام کے ساتھ ریکارڈ ہوتی ہے۔",
@@ -47,7 +101,15 @@
     "versus": "{a} بمقابلہ {b}",
     "decisionLabel": "ثالثی کا فیصلہ",
     "decisionPlaceholder": "کیا فیصلہ ہوا اور کوئی ریفنڈ یا مزید کارروائی درج کریں۔",
-    "resolveAndNotify": "حل کریں اور اطلاع دیں"
+    "resolveAndNotify": "حل کریں اور اطلاع دیں",
+    "allPriorities": "تمام ترجیحات",
+    "priorityUpdated": "ترجیح اپ ڈیٹ ہو گئی",
+    "assigned": "تنازع آپ کو تفویض کر دیا گیا",
+    "assignToMe": "مجھے تفویض کریں",
+    "assignedTo": "{name} کو تفویض شدہ",
+    "compensationLabel": "معاوضہ (روپے، اختیاری)",
+    "compensationHint": "طے شدہ رقم کا ریکارڈ — یہ گیٹ وے ریفنڈ نہیں۔",
+    "compensationPaid": "معاوضہ درج: {amount}"
   },
   "payouts": {
     "title": "ادائیگیاں",

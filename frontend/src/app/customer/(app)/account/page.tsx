@@ -17,7 +17,8 @@ import { Avatar, Skeleton } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
 import { useToast } from "@shared/ui/toast";
 import type { Me } from "@shared/caregiver-types";
-import { meApi } from "@/features/customer/lib/api/customer";
+import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
+import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 import { useMe, useSignOut } from "@/features/customer/lib/auth";
@@ -122,6 +123,8 @@ export default function AccountPage() {
             </Link>
           ))}
         </Card>
+
+        <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
 
         <Card className="divide-y divide-ink-100 overflow-hidden">
           {USE_MOCKS && (

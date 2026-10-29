@@ -1,4 +1,58 @@
 {
+  "customers": {
+    "title": "Customers",
+    "description": "Look up any customer, review their bookings, and deactivate or reactivate an account.",
+    "searchPlaceholder": "Search by name, phone or email…",
+    "empty": "No customers match.",
+    "noEmail": "No email on file",
+    "joinedOn": "Joined {date}",
+    "lastLogin": "Last seen {when}",
+    "neverLoggedIn": "Never signed in",
+    "recentBookings": "Recent bookings",
+    "bookingsCount": "{count, plural, =0 {No bookings} one {# booking} other {# bookings}}",
+    "noBookings": "No bookings yet.",
+    "deactivateTitle": "Deactivate {name}?",
+    "deactivateDesc": "Blocks this customer from signing in until reactivated.",
+    "deactivatePlaceholder": "Optional note for the audit log…",
+    "columns": {
+      "customer": "Customer",
+      "contact": "Contact",
+      "joined": "Joined",
+      "status": "Status"
+    },
+    "actions": {
+      "deactivate": "Deactivate account",
+      "reactivate": "Reactivate account"
+    },
+    "toast": {
+      "deactivated": "{name}'s account deactivated",
+      "reactivated": "{name}'s account reactivated"
+    }
+  },
+  "operations": {
+    "title": "Bookings & visits",
+    "description": "Read-only view of every booking and visit across the platform, with check-in/out and cancellations.",
+    "tabs": { "bookings": "Bookings", "visits": "Visits" },
+    "allStatuses": "All",
+    "allBookings": "All bookings",
+    "asapOnly": "ASAP only",
+    "asap": "ASAP",
+    "from": "From",
+    "to": "To",
+    "forPatient": "for {name}",
+    "checkedIn": "In: {time}",
+    "checkedOut": "Out: {time}",
+    "emptyBookings": "No bookings match.",
+    "emptyVisits": "No visits match.",
+    "columns": {
+      "customer": "Customer",
+      "caregiver": "Caregiver",
+      "schedule": "Schedule",
+      "scheduled": "Scheduled",
+      "checkIn": "Check-in / out",
+      "status": "Status"
+    }
+  },
   "safety": {
     "title": "Safety incidents",
     "description": "SOS alerts, customer complaints and caregiver reports. Every change is logged with time and actor.",
@@ -47,7 +101,15 @@
     "versus": "{a} vs {b}",
     "decisionLabel": "Mediation decision",
     "decisionPlaceholder": "Record what was decided and any refund or follow-up action.",
-    "resolveAndNotify": "Resolve and notify"
+    "resolveAndNotify": "Resolve and notify",
+    "allPriorities": "All priorities",
+    "priorityUpdated": "Priority updated",
+    "assigned": "Dispute assigned to you",
+    "assignToMe": "Assign to me",
+    "assignedTo": "Assigned to {name}",
+    "compensationLabel": "Compensation (Rs, optional)",
+    "compensationHint": "A record of any refund/compensation decided — not a gateway refund.",
+    "compensationPaid": "Compensation recorded: {amount}"
   },
   "payouts": {
     "title": "Payouts",

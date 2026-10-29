@@ -105,7 +105,7 @@ export function visitDetail(over: Partial<CaregiverVisitDetail> = {}): Caregiver
       },
       address,
       prescriptions: [],
-      customer: { id: "cust-1", phone: "+923211234567", fullName: "Ahmed Raza" },
+      customer: { id: "cust-1", fullName: "Ahmed Raza" },
     },
     statusHistory: [],
     note: null,

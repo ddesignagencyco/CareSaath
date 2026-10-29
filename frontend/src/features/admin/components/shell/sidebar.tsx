@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   BadgePercent,
   BarChart3,
+  CalendarCheck2,
   CalendarClock,
   CreditCard,
   FileSpreadsheet,
@@ -15,6 +16,7 @@ import {
   Settings2,
   ShieldAlert,
   UserCheck,
+  Users,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
@@ -70,7 +72,12 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const tNav = useTranslations("common.nav");
 
   const groups: { label?: string; items: NavItem[] }[] = [
-    { items: [{ href: "/admin", label: t("nav.overview"), icon: BarChart3 }] },
+    {
+      items: [
+        { href: "/admin", label: t("nav.overview"), icon: BarChart3 },
+        { href: "/admin/bookings", label: t("nav.bookings"), icon: CalendarCheck2 },
+      ],
+    },
     {
       label: t("nav.groups.caregivers"),
       items: [
@@ -99,6 +106,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     {
       label: t("nav.groups.platform"),
       items: [
+        { href: "/admin/customers", label: t("nav.customers"), icon: Users },
         { href: "/admin/settings", label: t("nav.settings"), icon: Settings2 },
         ...(CAN_AUDIT_LOG ? [{ href: "/admin/audit-logs", label: t("nav.auditLogs"), icon: ScrollText }] : []),
       ],

@@ -340,7 +340,8 @@ export interface CaregiverVisitDetail extends Visit {
     patient: PatientProfile;
     address: Address;
     prescriptions: PrescriptionDocument[];
-    customer: { id: string; phone: string; fullName: string };
+    /** Caregiver-facing responses omit the customer's phone (privacy); the backend sends the check-in OTP itself. */
+    customer: { id: string; fullName: string };
   };
   statusHistory: VisitStatusHistory[];
   note: VisitNote | null;
@@ -472,6 +473,12 @@ export interface DisputeRow {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** GET/PATCH /notifications/preferences — one per channel; a channel with no saved row defaults to enabled. */
+export interface NotificationPref {
+  channel: NotificationChannel;
+  enabled: boolean;
 }
 
 export interface AppNotification {

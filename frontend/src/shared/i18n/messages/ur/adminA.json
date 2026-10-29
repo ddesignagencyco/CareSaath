@@ -46,6 +46,8 @@
   },
   "nav": {
     "overview": "جائزہ",
+    "bookings": "بکنگز اور وزٹس",
+    "customers": "کسٹمرز",
     "verification": "تصدیق",
     "reverification": "دوبارہ تصدیق",
     "safety": "حفاظتی واقعات",

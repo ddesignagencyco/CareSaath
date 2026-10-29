@@ -11,7 +11,8 @@ import { useToast } from "@shared/ui/toast";
 import { formatPkMobile } from "@shared/lib/phone";
 import { SECONDARY } from "@/features/caregiver/components/shell/nav";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
-import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
+import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { useMe, useSignOut } from "@/features/caregiver/lib/auth";
@@ -65,6 +66,8 @@ export default function MorePage() {
           <Switch checked={shareLocation} onCheckedChange={setShareLocation} aria-label={t("location.title")} />
         </div>
       </Card>
+
+      <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
 
       <Card className="divide-y divide-ink-100 overflow-hidden">
         {USE_MOCKS && (

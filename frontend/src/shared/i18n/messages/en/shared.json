@@ -1,4 +1,15 @@
 {
+  "notificationPrefs": {
+    "title": "Notifications",
+    "description": "Choose how CareSaath reaches you. You can turn any channel off.",
+    "sosNote": "Safety-critical alerts (SOS) are always delivered, regardless of these settings.",
+    "channels": {
+      "PUSH": { "label": "In-app", "hint": "Your notification feed inside the app" },
+      "SMS": { "label": "SMS", "hint": "Text messages to your mobile number" },
+      "WHATSAPP": { "label": "WhatsApp", "hint": "Messages on WhatsApp" },
+      "EMAIL": { "label": "Email", "hint": "Updates to your email address" }
+    }
+  },
   "login": {
     "progress": "Sign-in progress",
     "stepPhone": "Mobile number",

@@ -337,7 +337,7 @@ export default function VisitDetailPage() {
               onClose={() => setRx(null)}
             />
           )}
-          {dialog === "sos" && <SosDialog visitId={v.id} familyPhone={customer?.phone} onClose={() => setDialog(null)} />}
+          {dialog === "sos" && <SosDialog visitId={v.id} onClose={() => setDialog(null)} />}
           {dialog === "report" && <ReportIssueDialog visitId={v.id} onClose={() => setDialog(null)} />}
           {dialog === "dispute" && <DisputeDialog visitId={v.id} onClose={() => setDialog(null)} />}
         </>

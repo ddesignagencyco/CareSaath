@@ -2,13 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { io, type Socket } from "socket.io-client";
-import { API_BASE_URL } from "@shared/api/http";
+import { API_BASE_URL, createHttp } from "@shared/api/http";
 import type { SessionStore } from "@shared/api/session";
 import { CallOverlay } from "./call-overlay";
 
 /** Socket.IO connects to the API origin, not the `/api/v1` REST base. */
 const ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
-const ICE: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+/** STUN-only fallback used until (and if) the backend's TURN config loads. */
+const ICE_FALLBACK: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 export interface ActiveCall {
   status: "outgoing" | "incoming" | "connected";
@@ -44,6 +45,9 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const callIdRef = useRef<string | null>(null);
   // An incoming offer waits here until the user accepts.
   const pendingOffer = useRef<{ callId: string; sdp: RTCSessionDescriptionInit; video: boolean } | null>(null);
+  // ICE config: STUN until GET /realtime/ice-servers returns the server's STUN + short-lived TURN.
+  const iceRef = useRef<RTCConfiguration>(ICE_FALLBACK);
+  const http = useMemo(() => createHttp(session), [session]);
 
   const teardown = useCallback(() => {
     pcRef.current?.getSenders().forEach((s) => s.track?.stop());
@@ -56,8 +60,25 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     setActive(null);
   }, []);
 
+  // Load STUN/TURN servers once a session is active; keep the STUN fallback on any failure.
+  useEffect(() => {
+    if (!enabled || !session.get()?.accessToken) return;
+    let cancelled = false;
+    http
+      .get<{ iceServers: RTCIceServer[] }>("/realtime/ice-servers")
+      .then((data) => {
+        if (!cancelled && data?.iceServers?.length) iceRef.current = { iceServers: data.iceServers };
+      })
+      .catch(() => {
+        /* keep the STUN fallback — a TURN fetch failure must not block calling */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, session, http]);
+
   const newPeer = useCallback(() => {
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection(iceRef.current);
     pc.onicecandidate = (e) => {
       if (e.candidate && callIdRef.current) socketRef.current?.emit("call:ice-candidate", { callId: callIdRef.current, candidate: e.candidate.toJSON() });
     };

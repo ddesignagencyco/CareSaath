@@ -99,8 +99,13 @@ export interface RescheduleInput {
   timeWindowEnd: string;
 }
 
-/** GET /customer/visits/:id — same include as the caregiver visit detail (no caregiver identity). */
-export type CustomerVisitDetail = CaregiverVisitDetail;
+/**
+ * GET /customer/visits/:id — same include as the caregiver visit detail (no caregiver identity),
+ * but the customer sees their OWN phone (used for the check-in code), which caregiver responses omit.
+ */
+export type CustomerVisitDetail = Omit<CaregiverVisitDetail, "booking"> & {
+  booking: CaregiverVisitDetail["booking"] & { customer: { id: string; phone: string; fullName: string } };
+};
 
 /* ---- Payments ------------------------------------------------------------ */
 

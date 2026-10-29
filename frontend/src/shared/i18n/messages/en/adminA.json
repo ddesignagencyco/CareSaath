@@ -46,6 +46,8 @@
   },
   "nav": {
     "overview": "Overview",
+    "bookings": "Bookings & visits",
+    "customers": "Customers",
     "verification": "Verification",
     "reverification": "Re-verification",
     "safety": "Safety incidents",

@@ -7,8 +7,13 @@ import * as mock from "../mock/handlers";
 import type {
   AdminCaregiver,
   AdminCaregiverRecord,
+  AdminBookingListItem,
+  AdminCustomer,
+  AdminCustomerDetail,
   AdminPayment,
   AdminPayoutRequest,
+  AdminVisitListItem,
+  BookingStatus,
   AnalyticsOverview,
   AnalyticsRange,
   AuditLogEntry,
@@ -39,6 +44,7 @@ import type {
   UpdateIncidentInput,
   UpdatePromoInput,
   VerificationStatus,
+  VisitStatus,
 } from "@shared/types";
 import { checkHealth, type Health } from "@shared/api/http";
 import type { Me, PaymentStatus } from "@shared/caregiver-types";
@@ -172,14 +178,20 @@ export const safetyApi = {
 };
 
 export const disputesApi = {
-  /** GET /admin/disputes?status=&page=&limit= */
-  list: (q: PageQuery & { status?: DisputeStatus }) =>
+  /** GET /admin/disputes?status=&priority=&page=&limit= */
+  list: (q: PageQuery & { status?: DisputeStatus; priority?: IncidentPriority }) =>
     USE_MOCKS ? mock.listDisputes(q) : http.get<Paginated<Dispute>>("/admin/disputes", q),
-  /** PATCH /admin/disputes/:id/resolve */
-  resolve: (id: string, resolutionNote: string) =>
+  /** PATCH /admin/disputes/:id/resolve — optional compensationAmount (paisa) recorded with the decision. */
+  resolve: (id: string, resolutionNote: string, compensationAmount?: number) =>
     USE_MOCKS
       ? mock.resolveDispute(id, resolutionNote)
-      : http.patch<DisputeRecord>(`/admin/disputes/${id}/resolve`, { resolutionNote }),
+      : http.patch<DisputeRecord>(`/admin/disputes/${id}/resolve`, { resolutionNote, ...(compensationAmount != null ? { compensationAmount } : {}) }),
+  /** PATCH /admin/disputes/:id/assign — assign to an admin; omit adminId to self-assign. Real backend only. */
+  assign: (id: string, adminId?: string) =>
+    http.patch<DisputeRecord>(`/admin/disputes/${id}/assign`, adminId ? { adminId } : {}),
+  /** PATCH /admin/disputes/:id/priority — set triage priority. Real backend only. */
+  setPriority: (id: string, priority: IncidentPriority) =>
+    http.patch<DisputeRecord>(`/admin/disputes/${id}/priority`, { priority }),
 };
 
 export const payoutsApi = {
@@ -251,4 +263,31 @@ export const callLogsApi = {
   /** GET /admin/call-logs?visitId=&page=&limit= — persisted in-app call history (investigation; filter by visit, not status). */
   list: (q: PageQuery & { visitId?: string }) =>
     http.get<Paginated<CallLogEntry>>("/admin/call-logs", q),
+};
+
+/** Read-only operator browser for every booking/visit (admin only). */
+export const adminBookingsApi = {
+  /** GET /admin/bookings?status=&isImmediate=&customerId=&caregiverId=&page=&limit= */
+  listBookings: (q: PageQuery & { status?: BookingStatus; isImmediate?: boolean; customerId?: string; caregiverId?: string }) =>
+    http.get<Paginated<AdminBookingListItem>>("/admin/bookings", q),
+  /** GET /admin/bookings/:id */
+  getBooking: (id: string) => http.get<AdminBookingListItem>(`/admin/bookings/${id}`),
+  /** GET /admin/visits?status=&bookingId=&from=&to=&sort=&page=&limit= */
+  listVisits: (q: PageQuery & { status?: VisitStatus; bookingId?: string; from?: string; to?: string; sort?: "asc" | "desc" }) =>
+    http.get<Paginated<AdminVisitListItem>>("/admin/visits", q),
+  /** GET /admin/visits/:id */
+  getVisit: (id: string) => http.get<AdminVisitListItem>(`/admin/visits/${id}`),
+};
+
+/** Admin customer directory + support actions. */
+export const customersApi = {
+  /** GET /admin/customers?q=&page=&limit= (q = name/phone/email) */
+  list: (q: PageQuery & { q?: string }) => http.get<Paginated<AdminCustomer>>("/admin/customers", q),
+  /** GET /admin/customers/:id — profile + recent bookings. */
+  get: (id: string) => http.get<AdminCustomerDetail>(`/admin/customers/${id}`),
+  /** POST /admin/customers/:id/deactivate — blocks sign-in. */
+  deactivate: (id: string, reason?: string) =>
+    http.post<AdminCustomerDetail>(`/admin/customers/${id}/deactivate`, reason ? { reason } : {}),
+  /** POST /admin/customers/:id/reactivate — restores the account. */
+  reactivate: (id: string) => http.post<AdminCustomerDetail>(`/admin/customers/${id}/reactivate`, {}),
 };

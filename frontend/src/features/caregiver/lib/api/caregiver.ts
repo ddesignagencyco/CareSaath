@@ -22,6 +22,8 @@ import type {
   Earnings,
   Me,
   MyCaregiverProfile,
+  NotificationChannel,
+  NotificationPref,
   PayoutAccountInput,
   PayoutRequestRow,
   RegisterCaregiverInput,
@@ -196,4 +198,14 @@ export const notificationsApi = {
     M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
   /** GET /notifications/unread-count — Phase 15. */
   unreadCount: () => (M ? mock.unreadCount() : http.get<{ unread: number }>("/notifications/unread-count")),
+  /** GET /notifications/preferences — per-channel opt-in/out (all channels, default enabled). */
+  prefs: () =>
+    M
+      ? Promise.resolve<NotificationPref[]>((["PUSH", "SMS", "WHATSAPP", "EMAIL"] as NotificationChannel[]).map((channel) => ({ channel, enabled: true })))
+      : http.get<NotificationPref[]>("/notifications/preferences"),
+  /** PATCH /notifications/preferences — opt one channel in/out (SOS always delivered). */
+  setPref: (channel: NotificationChannel, enabled: boolean) =>
+    M
+      ? Promise.resolve<NotificationPref[]>((["PUSH", "SMS", "WHATSAPP", "EMAIL"] as NotificationChannel[]).map((c) => ({ channel: c, enabled: c === channel ? enabled : true })))
+      : http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
 };
