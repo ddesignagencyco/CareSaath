@@ -53,6 +53,7 @@
     "title": "Payouts",
     "description": "Caregiver withdrawal requests. Approve to start processing, then mark paid once funds are transferred.",
     "allStatuses": "All",
+    "searchPlaceholder": "Search by caregiver…",
     "approved": "Payout approved for processing",
     "paid": "Payout marked as paid. Caregiver notified.",
     "transferred": "Money transferred. The caregiver will confirm receipt.",

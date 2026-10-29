@@ -13,7 +13,6 @@ import type {
   AnalyticsRange,
   AuditLogEntry,
   CallLogEntry,
-  CallStatus,
   CaregiverBadge,
   CommissionRate,
   CreatePromoInput,
@@ -42,7 +41,7 @@ import type {
   VerificationStatus,
 } from "@shared/types";
 import { checkHealth, type Health } from "@shared/api/http";
-import type { Me, PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
+import type { Me, PaymentStatus } from "@shared/caregiver-types";
 import { http, USE_MOCKS } from "./http";
 
 /** FR-A3 deactivate is now exposed by the backend (POST /admin/caregivers/:id/deactivate). */
@@ -56,18 +55,14 @@ export const CAN_DEACTIVATE_CAREGIVER = true;
  */
 export const CAN_OVERRIDE_BADGE = false;
 
-/**
- * Admin payments ledger. The receipt endpoint (GET /admin/payments/:id/receipt)
- * already exists, but there is no admin LIST endpoint yet. Flip to `true` once
- * the backend ships `GET /admin/payments` (spec in docs/requirement.md).
- */
-export const CAN_ADMIN_PAYMENTS = false;
+/** Admin payments ledger — live: backend ships `GET /admin/payments` (?status=, ?visitId=, page, limit). */
+export const CAN_ADMIN_PAYMENTS = true;
 
 /** Admin audit-log viewer. Flip to `true` once the backend ships `GET /admin/audit-logs` (spec in docs/requirement.md). */
 export const CAN_AUDIT_LOG = false;
 
-/** Admin in-app call history. Flip to `true` once the backend ships `GET /admin/call-logs` (spec in docs/requirement.md). */
-export const CAN_CALL_LOGS = false;
+/** Admin in-app call history — live: backend ships `GET /admin/call-logs` (?visitId=, page, limit; filter for investigation). */
+export const CAN_CALL_LOGS = true;
 
 /** Manual caregiver strike reset/add. Flip to `true` once the backend ships `POST /admin/caregivers/:id/strikes` (spec in docs/requirement.md). */
 export const CAN_MANAGE_STRIKES = false;
@@ -108,8 +103,8 @@ export const authApi = {
 };
 
 export const caregiversApi = {
-  /** GET /admin/caregivers?status=&reverifyDueBefore=&page=&limit= (reverifyDueBefore → due-asc order) */
-  list: (q: PageQuery & { status?: VerificationStatus; reverifyDueBefore?: string }) =>
+  /** GET /admin/caregivers?status=&q=&reverifyDueBefore=&page=&limit= (q = name/phone/license; reverifyDueBefore → due-asc order) */
+  list: (q: PageQuery & { status?: VerificationStatus; q?: string; reverifyDueBefore?: string }) =>
     USE_MOCKS ? mock.listCaregivers(q) : http.get<Paginated<AdminCaregiver>>("/admin/caregivers", q),
   /** POST /admin/caregivers/:id/approve */
   approve: (id: string, reason?: string) =>
@@ -188,8 +183,8 @@ export const disputesApi = {
 };
 
 export const payoutsApi = {
-  /** GET /admin/payouts?status=&page=&limit= */
-  list: (q: PageQuery & { status?: PayoutStatus }) =>
+  /** GET /admin/payouts?status=&q=&page=&limit= (q = caregiver name/phone) */
+  list: (q: PageQuery & { status?: PayoutStatus; q?: string }) =>
     USE_MOCKS ? mock.listPayouts(q) : http.get<Paginated<AdminPayoutRequest>>("/admin/payouts", q),
   /** POST /admin/payouts/:id/approve (REQUESTED -> PROCESSING) */
   approve: (id: string, dto: ResolvePayoutInput = {}) =>
@@ -239,8 +234,8 @@ export const configApi = {
 };
 
 export const paymentsApi = {
-  /** GET /admin/payments?status=&method=&page=&limit= — admin payments ledger. Backend list endpoint pending (see requirement.md); gated behind CAN_ADMIN_PAYMENTS. */
-  list: (q: PageQuery & { status?: PaymentStatus; method?: PaymentMethod }) =>
+  /** GET /admin/payments?status=&visitId=&page=&limit= — admin payments ledger (no method filter server-side). */
+  list: (q: PageQuery & { status?: PaymentStatus; visitId?: string }) =>
     http.get<Paginated<AdminPayment>>("/admin/payments", q),
   /** GET /admin/payments/:id/receipt — payment receipt PDF blob (real backend only). */
   receipt: (id: string) => http.download(`/admin/payments/${id}/receipt`),
@@ -253,7 +248,7 @@ export const auditApi = {
 };
 
 export const callLogsApi = {
-  /** GET /admin/call-logs?status=&page=&limit= — persisted in-app call history. Backend endpoint pending; gated behind CAN_CALL_LOGS (see requirement.md). */
-  list: (q: PageQuery & { status?: CallStatus }) =>
+  /** GET /admin/call-logs?visitId=&page=&limit= — persisted in-app call history (investigation; filter by visit, not status). */
+  list: (q: PageQuery & { visitId?: string }) =>
     http.get<Paginated<CallLogEntry>>("/admin/call-logs", q),
 };

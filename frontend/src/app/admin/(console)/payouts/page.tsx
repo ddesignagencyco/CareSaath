@@ -11,8 +11,10 @@ import { PayoutStatusBadge } from "@shared/status";
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { Avatar, ErrorState } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
+import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
 import { payoutsApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import { USE_MOCKS } from "@/features/admin/lib/api/http";
@@ -28,13 +30,15 @@ export default function PayoutsPage() {
   const [status, setStatus] = useState<PayoutStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [act, setAct] = useState<Act | null>(null);
+  const [qInput, setQInput] = useState("");
+  const q = useDebouncedValue(qInput.trim());
   const t = useTranslations("adminB.payouts");
   const L = useLabels();
   const f = useFmt();
 
   const list = useQuery({
-    queryKey: [...keys.payouts, "list", status, page],
-    queryFn: () => payoutsApi.list({ ...(status === "ALL" ? {} : { status }), page, limit: LIMIT }),
+    queryKey: [...keys.payouts, "list", status, q, page],
+    queryFn: () => payoutsApi.list({ ...(status === "ALL" ? {} : { status }), ...(q ? { q } : {}), page, limit: LIMIT }),
   });
 
   const opts = (success: string) => ({
@@ -188,25 +192,30 @@ export default function PayoutsPage() {
           emptyText={t("empty")}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
           toolbar={() => (
-            <Select<PayoutStatus | "ALL">
-              className="w-52"
-              value={status}
-              isSearchable={false}
-              onChange={(v) => {
-                if (v) {
-                  setStatus(v);
-                  setPage(1);
-                }
-              }}
-              options={[
-                { value: "ALL", label: t("allStatuses") },
-                { value: "REQUESTED", label: L.payout("REQUESTED") },
-                { value: "PROCESSING", label: L.payout("PROCESSING") },
-                { value: "TRANSFERRED", label: L.payout("TRANSFERRED") },
-                { value: "PAID", label: L.payout("PAID") },
-                { value: "REJECTED", label: L.payout("REJECTED") },
-              ]}
-            />
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1 sm:max-w-xs">
+                <Input value={qInput} onChange={(e) => { setQInput(e.target.value); setPage(1); }} placeholder={t("searchPlaceholder")} />
+              </div>
+              <Select<PayoutStatus | "ALL">
+                className="w-52"
+                value={status}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setStatus(v);
+                    setPage(1);
+                  }
+                }}
+                options={[
+                  { value: "ALL", label: t("allStatuses") },
+                  { value: "REQUESTED", label: L.payout("REQUESTED") },
+                  { value: "PROCESSING", label: L.payout("PROCESSING") },
+                  { value: "TRANSFERRED", label: L.payout("TRANSFERRED") },
+                  { value: "PAID", label: L.payout("PAID") },
+                  { value: "REJECTED", label: L.payout("REJECTED") },
+                ]}
+              />
+            </div>
           )}
         />
       )}

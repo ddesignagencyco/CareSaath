@@ -10,13 +10,11 @@ import { Badge, type Tone } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { EmptyState, ErrorState } from "@shared/ui/misc";
-import { Select } from "@shared/ui/select";
 import { CAN_CALL_LOGS, callLogsApi } from "@/features/admin/lib/api/admin";
 import { useFmt } from "@shared/i18n/use-fmt";
 import type { CallLogEntry, CallStatus } from "@shared/types";
 
 const LIMIT = 15;
-const STATUSES: CallStatus[] = ["INITIATED", "CONNECTED", "ENDED", "MISSED", "REJECTED"];
 const TONE: Record<CallStatus, Tone> = { INITIATED: "neutral", CONNECTED: "success", ENDED: "neutral", MISSED: "warning", REJECTED: "danger" };
 
 function formatDuration(sec: number | null): string {
@@ -30,12 +28,11 @@ function formatDuration(sec: number | null): string {
 export default function CallLogsPage() {
   const t = useTranslations("adminB.callLogs");
   const f = useFmt();
-  const [status, setStatus] = useState<CallStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
 
   const list = useQuery({
-    queryKey: ["admin-call-logs", status, page],
-    queryFn: () => callLogsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }) }),
+    queryKey: ["admin-call-logs", page],
+    queryFn: () => callLogsApi.list({ page, limit: LIMIT }),
     enabled: CAN_CALL_LOGS,
   });
 
@@ -103,20 +100,6 @@ export default function CallLogsPage() {
           loading={!list.data}
           emptyText={t("empty")}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
-          toolbar={() => (
-            <Select<CallStatus | "ALL">
-              className="w-44"
-              isSearchable={false}
-              value={status}
-              onChange={(v) => {
-                if (v) {
-                  setStatus(v);
-                  setPage(1);
-                }
-              }}
-              options={[{ value: "ALL", label: t("allStatuses") }, ...STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))]}
-            />
-          )}
         />
       )}
     </>

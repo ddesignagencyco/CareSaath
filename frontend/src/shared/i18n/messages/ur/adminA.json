@@ -131,6 +131,7 @@
       "SUSPENDED": "معطل"
     },
     "allStatuses": "تمام",
+    "searchPlaceholder": "نام، فون یا لائسنس سے تلاش کریں…",
     "emptyPendingTitle": "تصدیق کی قطار خالی ہے",
     "emptyPendingText": "نئے کیئرگیورز کی رجسٹریشن جائزے کے لیے یہاں نظر آئے گی۔",
     "emptyTitle": "یہاں کوئی کیئرگیور نہیں",

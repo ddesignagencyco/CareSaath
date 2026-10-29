@@ -107,7 +107,7 @@ export interface AdminCaregiver {
   documents: CaregiverDocument[];
 }
 
-/** One row of the admin payments ledger — GET /admin/payments (backend list endpoint pending; see requirement.md). */
+/** One row of the admin payments ledger — GET /admin/payments. Nested shape mirrors the backend (payment + visit→booking context). */
 export interface AdminPayment {
   id: string;
   visitId: string;
@@ -116,11 +116,17 @@ export interface AdminPayment {
   caregiverAmount: number;
   method: PaymentMethod;
   status: PaymentStatus;
+  gatewayRef: string | null;
   createdAt: string;
   paidAt: string | null;
-  patientName: string;
-  customer: { id: string; fullName: string };
-  caregiver: { id: string; fullName: string };
+  visit: {
+    booking: {
+      patient: { id: string; name: string };
+      customer: { id: string; phone: string; fullName: string };
+      caregiver: { id: string; specialty: Specialty; user: { fullName: string } };
+    };
+  };
+  payoutRequest: { id: string; status: PayoutStatus } | null;
 }
 
 export type CallStatus = "INITIATED" | "CONNECTED" | "ENDED" | "MISSED" | "REJECTED";

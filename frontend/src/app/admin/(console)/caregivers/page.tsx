@@ -10,10 +10,12 @@ import { PageHeader } from "@shared/page-header";
 import { UserStatusBadge, VerificationBadge } from "@shared/status";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { Avatar, ErrorState } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
 import { caregiversApi } from "@/features/admin/lib/api/admin";
 import { keys } from "@/features/admin/lib/api/hooks";
+import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import type { AdminCaregiver, VerificationStatus } from "@shared/types";
@@ -29,10 +31,12 @@ export default function CaregiversPage() {
   const [status, setStatus] = useState<VerificationStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdminCaregiver | null>(null);
+  const [qInput, setQInput] = useState("");
+  const q = useDebouncedValue(qInput.trim());
 
   const list = useQuery({
-    queryKey: [...keys.caregivers, "list", status, page],
-    queryFn: () => caregiversApi.list({ ...(status === "ALL" ? {} : { status }), page, limit: LIMIT }),
+    queryKey: [...keys.caregivers, "list", status, q, page],
+    queryFn: () => caregiversApi.list({ ...(status === "ALL" ? {} : { status }), ...(q ? { q } : {}), page, limit: LIMIT }),
   });
 
   const counts = useQueries({
@@ -132,24 +136,29 @@ export default function CaregiversPage() {
           onRowClick={(c) => setSelected(c)}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
           toolbar={() => (
-            <Select<VerificationStatus | "ALL">
-              className="w-52"
-              value={status}
-              isSearchable={false}
-              onChange={(v) => {
-                if (v) {
-                  setStatus(v);
-                  setPage(1);
-                }
-              }}
-              options={[
-                { value: "ALL", label: allCount != null ? `${t("allStatuses")} (${allCount})` : t("allStatuses") },
-                ...STATUSES.map((s, i) => ({
-                  value: s,
-                  label: counts[i].data?.total != null ? `${t(`statuses.${s}`)} (${counts[i].data!.total})` : t(`statuses.${s}`),
-                })),
-              ]}
-            />
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1 sm:max-w-xs">
+                <Input value={qInput} onChange={(e) => { setQInput(e.target.value); setPage(1); }} placeholder={t("searchPlaceholder")} />
+              </div>
+              <Select<VerificationStatus | "ALL">
+                className="w-52"
+                value={status}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setStatus(v);
+                    setPage(1);
+                  }
+                }}
+                options={[
+                  { value: "ALL", label: allCount != null ? `${t("allStatuses")} (${allCount})` : t("allStatuses") },
+                  ...STATUSES.map((s, i) => ({
+                    value: s,
+                    label: counts[i].data?.total != null ? `${t(`statuses.${s}`)} (${counts[i].data!.total})` : t(`statuses.${s}`),
+                  })),
+                ]}
+              />
+            </div>
           )}
         />
       )}

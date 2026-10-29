@@ -131,6 +131,7 @@
       "SUSPENDED": "Suspended"
     },
     "allStatuses": "All",
+    "searchPlaceholder": "Search by name, phone or license…",
     "emptyPendingTitle": "Verification queue is clear",
     "emptyPendingText": "New caregiver registrations will appear here for review.",
     "emptyTitle": "No caregivers here",

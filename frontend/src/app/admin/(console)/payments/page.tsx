@@ -17,27 +17,24 @@ import { useAction } from "@/features/admin/lib/api/hooks";
 import { saveBlob } from "@shared/api/http";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
-import type { PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
+import type { PaymentStatus } from "@shared/caregiver-types";
 import type { AdminPayment } from "@shared/types";
 
 const LIMIT = 10;
 const TONE: Record<PaymentStatus, Tone> = { PAID: "success", PENDING: "warning", FAILED: "danger", REFUNDED: "neutral" };
 const STATUSES: PaymentStatus[] = ["PAID", "PENDING", "FAILED", "REFUNDED"];
-const METHODS: PaymentMethod[] = ["CASH", "CARD", "JAZZCASH", "EASYPAISA"];
 
-/** FR-A admin payments ledger. Gated behind CAN_ADMIN_PAYMENTS until the backend ships GET /admin/payments (see requirement.md). */
+/** FR-A admin payments ledger — GET /admin/payments (?status=, page, limit). No server-side method filter. */
 export default function AdminPaymentsPage() {
   const t = useTranslations("adminB.payments");
   const f = useFmt();
   const L = useLabels();
   const [status, setStatus] = useState<PaymentStatus | "ALL">("ALL");
-  const [method, setMethod] = useState<PaymentMethod | "ALL">("ALL");
   const [page, setPage] = useState(1);
 
   const list = useQuery({
-    queryKey: ["admin-payments", "list", status, method, page],
-    queryFn: () =>
-      paymentsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }), ...(method === "ALL" ? {} : { method }) }),
+    queryKey: ["admin-payments", "list", status, page],
+    queryFn: () => paymentsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }) }),
     enabled: CAN_ADMIN_PAYMENTS,
   });
 
@@ -53,22 +50,25 @@ export default function AdminPaymentsPage() {
     {
       id: "payer",
       header: t("columns.payer"),
-      accessorFn: (p) => p.customer.fullName,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={row.original.customer.fullName} size="sm" />
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-ink-900">{row.original.customer.fullName}</p>
-            <p className="text-xs text-ink-500">{t("forPatient", { name: row.original.patientName })}</p>
+      accessorFn: (p) => p.visit.booking.customer.fullName,
+      cell: ({ row }) => {
+        const b = row.original.visit.booking;
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar name={b.customer.fullName} size="sm" />
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-ink-900">{b.customer.fullName}</p>
+              <p className="text-xs text-ink-500">{t("forPatient", { name: b.patient.name })}</p>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       id: "caregiver",
       header: t("columns.caregiver"),
       meta: { className: "hidden md:table-cell" },
-      accessorFn: (p) => p.caregiver.fullName,
+      accessorFn: (p) => p.visit.booking.caregiver.user.fullName,
       cell: ({ getValue }) => <span className="text-ink-700">{getValue() as string}</span>,
     },
     {
@@ -136,32 +136,18 @@ export default function AdminPaymentsPage() {
           emptyText={t("empty")}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
           toolbar={() => (
-            <div className="flex flex-wrap gap-2">
-              <Select<PaymentStatus | "ALL">
-                className="w-40"
-                isSearchable={false}
-                value={status}
-                onChange={(v) => {
-                  if (v) {
-                    setStatus(v);
-                    setPage(1);
-                  }
-                }}
-                options={[{ value: "ALL", label: t("allStatuses") }, ...STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
-              />
-              <Select<PaymentMethod | "ALL">
-                className="w-40"
-                isSearchable={false}
-                value={method}
-                onChange={(v) => {
-                  if (v) {
-                    setMethod(v);
-                    setPage(1);
-                  }
-                }}
-                options={[{ value: "ALL", label: t("allMethods") }, ...METHODS.map((m) => ({ value: m, label: L.paymentMethod(m) }))]}
-              />
-            </div>
+            <Select<PaymentStatus | "ALL">
+              className="w-40"
+              isSearchable={false}
+              value={status}
+              onChange={(v) => {
+                if (v) {
+                  setStatus(v);
+                  setPage(1);
+                }
+              }}
+              options={[{ value: "ALL", label: t("allStatuses") }, ...STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
+            />
           )}
         />
       )}
