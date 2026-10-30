@@ -65,7 +65,7 @@ describe("LoginScreen", () => {
   it("a valid number requests an OTP in E.164 and moves to the code step", async () => {
     const { requestOtp, user } = setup();
     await toOtpStep(user);
-    expect(requestOtp).toHaveBeenCalledWith("+923001234567");
+    expect(requestOtp).toHaveBeenCalledWith("+923001234567", undefined, undefined);
     expect(screen.getByRole("heading", { name: "Check your phone" })).toBeInTheDocument();
     expect(screen.getByText(/Enter the 6-digit code/)).toHaveTextContent("+92 300 1234567");
     expect(screen.getByText(/Resend in 0:30/)).toBeInTheDocument();

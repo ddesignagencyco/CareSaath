@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Banknote, Check, CreditCard, KeyRound, Smartphone, Star } from "lucide-react";
+import { Banknote, Check, CreditCard, KeyRound, Navigation, Smartphone, Star } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -14,6 +14,7 @@ import { formatMoney } from "@shared/lib/format";
 import { formatPkMobile } from "@shared/lib/phone";
 import { Button } from "@shared/ui/button";
 import { Field, Textarea } from "@shared/ui/field";
+import { LocationMap } from "@shared/ui/location-map";
 import { Modal } from "@shared/ui/overlay";
 import { Select } from "@shared/ui/select";
 import { DisputeStatusBadge } from "@shared/status";
@@ -74,6 +75,37 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * Live caregiver position + ETA while the visit is EN_ROUTE. Seeded by
+ * GET /customer/visits/:id/location and updated live by the `visit.location`
+ * socket event (wired in useRealtime → query key ["visit-location", id]).
+ */
+export function LiveLocationMap({ visitId }: { visitId: string }) {
+  const t = useTranslations("customerB.liveTrack");
+  const loc = useQuery({
+    queryKey: ["visit-location", visitId],
+    queryFn: () => visitsApi.location(visitId),
+    // Fallback poll in case a socket update is missed; the socket keeps it fresh in between.
+    refetchInterval: 20_000,
+  });
+  if (!loc.data) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl bg-ink-25 p-4 text-sm text-ink-500">
+        <Navigation className="size-4 shrink-0 text-ink-400" /> {t("waiting")}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <LocationMap lat={String(loc.data.lat)} lng={String(loc.data.lng)} label={t("caregiverHere")} />
+      <p className="flex items-center gap-2 text-sm font-semibold text-brand-800">
+        <Navigation className="size-4 shrink-0 text-brand-600" />
+        {loc.data.etaMinutes <= 0 ? t("arrivingNow") : t("eta", { min: loc.data.etaMinutes })}
+      </p>
+    </div>
   );
 }
 

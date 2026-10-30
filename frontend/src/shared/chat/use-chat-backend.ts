@@ -4,13 +4,22 @@ import { useCallback, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useToast } from "@shared/ui/toast";
-import type { BackendChatMessage, ChatConversation, ChatMessage, ChatReaction, ChatTransport } from "./types";
+import type { BackendChatMessage, BackendChatType, ChatConversation, ChatMessage, ChatMessageType, ChatReaction, ChatTransport } from "./types";
 import type { ChatScope, SendInput } from "./use-chat";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** Local-only embellishments that the text backend can't store (demo in real mode). */
-type Patch = { reactions?: ChatReaction[]; deleted?: boolean };
+/** Local-only delete (no backend delete endpoint yet); reactions are now real. */
+type Patch = { deleted?: boolean };
+
+const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice" };
+
+/** Collapse per-user reaction rows into one chip per emoji, flagging mine. */
+function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: string | undefined): ChatReaction[] {
+  const byEmoji = new Map<string, boolean>();
+  for (const r of rows) byEmoji.set(r.emoji, (byEmoji.get(r.emoji) ?? false) || r.userId === myUserId);
+  return [...byEmoji].map(([emoji, byMe]) => ({ emoji, byMe }));
+}
 
 /**
  * Real-backend chat: one thread per booking, text persisted via the REST API and
@@ -43,9 +52,13 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       id: m.id,
       conversationId: m.bookingId,
       sender: m.senderId === myUserId ? "me" : "them",
-      type: "text",
-      text: m.body,
-      reactions: [],
+      type: m.deletedAt ? "text" : TYPE_MAP[m.type],
+      text: m.deletedAt ? undefined : (m.body ?? undefined),
+      mediaUrl: m.deletedAt ? undefined : (m.url ?? undefined),
+      mediaSize: m.sizeBytes ?? undefined,
+      replyToId: m.replyToId ?? undefined,
+      reactions: m.deletedAt ? [] : aggregateReactions(m.reactions, myUserId),
+      deleted: m.deletedAt != null,
       createdAt: new Date(m.createdAt).getTime(),
       readByThem: m.senderId === myUserId ? m.readAt != null : true,
     }),
@@ -60,9 +73,8 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
         const messages = [...backend, ...locals]
           .map((m) => {
             const p = patches[m.id];
-            if (!p) return m;
-            if (p.deleted) return { ...m, deleted: true, type: "text" as const, text: undefined, mediaUrl: undefined, mediaName: undefined, durationMs: undefined, reactions: [] };
-            return p.reactions ? { ...m, reactions: p.reactions } : m;
+            if (p?.deleted) return { ...m, deleted: true, type: "text" as const, text: undefined, mediaUrl: undefined, mediaName: undefined, durationMs: undefined, reactions: [] };
+            return m;
           })
           .sort((a, b) => a.createdAt - b.createdAt);
         return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, messages };
@@ -82,7 +94,7 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
         const temp: ChatMessage = { id: tempId, conversationId: convId, sender: "me", type: "text", text: input.text, replyToId: input.replyToId, reactions: [], createdAt: Date.now(), readByThem: false };
         setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
         transport
-          .send(convId, text)
+          .send(convId, text, input.replyToId)
           .then(() => {
             setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
             void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
@@ -90,9 +102,12 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
           .catch(() => toast.error(t("sendFailed"))); // keep the bubble, but surface the failure
         return;
       }
-      // Media / voice: local-only demo (no backend persistence).
-      const msg: ChatMessage = {
-        id: uid(),
+      // Media / voice → resumable upload to the backend; an optimistic bubble shows the local
+      // preview while it uploads, then the stored (signed-URL) message replaces it on refetch.
+      if (!input.file) return;
+      const tempId = `tmp-${uid()}`;
+      const temp: ChatMessage = {
+        id: tempId,
         conversationId: convId,
         sender: "me",
         type,
@@ -107,20 +122,30 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
         createdAt: Date.now(),
         readByThem: false,
       };
-      setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), msg] }));
+      setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
+      transport
+        .uploadMedia(convId, input.file, { fileName: input.mediaName, caption: input.text, replyToId: input.replyToId })
+        .then(() => {
+          setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
+          void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
+        })
+        .catch(() => {
+          setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
+          toast.error(t("sendFailed"));
+        });
     },
     [qc, scope, transport, toast, t],
   );
 
-  const react = useCallback((_convId: string, msgId: string, emoji: string) => {
-    setPatches((p) => {
-      const cur = p[msgId]?.reactions ?? [];
-      const mine = cur.find((r) => r.byMe);
-      const rest = cur.filter((r) => !r.byMe);
-      const reactions = mine && mine.emoji === emoji ? rest : [...rest, { emoji, byMe: true }];
-      return { ...p, [msgId]: { ...p[msgId], reactions } };
-    });
-  }, []);
+  const react = useCallback(
+    (convId: string, msgId: string, emoji: string) => {
+      transport
+        .react(convId, msgId, emoji)
+        .then(() => void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] }))
+        .catch(() => toast.error(t("sendFailed")));
+    },
+    [transport, qc, scope, toast, t],
+  );
 
   const remove = useCallback((_convId: string, msgId: string) => {
     setPatches((p) => ({ ...p, [msgId]: { ...p[msgId], deleted: true } }));

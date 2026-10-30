@@ -129,7 +129,7 @@ function Receipt({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-const METHODS: PaymentMethod[] = ["CASH", "CARD", "JAZZCASH", "EASYPAISA"];
+const LIMIT = 15;
 
 export default function PaymentsPage() {
   const t = useTranslations("customerB.payments");
@@ -137,7 +137,12 @@ export default function PaymentsPage() {
   const L = useLabels();
   const statusText = useStatusText();
   const [viewing, setViewing] = useState<string | null>(null);
-  const list = useQuery({ queryKey: [...keys.payments, "all"], queryFn: () => paymentsApi.list({ limit: 100 }) });
+  const [status, setStatus] = useState<PaymentStatus | "ALL">("ALL");
+  const [page, setPage] = useState(1);
+  const list = useQuery({
+    queryKey: [...keys.payments, "all", status, page],
+    queryFn: () => paymentsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }) }),
+  });
 
   const columns: ColumnDef<CustomerPaymentWithVisit, unknown>[] = [
     {
@@ -211,33 +216,23 @@ export default function PaymentsPage() {
           columns={columns}
           data={list.data?.items ?? []}
           loading={!list.data}
-          searchPlaceholder={t("searchPlaceholder")}
           emptyText={t("noResults")}
           onRowClick={(p) => setViewing(p.id)}
-          toolbar={(table) => {
-            const sCol = table.getColumn("status");
-            const mCol = table.getColumn("method");
-            const sVal = (sCol?.getFilterValue() as string) ?? "ALL";
-            const mVal = (mCol?.getFilterValue() as string) ?? "ALL";
-            return (
-              <>
-                <Select<string>
-                  className="w-40"
-                  value={sVal}
-                  isSearchable={false}
-                  onChange={(v) => sCol?.setFilterValue(!v || v === "ALL" ? undefined : v)}
-                  options={[{ value: "ALL", label: t("all") }, ...PAYMENT_STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
-                />
-                <Select<string>
-                  className="w-40"
-                  value={mVal}
-                  isSearchable={false}
-                  onChange={(v) => mCol?.setFilterValue(!v || v === "ALL" ? undefined : v)}
-                  options={[{ value: "ALL", label: t("allMethods") }, ...METHODS.map((m) => ({ value: m, label: L.paymentMethod(m) }))]}
-                />
-              </>
-            );
-          }}
+          serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
+          toolbar={() => (
+            <Select<PaymentStatus | "ALL">
+              className="w-40"
+              value={status}
+              isSearchable={false}
+              onChange={(v) => {
+                if (v) {
+                  setStatus(v);
+                  setPage(1);
+                }
+              }}
+              options={[{ value: "ALL", label: t("all") }, ...PAYMENT_STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
+            />
+          )}
         />
       )}
       {viewing && <Receipt id={viewing} onClose={() => setViewing(null)} />}

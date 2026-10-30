@@ -22,6 +22,7 @@ import type { Me, MyCaregiverProfile } from "@shared/caregiver-types";
 import type { Specialty } from "@shared/types";
 import { DocumentList, DocumentUploader } from "@/features/caregiver/components/documents-panel";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
+import { ServiceAreasCard } from "@/features/caregiver/components/service-areas-card";
 import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { CITY_OPTIONS, SPECIALTY_OPTIONS } from "@shared/lib/options";
@@ -243,6 +244,7 @@ export default function ProfilePage() {
               </Card>
             )}
             <ProfileForm key={p.updatedAt} me={me.data} profile={p} />
+            <ServiceAreasCard />
           </div>
 
           <div className="space-y-5">

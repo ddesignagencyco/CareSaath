@@ -36,7 +36,8 @@ export interface LoginScreenProps {
   phoneHint?: React.ReactNode;
   /** Top-right control on the form side (e.g. a language toggle). */
   topRight?: React.ReactNode;
-  requestOtp: (phone: string) => Promise<unknown>;
+  /** `name`/`email` are passed in signup mode (collectName/collectEmail) so signup can send them with the OTP request. */
+  requestOtp: (phone: string, name?: string, email?: string) => Promise<unknown>;
   /** Resolve with an error message to show it, or nothing on success. `name`/`email` are set in signup mode. */
   verifyOtp: (phone: string, code: string, name?: string, email?: string) => Promise<string | void>;
   /** Signup mode: also collect the person's name in the first step. */
@@ -134,13 +135,14 @@ export function LoginScreen(props: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Field-format validation stays inline (so you can see which field); submit/API errors go to a toast.
+  const [codeInvalid, setCodeInvalid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
   const parsed = parsePkMobile(phone);
   const fullPhone = parsed.ok ? parsed.e164 : "";
-  const phoneError = error ?? (touched && !parsed.ok && phone ? t(`phone.${parsed.code}`) : null);
+  const phoneError = touched && !parsed.ok ? t(`phone.${parsed.code}`) : null;
   const nameOk = !props.collectName || name.trim().length >= 2;
   const nameError = props.collectName && touched && !nameOk ? t("login.nameRequired") : undefined;
   const emailOk = !props.collectEmail || !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -155,21 +157,17 @@ export function LoginScreen(props: LoginScreenProps) {
   async function sendCode(e?: React.FormEvent) {
     e?.preventDefault();
     setTouched(true);
-    setError(null);
-    if (!nameOk || !emailOk) return;
-    if (!parsed.ok) {
-      setError(t(`phone.${parsed.code}`));
-      return;
-    }
+    // Field-format problems are shown inline (phoneError / nameError / emailError); don't proceed.
+    if (!nameOk || !emailOk || !parsed.ok) return;
     setLoading(true);
     try {
-      await props.requestOtp(fullPhone);
+      await props.requestOtp(fullPhone, name.trim() || undefined, email.trim() || undefined);
       setStep("otp");
       setCode("");
       setResendIn(RESEND_SECONDS);
       toast.success(t("login.codeSent", { phone: formatPkMobile(fullPhone) }));
     } catch (err) {
-      setError(err instanceof Error ? apiError(err) : t("login.couldNotSend"));
+      toast.error(err instanceof Error ? apiError(err) : t("login.couldNotSend"));
     } finally {
       setLoading(false);
     }
@@ -177,17 +175,20 @@ export function LoginScreen(props: LoginScreenProps) {
 
   async function verify(value = code) {
     if (value.length !== 6 || loading) return;
-    setError(null);
+    setCodeInvalid(false);
     setLoading(true);
     try {
       const message = await props.verifyOtp(fullPhone, value, name.trim(), email.trim());
       if (message) {
-        setError(message);
+        toast.error(message);
+        setCodeInvalid(true);
+        setCode("");
       } else {
         toast.success(t("login.signedIn"));
       }
     } catch (err) {
-      setError(err instanceof Error ? apiError(err) : t("login.verificationFailed"));
+      toast.error(err instanceof Error ? apiError(err) : t("login.verificationFailed"));
+      setCodeInvalid(true);
       setCode("");
     } finally {
       setLoading(false);
@@ -231,10 +232,7 @@ export function LoginScreen(props: LoginScreenProps) {
               <div className="mt-8">
                 <PhoneField
                   value={phone}
-                  onChange={(v) => {
-                    setPhone(v);
-                    setError(null);
-                  }}
+                  onChange={setPhone}
                   onBlur={() => setTouched(true)}
                   error={phoneError}
                   autoFocus
@@ -259,7 +257,7 @@ export function LoginScreen(props: LoginScreenProps) {
                 type="button"
                 onClick={() => {
                   setStep("phone");
-                  setError(null);
+                  setCodeInvalid(false);
                 }}
                 className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-900"
               >
@@ -279,8 +277,7 @@ export function LoginScreen(props: LoginScreenProps) {
               </p>
 
               <div className="mt-7">
-                <OtpInput value={code} onChange={setCode} onComplete={verify} invalid={!!error} disabled={loading} autoFocus />
-                {error && <p className="mt-3 text-sm font-medium text-danger-600">{error}</p>}
+                <OtpInput value={code} onChange={(v) => { setCode(v); setCodeInvalid(false); }} onComplete={verify} invalid={codeInvalid} disabled={loading} autoFocus />
               </div>
 
               <Button type="submit" size="lg" className="mt-6 w-full" loading={loading} disabled={code.length !== 6}>

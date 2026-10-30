@@ -18,7 +18,10 @@ function useCustomerChatTransport(): ChatTransport {
   const th = useTranslations("customerA.home");
   const me = useQuery({ queryKey: keys.me, queryFn: meApi.get, enabled: !USE_MOCKS });
   const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: !USE_MOCKS });
-  const items = bookings.data?.items ?? [];
+  // A chat thread only for bookings with a real relationship — accepted/active (CONFIRMED) or past
+  // (COMPLETED) — never pending requests, declines or cancellations. You can't message a caregiver you
+  // haven't actually booked.
+  const items = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
   const caregiverMap = useCaregiverMap(items.map((b) => b.caregiverId));
 
   const sig = items.map((b) => `${b.id}:${caregiverMap[b.caregiverId]?.user.fullName ?? ""}:${b.serviceType}`).join("|");
@@ -34,10 +37,12 @@ function useCustomerChatTransport(): ChatTransport {
       threads,
       threadsLoaded: USE_MOCKS || bookings.isSuccess,
       listMessages: async (id) => (await chatApi.list(id)).items.slice().reverse(),
-      send: (id, body) => chatApi.send(id, body),
+      send: (id, body, replyToId) => chatApi.send(id, body, replyToId),
       markRead: async (id) => {
         await chatApi.markRead(id);
       },
+      uploadMedia: (id, file, opts) => chatApi.uploadMedia(id, file, opts),
+      react: (id, msgId, emoji) => chatApi.react(id, msgId, emoji),
     }),
     [me.data?.id, threads, bookings.isSuccess],
   );

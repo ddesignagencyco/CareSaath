@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { profileApi } from "./api/caregiver";
+import { profileApi, visitsApi } from "./api/caregiver";
 
 const PREF_KEY = "caresaath.caregiver.shareLocation";
 const PREF_EVENT = "caresaath:location-pref";
@@ -68,4 +68,33 @@ export function useLiveLocation(enabled: boolean) {
       window.clearInterval(iv);
     };
   }, [enabled, sharing]);
+}
+
+/**
+ * While a specific visit is EN_ROUTE (and the caregiver hasn't opted out), stream
+ * high-accuracy GPS fixes to `POST /caregiver/visits/:id/location` every ~12s so the
+ * customer watches the caregiver approach on their visit map. Best-effort — silent on error.
+ */
+export function useVisitLocationStream(visitId: string, active: boolean) {
+  const [sharing] = useLocationSharing();
+  useEffect(() => {
+    if (!active || !sharing || typeof navigator === "undefined" || !navigator.geolocation) return;
+    let stopped = false;
+    const push = () => {
+      if (document.visibilityState !== "visible") return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!stopped) visitsApi.postLocation(visitId, pos.coords.latitude, pos.coords.longitude).catch(() => undefined);
+        },
+        () => undefined,
+        { enableHighAccuracy: true, maximumAge: 10_000, timeout: 10_000 },
+      );
+    };
+    push();
+    const iv = window.setInterval(push, 12_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(iv);
+    };
+  }, [visitId, active, sharing]);
 }

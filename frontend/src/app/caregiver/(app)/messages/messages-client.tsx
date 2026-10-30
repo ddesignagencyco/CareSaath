@@ -16,7 +16,9 @@ function useCaregiverChatTransport(): ChatTransport {
   const L = useLabels();
   const me = useMe();
   const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: !USE_MOCKS });
-  const items = bookings.data?.items ?? [];
+  // Only accepted/active (CONFIRMED) or past (COMPLETED) bookings get a chat thread — not pending
+  // requests, declines or cancellations.
+  const items = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
   const activeVisitId = (visits: { id: string; status: string }[]) =>
     (visits.find((v) => !["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status)) ?? visits[0])?.id;
 
@@ -33,10 +35,12 @@ function useCaregiverChatTransport(): ChatTransport {
       threads,
       threadsLoaded: USE_MOCKS || bookings.isSuccess,
       listMessages: async (id) => (await chatApi.list(id)).items.slice().reverse(),
-      send: (id, body) => chatApi.send(id, body),
+      send: (id, body, replyToId) => chatApi.send(id, body, replyToId),
       markRead: async (id) => {
         await chatApi.markRead(id);
       },
+      uploadMedia: (id, file, opts) => chatApi.uploadMedia(id, file, opts),
+      react: (id, msgId, emoji) => chatApi.react(id, msgId, emoji),
     }),
     [me.data?.id, threads, bookings.isSuccess],
   );

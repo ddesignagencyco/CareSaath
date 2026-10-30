@@ -116,6 +116,12 @@
     "care": "Care",
     "done": "Done"
   },
+  "liveTrack": {
+    "waiting": "Waiting for the caregiver to start sharing their location…",
+    "caregiverHere": "Caregiver's location",
+    "eta": "About {min} min away",
+    "arrivingNow": "Arriving now"
+  },
   "arrivalCode": {
     "notice": "When your caregiver arrives, they may ask for a <b>6-digit code</b> we text to <num>{phone}</num>. Only share it once they're at your door."
   },
@@ -345,9 +351,7 @@
       "amount": "Amount",
       "status": "Status"
     },
-    "searchPlaceholder": "Search by patient…",
     "noResults": "No payments match.",
-    "allMethods": "All methods",
     "cashDue": "Cash due",
     "all": "All",
     "awaitingGateway": "Awaiting confirmation",

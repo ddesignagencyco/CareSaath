@@ -158,7 +158,6 @@
     "receipt": "Receipt",
     "forPatient": "for {name}",
     "allStatuses": "All statuses",
-    "allMethods": "All methods",
     "columns": {
       "payer": "Customer",
       "caregiver": "Caregiver",
@@ -184,11 +183,10 @@
   },
   "callLogs": {
     "title": "Call history",
-    "description": "Persisted in-app voice and video calls between customers and caregivers.",
+    "description": "Persisted in-app voice calls between customers and caregivers.",
     "pendingTitle": "Call history coming soon",
     "pendingHint": "The screen is ready and activates once the backend exposes GET /admin/call-logs.",
     "empty": "No calls match these filters.",
-    "allStatuses": "All statuses",
     "columns": {
       "caller": "Caller",
       "callee": "Callee",

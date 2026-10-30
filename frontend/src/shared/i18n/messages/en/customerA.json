@@ -107,6 +107,7 @@
     "licenseVerified": "License verified by CareSaath",
     "experience": "{years} years of experience",
     "cities": "Visits homes in {cities}",
+    "coversAreas": "Covers: {areas}",
     "about": "About",
     "weeklyHours": "Weekly hours",
     "weeklyHoursHint": "When this caregiver usually takes visits.",

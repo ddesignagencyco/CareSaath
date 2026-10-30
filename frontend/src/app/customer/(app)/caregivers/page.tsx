@@ -91,9 +91,7 @@ export default function FindCarePage() {
             ))}
           </div>
           {results.data.total > LIMIT && (
-            <Card className="mt-4">
-              <Pagination page={results.data.page} limit={results.data.limit} total={results.data.total} onPage={(p) => setParams({ page: String(p) })} />
-            </Card>
+            <Pagination page={results.data.page} limit={results.data.limit} total={results.data.total} onPage={(p) => setParams({ page: String(p) })} />
           )}
         </>
       )}

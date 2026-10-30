@@ -50,6 +50,10 @@ export function useRealtime(opts: {
     socket.on("entity.updated", onEntityUpdated);
     socket.on("notification.created", refetchNotifs);
     socket.on("notification.read", refetchNotifs);
+    // Live caregiver position while a visit is EN_ROUTE — feeds the customer's visit tracker map.
+    socket.on("visit.location", (p?: { visitId?: string }) => {
+      if (p?.visitId) queryClient.setQueryData(["visit-location", p.visitId], p);
+    });
     // Bad/inactive token: don't loop — stop here.
     socket.on("auth.error", () => socket.close());
     // Token expired: refresh; the auto-reconnect's auth callback picks up the new one.

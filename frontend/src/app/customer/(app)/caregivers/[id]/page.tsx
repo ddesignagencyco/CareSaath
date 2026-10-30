@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BadgeCheck, Briefcase, CalendarCheck2, ChevronRight, Clock3, History, MapPin, Repeat, ShieldCheck, Siren } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Briefcase, CalendarCheck2, ChevronRight, Clock3, History, MapPin, MapPinned, Repeat, ShieldCheck, Siren } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -104,6 +104,12 @@ export default function CaregiverProfilePage() {
                   <MapPin className="size-4 text-ink-400" />
                   <dd>{t("cities", { cities: f.list(p.serviceArea.cities) })}</dd>
                 </div>
+                {p.serviceAreas && p.serviceAreas.length > 0 && (
+                  <div className="flex items-start gap-2.5 text-ink-700 sm:col-span-2">
+                    <MapPinned className="mt-0.5 size-4 shrink-0 text-ink-400" />
+                    <dd>{t("coversAreas", { areas: f.list(p.serviceAreas.map((a) => a.label ?? a.city)) })}</dd>
+                  </div>
+                )}
               </dl>
 
               {p.bio && (

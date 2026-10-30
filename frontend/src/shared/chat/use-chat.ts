@@ -103,6 +103,8 @@ export interface SendInput {
   mediaSize?: number;
   durationMs?: number;
   replyToId?: string;
+  /** The raw bytes to upload for a media/voice message (real backend). The mock uses `mediaUrl` instead. */
+  file?: Blob;
 }
 
 /** Local, mock-backed chat state. Swap `load`/`save`/`send` for the real API + socket later. */

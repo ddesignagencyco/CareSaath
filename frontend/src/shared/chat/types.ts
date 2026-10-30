@@ -44,15 +44,33 @@ export interface ChatConversation {
   peerUserId?: string;
 }
 
-/* ---- Real backend (booking-scoped, text-only) ---------------------------- */
+/* ---- Real backend (booking-scoped, text + media) ------------------------- */
 
-/** GET/POST /bookings/:bookingId/messages row. */
+export type BackendChatType = "TEXT" | "IMAGE" | "FILE" | "VOICE";
+
+export interface BackendChatReaction {
+  id: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
+/** GET/POST /bookings/:bookingId/messages row (media's `mediaKey` is served as a signed `url`). */
 export interface BackendChatMessage {
   id: string;
   bookingId: string;
   senderId: string;
-  body: string;
+  type: BackendChatType;
+  body: string | null;
+  /** Signed URL for a media message; null for text. */
+  url: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  replyToId: string | null;
+  reactions: BackendChatReaction[];
   readAt: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
   createdAt: string;
 }
 
@@ -80,6 +98,10 @@ export interface ChatTransport {
   threadsLoaded: boolean;
   /** Chronological (oldest first). */
   listMessages: (bookingId: string) => Promise<BackendChatMessage[]>;
-  send: (bookingId: string, body: string) => Promise<BackendChatMessage>;
+  send: (bookingId: string, body: string, replyToId?: string) => Promise<BackendChatMessage>;
   markRead: (bookingId: string) => Promise<void>;
+  /** Resumable chunked upload (init → chunks → complete); resolves to the created media message. */
+  uploadMedia: (bookingId: string, file: Blob, opts?: { fileName?: string; caption?: string; replyToId?: string; onProgress?: (fraction: number) => void }) => Promise<BackendChatMessage>;
+  /** Toggle a reaction emoji on a message. */
+  react: (bookingId: string, messageId: string, emoji: string) => Promise<void>;
 }

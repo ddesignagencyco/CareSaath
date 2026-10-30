@@ -22,6 +22,7 @@ import { DoctorOrders } from "@/features/caregiver/components/visit/doctor-order
 import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
+import { useVisitLocationStream } from "@/features/caregiver/lib/use-live-location";
 import { ACTIVE_STATUSES, mapsUrl, VISIT_TONE } from "@shared/lib/visit";
 
 /**
@@ -55,6 +56,8 @@ export default function VisitDetailPage() {
   });
   // The caregiver's own bookings — used to list other visits with the same customer.
   const bookings = useQuery({ queryKey: [...keys.bookings, "list", "all"], queryFn: () => bookingsApi.list({ limit: 50 }) });
+  // Stream GPS to the customer's live map while this visit is EN_ROUTE.
+  useVisitLocationStream(id, visit.data?.status === "EN_ROUTE");
   const [rx, setRx] = useState<PrescriptionDocument | null>(null);
   const [dialog, setDialog] = useState<"sos" | "report" | "dispute" | null>(null);
 

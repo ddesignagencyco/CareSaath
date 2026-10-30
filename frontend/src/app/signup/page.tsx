@@ -5,12 +5,10 @@ import { BadgeCheck, MapPinned, Siren } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { decodeToken } from "@shared/api/session";
 import { LoginScreen } from "@shared/auth/login-screen";
 import { MockHint } from "@shared/auth/mock-hint";
-import { meApi as caregiverMe } from "@/features/caregiver/lib/api/caregiver";
 import { storeTokens as caregiverStoreTokens } from "@/features/caregiver/lib/auth";
-import { authApi, meApi } from "@/features/customer/lib/api/customer";
+import { authApi } from "@/features/customer/lib/api/customer";
 import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { session as customerSession } from "@/features/customer/lib/api/session";
 import { clearSession } from "@/features/customer/lib/auth";
@@ -27,13 +25,13 @@ const ROLES = [
   ["caregiver", "I provide care"],
 ] as const;
 
-const ALREADY_REGISTERED = "This number is already registered — please log in instead.";
-
 /**
  * The single sign-up. A role toggle routes families to the customer app and
- * caregivers into onboarding. Sign-up is for NEW numbers only: an already
- * registered number is rejected here and sent to the login screen, so you can
- * never sign up "into" someone else's account.
+ * caregivers into onboarding. Sign-up uses the real backend `/auth/signup`
+ * (+ `/auth/signup/verify`): an already-registered number is rejected with 409
+ * at the OTP-request step (shown on the phone step), so you can never sign up
+ * "into" someone else's account. The backend creates the account with the
+ * chosen role and the name/email supplied here.
  */
 export default function SignupPage() {
   const router = useRouter();
@@ -87,36 +85,19 @@ export default function SignupPage() {
           </MockHint>
         ) : undefined
       }
-      requestOtp={authApi.requestOtp}
-      verifyOtp={async (phone, code, name, email) => {
-        const tokens = await authApi.verifyOtp(phone, code);
-        const accountRole = decodeToken(tokens.accessToken)?.role;
-        // A caregiver/admin number already has an account — reject sign-up, send them to log in.
-        if (accountRole === "ADMIN" || accountRole === "CAREGIVER") {
-          await authApi.logout(tokens.refreshToken).catch(() => undefined);
-          return ALREADY_REGISTERED;
-        }
-        // Customer role: a brand-new number is created with an empty name; a non-empty
-        // name means the account already belongs to someone — don't take it over.
-        customerSession.set({ ...tokens, phone });
-        const me = await meApi.get();
-        if (me.fullName.trim()) {
-          await authApi.logout(tokens.refreshToken).catch(() => undefined);
-          clearSession();
-          return ALREADY_REGISTERED;
-        }
-        // Brand-new account → complete sign-up with the chosen role.
-        const patch: { fullName?: string; email?: string } = {};
-        if (name) patch.fullName = name;
-        if (email) patch.email = email;
+      requestOtp={(phone, name, email) =>
+        authApi.signup({ phone, fullName: (name ?? "").trim(), ...(email ? { email } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" })
+      }
+      verifyOtp={async (phone, code) => {
+        // The backend already has the name/email/role from /auth/signup; this just verifies + issues tokens.
+        const tokens = await authApi.signupVerify(phone, code);
         if (role === "caregiver") {
           clearSession();
           caregiverStoreTokens(tokens, phone);
-          if (Object.keys(patch).length) await caregiverMe.update(patch).catch(() => undefined);
           router.replace("/caregiver/onboarding");
           return;
         }
-        if (Object.keys(patch).length) await meApi.update(patch).catch(() => undefined);
+        customerSession.set({ ...tokens, phone });
         router.replace("/customer");
       }}
     />

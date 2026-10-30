@@ -418,9 +418,9 @@ function Composer({ onSend, replyTo, onCancelReply }: { onSend: (input: SendInpu
     const reader = new FileReader();
     if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
       const type = file.type.startsWith("video/") ? "video" : "image";
-      reader.onload = () => onSend({ type, mediaUrl: String(reader.result), mediaName: file.name, mediaSize: file.size, replyToId: replyTo?.id });
+      reader.onload = () => onSend({ type, mediaUrl: String(reader.result), mediaName: file.name, mediaSize: file.size, replyToId: replyTo?.id, file });
     } else {
-      reader.onload = () => onSend({ type: "file", mediaUrl: String(reader.result), mediaName: file.name, mediaSize: file.size, replyToId: replyTo?.id });
+      reader.onload = () => onSend({ type: "file", mediaUrl: String(reader.result), mediaName: file.name, mediaSize: file.size, replyToId: replyTo?.id, file });
     }
     reader.readAsDataURL(file);
     onCancelReply();
@@ -450,7 +450,7 @@ function Composer({ onSend, replyTo, onCancelReply }: { onSend: (input: SendInpu
         if (cancelledRef.current || dur < 600) return;
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         const reader = new FileReader();
-        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id });
+        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: "voice-note.webm" });
         reader.readAsDataURL(blob);
         onCancelReply();
       };
@@ -855,11 +855,12 @@ export function ChatThread({
   // Real WebRTC when the call engine is mounted and we know the visit + the other party's user id
   // (caregiver → family); otherwise fall back to the demo overlay.
   const callCtx = useCallOptional();
-  const placeCall = (video: boolean) => {
+  // Audio-only: video calling is disabled product-wide.
+  const placeCall = () => {
     if (callCtx && conversation.visitId && conversation.peerUserId) {
-      callCtx.startCall({ visitId: conversation.visitId, calleeId: conversation.peerUserId, peerName: conversation.name, video });
+      callCtx.startCall({ visitId: conversation.visitId, calleeId: conversation.peerUserId, peerName: conversation.name, video: false });
     } else {
-      setCall({ video });
+      setCall({ video: false });
     }
   };
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -903,10 +904,7 @@ export function ChatThread({
             <span className="block text-xs text-ink-500">{conversation.online ? t("online") : conversation.role}</span>
           </span>
         </button>
-        <button type="button" aria-label={t("videoCall")} onClick={() => placeCall(true)} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
-          <Video className="size-5" />
-        </button>
-        <button type="button" aria-label={t("voiceCall")} onClick={() => placeCall(false)} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
+        <button type="button" aria-label={t("voiceCall")} onClick={placeCall} className="flex size-10 shrink-0 items-center justify-center rounded-full text-ink-500 hover:bg-ink-50 hover:text-brand-600">
           <Phone className="size-5" />
         </button>
       </header>

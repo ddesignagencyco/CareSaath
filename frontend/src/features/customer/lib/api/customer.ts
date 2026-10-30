@@ -35,6 +35,7 @@ import type {
   PublicCaregiver,
   RescheduleInput,
   ReviewInput,
+  VisitLocation,
 } from "@shared/customer-types";
 import type { IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
 import type { BackendChatMessage } from "@shared/chat/types";
@@ -44,10 +45,16 @@ import { http, USE_MOCKS } from "./http";
 const M = USE_MOCKS;
 
 export const authApi = {
-  /** POST /auth/otp/request */
+  /** POST /auth/otp/request — login: existing accounts only. */
   requestOtp: (phone: string) => (M ? mock.requestOtp(phone) : http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
-  /** POST /auth/otp/verify — new numbers become CUSTOMER accounts. */
+  /** POST /auth/otp/verify — login only (an unknown number now 404s; use signup for new numbers). */
   verifyOtp: (phone: string, code: string) => (M ? mock.verifyOtp(phone, code) : http.post<TokenPair>("/auth/otp/verify", { phone, code })),
+  /** POST /auth/signup — starts a sign-up: 409 if the number is already registered, else sends a SIGNUP OTP. */
+  signup: (dto: { phone: string; fullName: string; email?: string; role: "CUSTOMER" | "CAREGIVER" }) =>
+    M ? mock.requestOtp(dto.phone) : http.post<{ ttlSeconds: number }>("/auth/signup", dto),
+  /** POST /auth/signup/verify — completes the sign-up with the role chosen at /auth/signup; returns tokens. */
+  signupVerify: (phone: string, code: string) =>
+    M ? mock.verifyOtp(phone, code) : http.post<TokenPair>("/auth/signup/verify", { phone, code }),
   /** POST /auth/logout */
   logout: (refreshToken: string) => (M ? Promise.resolve({ ok: true }) : http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
 };
@@ -143,18 +150,69 @@ export const visitsApi = {
   sos: (dto: { visitId: string; note?: string }) => (M ? mock.sos(dto) : http.post<SosResult>("/sos", dto)),
   /** GET /customer/visits/:id/medical-orders — the doctor's diagnosis/prescription/lab-test records. */
   medicalOrders: (id: string) => (M ? Promise.resolve<MedicalOrder[]>([]) : http.get<MedicalOrder[]>(`/customer/visits/${id}/medical-orders`)),
+  /** GET /customer/visits/:id/location — last-known caregiver fix while EN_ROUTE (null once checked in / no fix yet). */
+  location: (id: string) => (M ? Promise.resolve<VisitLocation | null>(null) : http.get<VisitLocation | null>(`/customer/visits/${id}/location`)),
 };
 
 /** Booking-scoped in-app chat (shared REST, customer token). */
+const chatStub = (bookingId: string, over: Partial<BackendChatMessage> = {}): BackendChatMessage => ({
+  id: "m",
+  bookingId,
+  senderId: "",
+  type: "TEXT",
+  body: null,
+  url: null,
+  mimeType: null,
+  sizeBytes: null,
+  replyToId: null,
+  reactions: [],
+  readAt: null,
+  editedAt: null,
+  deletedAt: null,
+  createdAt: new Date().toISOString(),
+  ...over,
+});
+
 export const chatApi = {
   /** GET /bookings/:bookingId/messages — newest first. */
   list: (bookingId: string) =>
     M ? Promise.resolve<Paginated<BackendChatMessage>>({ items: [], page: 1, limit: 100, total: 0 }) : http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
   /** POST /bookings/:bookingId/messages */
-  send: (bookingId: string, body: string) =>
-    M ? Promise.resolve<BackendChatMessage>({ id: "m", bookingId, senderId: "", body, readAt: null, createdAt: new Date().toISOString() }) : http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body }),
+  send: (bookingId: string, body: string, replyToId?: string) =>
+    M
+      ? Promise.resolve(chatStub(bookingId, { body }))
+      : http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body, ...(replyToId ? { replyToId } : {}) }),
   /** PATCH /bookings/:bookingId/messages/read */
   markRead: (bookingId: string) => (M ? Promise.resolve({ updated: 0 }) : http.patch<{ updated: number }>(`/bookings/${bookingId}/messages/read`)),
+  /** POST /bookings/:bookingId/messages/:id/reactions — toggle a reaction emoji. */
+  react: (bookingId: string, messageId: string, emoji: string) =>
+    M ? Promise.resolve() : http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
+  /** Resumable media upload: init → 2 MB chunks → complete (creates the media message). */
+  uploadMedia: async (
+    bookingId: string,
+    file: Blob,
+    opts?: { fileName?: string; caption?: string; replyToId?: string; onProgress?: (fraction: number) => void },
+  ): Promise<BackendChatMessage> => {
+    if (M) return chatStub(bookingId, { type: "FILE" });
+    const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
+      mimeType: file.type || "application/octet-stream",
+      totalBytes: file.size,
+      ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+    });
+    const CHUNK = 2 * 1024 * 1024;
+    const total = file.size || 1;
+    let index = 0;
+    for (let offset = 0; offset < file.size; offset += CHUNK, index += 1) {
+      const form = new FormData();
+      form.append("chunk", file.slice(offset, offset + CHUNK), opts?.fileName ?? "chunk");
+      await http.put<unknown>(`/bookings/${bookingId}/media/uploads/${init.uploadId}/chunks/${index}`, form);
+      opts?.onProgress?.(Math.min(1, (offset + CHUNK) / total));
+    }
+    return http.post<BackendChatMessage>(`/bookings/${bookingId}/media/uploads/${init.uploadId}/complete`, {
+      ...(opts?.caption ? { body: opts.caption } : {}),
+      ...(opts?.replyToId ? { replyToId: opts.replyToId } : {}),
+    });
+  },
 };
 
 export const paymentsApi = {

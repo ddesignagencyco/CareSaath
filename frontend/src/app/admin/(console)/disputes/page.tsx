@@ -176,9 +176,7 @@ export default function DisputesPage() {
               )}
             </Card>
           ))}
-          <Card>
-            <Pagination page={list.data.page} limit={list.data.limit} total={list.data.total} onPage={setPage} />
-          </Card>
+          <Pagination page={list.data.page} limit={list.data.limit} total={list.data.total} onPage={setPage} />
         </div>
       )}
 

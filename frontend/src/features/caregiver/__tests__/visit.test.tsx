@@ -24,7 +24,9 @@ function backend(detail: CaregiverVisitDetail, respond?: (c: RecordedCall) => Re
   });
 }
 
-const posts = (f: ReturnType<typeof mockFetch>) => f.calls.filter((c) => c.method !== "GET" && apiPath(c) !== "/auth/refresh");
+// Exclude the background EN_ROUTE location stream (POST …/location) — it's a side-effect, not a user action.
+const posts = (f: ReturnType<typeof mockFetch>) =>
+  f.calls.filter((c) => c.method !== "GET" && apiPath(c) !== "/auth/refresh" && !apiPath(c).endsWith("/location"));
 
 function renderPage() {
   return renderWithProviders(<VisitDetailPage />, { storageKey: LOCALE_KEY });

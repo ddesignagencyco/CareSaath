@@ -481,6 +481,26 @@ export interface NotificationPref {
   enabled: boolean;
 }
 
+/** A caregiver sub-city coverage zone — GET /caregiver/service-areas item + the public `serviceAreas` on GET /caregivers/:id. */
+export interface CaregiverServiceArea {
+  id: string;
+  city: string;
+  label: string | null;
+  /** Decimal strings. */
+  latitude: string;
+  longitude: string;
+  radiusMeters: number;
+}
+
+/** One zone for PUT /caregiver/service-areas (full replace; empty list = whole-city coverage). */
+export interface ServiceAreaInput {
+  city: string;
+  label?: string;
+  lat: number;
+  lng: number;
+  radiusMeters?: number;
+}
+
 export interface AppNotification {
   id: string;
   userId: string;

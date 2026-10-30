@@ -21,6 +21,7 @@ import {
   ArrivalCodeNotice,
   DisputeDialog,
   DisputeItems,
+  LiveLocationMap,
   PaymentPanel,
   ReportConcernDialog,
   ReviewPanel,
@@ -117,6 +118,7 @@ export default function CustomerVisitPage() {
                   ) : (
                     <VisitTracker visit={v} />
                   )}
+                  {v.status === "EN_ROUTE" && <LiveLocationMap visitId={v.id} />}
                   {(v.status === "CONFIRMED" || v.status === "EN_ROUTE") && <ArrivalCodeNotice phone={v.booking.customer.phone} />}
                   <PaymentPanel visit={v} />
                 </CardBody>

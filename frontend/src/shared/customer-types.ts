@@ -31,6 +31,8 @@ export interface PublicCaregiver extends CaregiverSearchItem {
   licenseBody: LicenseBody;
   createdAt: string;
   availabilityRules: Pick<AvailabilityRule, "dayOfWeek" | "startTime" | "endTime">[];
+  /** Sub-city coverage zones; an empty list means the caregiver covers their service cities in full. */
+  serviceAreas?: { city: string; label: string | null; latitude: string; longitude: string; radiusMeters: number }[];
 }
 
 /* ---- Patients & addresses ------------------------------------------------ */
@@ -97,6 +99,17 @@ export interface RescheduleInput {
   newDate: string;
   timeWindowStart: string;
   timeWindowEnd: string;
+}
+
+/** GET /customer/visits/:id/location + realtime `visit.location` — the caregiver's live position while EN_ROUTE. */
+export interface VisitLocation {
+  visitId: string;
+  lat: number;
+  lng: number;
+  /** ISO timestamp of the fix. */
+  at: string;
+  /** Rough minutes to the visit address at an average speed. */
+  etaMinutes: number;
 }
 
 /**

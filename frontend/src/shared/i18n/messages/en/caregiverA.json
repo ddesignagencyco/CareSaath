@@ -145,6 +145,19 @@
     "title": "Share my live location",
     "hint": "Lets nearby families book you for immediate (ASAP) visits while the app is open. Turn off to stop sharing."
   },
+  "serviceAreas": {
+    "title": "Coverage areas",
+    "description": "Pick the parts of Lahore you cover so families in those areas find you. Leave empty to cover the whole city.",
+    "areasLabel": "Areas you cover",
+    "areasHint": "Choose one or more neighbourhoods.",
+    "areasPlaceholder": "Add an area…",
+    "radiusLabel": "Coverage radius",
+    "radiusHint": "How far around each area you'll travel.",
+    "wholeCity": "No areas selected — you'll appear for the whole city.",
+    "summary": "Families within {radius} of {areas} will see you.",
+    "save": "Save coverage",
+    "saved": "Coverage areas updated"
+  },
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet",

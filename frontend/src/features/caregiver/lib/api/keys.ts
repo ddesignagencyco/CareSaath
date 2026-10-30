@@ -3,6 +3,7 @@ export const keys = {
   me: ["cg-me"] as const,
   profile: ["cg-profile"] as const,
   availability: ["cg-availability"] as const,
+  serviceAreas: ["cg-service-areas"] as const,
   bookings: ["cg-bookings"] as const,
   visits: ["cg-visits"] as const,
   earnings: ["cg-earnings"] as const,
