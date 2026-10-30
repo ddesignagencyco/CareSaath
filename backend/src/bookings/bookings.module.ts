@@ -32,6 +32,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -206,11 +207,81 @@ export class RescheduleVisitDto {
 
 export class RejectBookingDto extends CancelBookingDto {}
 
+/** The customer UI's tabs: waiting = REQUESTED; active = CONFIRMED with a visit still open; past = everything else. */
+export const BOOKING_GROUPS = ['active', 'waiting', 'past', 'all'] as const;
+export type BookingGroup = (typeof BOOKING_GROUPS)[number];
+
+/** Visit outcomes that close a visit for good; a booking whose every visit is in one of these is finished. */
+const FINISHED_VISIT_STATUSES: VisitStatus[] = [VisitStatus.COMPLETED, VisitStatus.CANCELLED, VisitStatus.DECLINED];
+
+/** A CONFIRMED booking that still has a visit to do (no visits yet counts as not finished). */
+const ACTIVE_BOOKING_WHERE: Prisma.BookingWhereInput = {
+  status: BookingStatus.CONFIRMED,
+  OR: [{ visits: { none: {} } }, { visits: { some: { status: { notIn: FINISHED_VISIT_STATUSES } } } }],
+};
+
+export function bookingGroupWhere(group: BookingGroup | undefined): Prisma.BookingWhereInput {
+  switch (group) {
+    case 'waiting':
+      return { status: BookingStatus.REQUESTED };
+    case 'active':
+      return ACTIVE_BOOKING_WHERE;
+    case 'past':
+      return { NOT: [{ status: BookingStatus.REQUESTED }, ACTIVE_BOOKING_WHERE] };
+    default:
+      return {};
+  }
+}
+
+/** Same rule as bookingGroupWhere, for one loaded booking (exposed as `derivedStatus`). */
+export function derivedBookingGroup(booking: {
+  status: BookingStatus;
+  visits: Array<{ status: VisitStatus }>;
+}): Exclude<BookingGroup, 'all'> {
+  if (booking.status === BookingStatus.REQUESTED) return 'waiting';
+  const finished =
+    booking.visits.length > 0 && booking.visits.every((v) => FINISHED_VISIT_STATUSES.includes(v.status));
+  return booking.status === BookingStatus.CONFIRMED && !finished ? 'active' : 'past';
+}
+
+/** Free-text search across patient / the other party's name / the rate (PKR or paisa). */
+function bookingSearchWhere(q: string | undefined, side: 'customer' | 'caregiver'): Prisma.BookingWhereInput {
+  const term = q?.trim();
+  if (!term) return {};
+  const contains = { contains: term, mode: 'insensitive' as const };
+  const amount = /^\d+(\.\d+)?$/.test(term) ? Number(term) : null;
+  return {
+    OR: [
+      { patient: { name: contains } },
+      side === 'customer'
+        ? { caregiver: { user: { fullName: contains } } }
+        : { customer: { fullName: contains } },
+      ...(amount !== null
+        ? [{ rateSnapshot: { in: [Math.round(amount), Math.round(amount * 100)] } }]
+        : []),
+    ],
+  };
+}
+
 export class ListBookingsQueryDto {
   @ApiPropertyOptional({ enum: BookingStatus, description: 'Filter by booking status' })
   @IsOptional()
   @IsEnum(BookingStatus)
   status?: BookingStatus;
+
+  @ApiPropertyOptional({
+    enum: BOOKING_GROUPS,
+    description: 'UI tab: waiting (REQUESTED), active (CONFIRMED with a visit still open), past (everything else), all. Each item also carries derivedStatus.',
+  })
+  @IsOptional()
+  @IsIn(BOOKING_GROUPS)
+  group?: BookingGroup;
+
+  @ApiPropertyOptional({ example: 'Ayesha', description: 'Free-text search: patient name, the other party\'s name, or the rate (PKR or paisa)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -598,8 +669,12 @@ export class BookingsService {
 
   async listCustomer(user: AuthUser, query: ListBookingsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.BookingWhereInput = {
-      customerId: user.sub,
-      ...(query.status ? { status: query.status } : {}),
+      AND: [
+        { customerId: user.sub },
+        query.status ? { status: query.status } : {},
+        bookingGroupWhere(query.group),
+        bookingSearchWhere(query.q, 'customer'),
+      ],
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.booking.count({ where }),
@@ -611,7 +686,8 @@ export class BookingsService {
         include: { visits: { orderBy: { scheduledDate: 'asc' } } },
       }),
     ]);
-    return paginate(items, query.page, query.limit, total);
+    const withGroup = items.map((booking) => ({ ...booking, derivedStatus: derivedBookingGroup(booking) }));
+    return paginate(withGroup, query.page, query.limit, total);
   }
 
   async getCustomerBooking(user: AuthUser, id: string) {
@@ -711,8 +787,12 @@ export class BookingsService {
   async listCaregiver(user: AuthUser, query: ListBookingsQueryDto): Promise<Paginated<unknown>> {
     const caregiverId = await this.caregiverProfileId(user);
     const where: Prisma.BookingWhereInput = {
-      caregiverId,
-      ...(query.status ? { status: query.status } : {}),
+      AND: [
+        { caregiverId },
+        query.status ? { status: query.status } : {},
+        bookingGroupWhere(query.group),
+        bookingSearchWhere(query.q, 'caregiver'),
+      ],
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.booking.count({ where }),
@@ -728,7 +808,39 @@ export class BookingsService {
         },
       }),
     ]);
-    return paginate(items, query.page, query.limit, total);
+    // "Returning customer": completed visits with this customer on their other bookings.
+    const priorCounts = await this.priorVisitsByCustomer(
+      caregiverId,
+      items.map((b) => b.customerId),
+    );
+    const presented = items.map((booking) => ({
+      ...booking,
+      derivedStatus: derivedBookingGroup(booking),
+      priorVisitsWithCaregiver: Math.max(
+        0,
+        (priorCounts.get(booking.customerId) ?? 0) -
+          booking.visits.filter((v) => v.status === VisitStatus.COMPLETED).length,
+      ),
+    }));
+    return paginate(presented, query.page, query.limit, total);
+  }
+
+  /** Completed visits per customer for one caregiver, in one grouped query (all of their bookings). */
+  private async priorVisitsByCustomer(caregiverId: string, customerIds: string[]): Promise<Map<string, number>> {
+    const unique = [...new Set(customerIds)];
+    if (unique.length === 0) return new Map();
+    const bookings = await this.prisma.booking.findMany({
+      where: { caregiverId, customerId: { in: unique } },
+      select: {
+        customerId: true,
+        _count: { select: { visits: { where: { status: VisitStatus.COMPLETED } } } },
+      },
+    });
+    const counts = new Map<string, number>();
+    for (const b of bookings) {
+      counts.set(b.customerId, (counts.get(b.customerId) ?? 0) + b._count.visits);
+    }
+    return counts;
   }
 
   /** FR-CG5: accept a requested booking; all pending visits become CONFIRMED. */
@@ -959,7 +1071,7 @@ export class CustomerBookingsController {
   @Get()
   @ApiOperation({
     summary: 'List customer bookings',
-    description: 'Retrieves all bookings made by the customer with status filtering and pagination.',
+    description: 'Bookings made by the customer, newest first, paginated. Filter with ?status=, ?group=active|waiting|past|all (the UI tabs, derived from visit completion) and free-text ?q= (patient / caregiver name / rate). Each item carries derivedStatus.',
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListBookingsQueryDto) {
     return this.bookings.listCustomer(user, query);
@@ -1057,7 +1169,7 @@ export class CaregiverBookingsController {
   @Get()
   @ApiOperation({
     summary: 'List incoming booking requests',
-    description: 'Retrieves booking requests assigned to the caregiver with status filtering.',
+    description: 'Booking requests assigned to the caregiver. Filter with ?status=, ?group= and ?q= (patient / customer name / rate). Each item carries derivedStatus and priorVisitsWithCaregiver (completed visits with this customer on other bookings).',
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListBookingsQueryDto) {
     return this.bookings.listCaregiver(user, query);

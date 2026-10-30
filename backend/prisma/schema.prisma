@@ -184,6 +184,14 @@ enum StrikeReason {
   NO_SHOW
 }
 
+/// Ranking tier; normally computed (src/caregivers/badge.ts), stored only as an admin override.
+enum CaregiverBadge {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
 enum CallStatus {
   INITIATED
   CONNECTED
@@ -230,6 +238,7 @@ model User {
   callsPlaced             CallLog[]                @relation("CallCaller")
   callsReceived           CallLog[]                @relation("CallCallee")
   notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
 }
 
 model OtpCode {
@@ -327,6 +336,11 @@ model CaregiverProfile {
   currentLat         Decimal?           @db.Decimal(9, 6)
   currentLng         Decimal?           @db.Decimal(9, 6)
   locationUpdatedAt  DateTime?
+  /// "Available now" toggle: opted in to immediate (ASAP / emergency) requests.
+  /// Only counts while the live fix above is fresh (caregiver.availableNowMaxFixAgeMinutes).
+  acceptingImmediate Boolean            @default(false)
+  /// Admin-set tier; null means the badge is auto-computed.
+  badgeOverride      CaregiverBadge?
   /// Cumulative count of CaregiverStrike rows (declines / late arrivals / no-shows).
   strikeCount        Int                @default(0)
   commissionRateId   String
@@ -354,6 +368,7 @@ model CaregiverProfile {
   serviceAreas        CaregiverServiceArea[]
 
   @@index([verificationStatus, specialty])
+  @@index([acceptingImmediate, locationUpdatedAt])
   // GIN index for the city filter: the search matches `serviceArea @> {"cities":[...]}`
   // (jsonb_path_ops) and needs an index for it to scale past a single pilot city.
   @@index([serviceArea(ops: JsonbPathOps)], type: Gin)
@@ -881,6 +896,22 @@ model NotificationPreference {
   @@unique([userId, channel])
 }
 
+/// A browser Web Push subscription (service worker), so notifications reach a closed tab/app.
+model PushSubscription {
+  id         String    @id @default(uuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?
@@ -893,6 +924,8 @@ model AuditLog {
   actor User? @relation(fields: [actorId], references: [id])
 
   @@index([entityType, entityId, at])
+  @@index([actorId, at])
+  @@index([at])
 }
 
 // ---------------------------------------------------------------------------

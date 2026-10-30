@@ -57,6 +57,7 @@ export function createPrismaMock() {
     medicalOrder: model(),
     caregiverStrike: model(),
     callLog: model(),
+    pushSubscription: model(),
     // $transaction supports both array form and callback form.
     $transaction: vi.fn(),
   };

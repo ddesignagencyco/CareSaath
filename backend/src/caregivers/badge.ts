@@ -43,3 +43,11 @@ export function computeCaregiverBadge(input: BadgeInputs): CaregiverBadge {
   }
   return 'BRONZE';
 }
+
+/** An admin override (POST /admin/caregivers/:id/badge) wins; null/undefined falls back to the computed tier. */
+export function resolveCaregiverBadge(
+  badgeOverride: CaregiverBadge | null | undefined,
+  input: BadgeInputs,
+): CaregiverBadge {
+  return badgeOverride ?? computeCaregiverBadge(input);
+}

@@ -172,6 +172,12 @@ export class ListPaymentsQueryDto {
   @IsUUID()
   visitId?: string;
 
+  @ApiPropertyOptional({ example: 'Fatima', description: 'Free-text search: patient name, caregiver name, or amount (PKR or paisa)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
+
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -755,10 +761,27 @@ export class PaymentsService {
     } satisfies Prisma.PaymentInclude;
   }
 
+  /** ?q= — patient / caregiver / customer name, or the amount in PKR or paisa. */
+  private paymentSearchWhere(q: string | undefined): Prisma.PaymentWhereInput {
+    const term = q?.trim();
+    if (!term) return {};
+    const contains = { contains: term, mode: 'insensitive' as const };
+    const amount = /^\d+(\.\d+)?$/.test(term) ? Number(term) : null;
+    return {
+      OR: [
+        { visit: { booking: { patient: { name: contains } } } },
+        { visit: { booking: { caregiver: { user: { fullName: contains } } } } },
+        { visit: { booking: { customer: { fullName: contains } } } },
+        ...(amount !== null ? [{ amount: { in: [Math.round(amount), Math.round(amount * 100)] } }] : []),
+      ],
+    };
+  }
+
   async listForAdmin(query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
       ...(query.visitId ? { visitId: query.visitId } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...this.paymentSearchWhere(query.q),
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.payment.count({ where }),
@@ -775,9 +798,12 @@ export class PaymentsService {
 
   async listForCustomer(user: AuthUser, query: ListPaymentsQueryDto): Promise<Paginated<unknown>> {
     const where: Prisma.PaymentWhereInput = {
-      visit: { booking: { customerId: user.sub } },
-      ...(query.visitId ? { visitId: query.visitId } : {}),
-      ...(query.status ? { status: query.status } : {}),
+      AND: [
+        { visit: { booking: { customerId: user.sub } } },
+        query.visitId ? { visitId: query.visitId } : {},
+        query.status ? { status: query.status } : {},
+        this.paymentSearchWhere(query.q),
+      ],
     };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.payment.count({ where }),
@@ -823,7 +849,7 @@ export class CustomerPaymentsController {
   @Get()
   @ApiOperation({
     summary: 'List customer payment receipts',
-    description: 'Retrieves history of customer payment records with status and pagination.',
+    description: 'Customer payment records, newest first, paginated. Filter with ?status=, ?visitId= and free-text ?q= (patient / caregiver name / amount in PKR or paisa).',
   })
   list(@CurrentUser() user: AuthUser, @Query() query: ListPaymentsQueryDto) {
     return this.payments.listForCustomer(user, query);

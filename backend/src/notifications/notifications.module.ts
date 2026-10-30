@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Injectable,
   Logger,
@@ -27,9 +29,13 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  IsString,
+  IsUrl,
   IsUUID,
   Max,
+  MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import {
   NotificationChannel,
@@ -53,6 +59,7 @@ import {
   SmsChannelAdapter,
   WhatsAppChannelAdapter,
 } from './channels.js';
+import { WebPushService } from './web-push.service.js';
 
 export interface NotifyInput {
   userId: string;
@@ -119,6 +126,37 @@ export class MarkNotificationsReadDto {
   before?: string;
 }
 
+export class PushSubscriptionKeysDto {
+  @ApiProperty({ description: 'Base64url P-256 public key from PushSubscription.toJSON().keys.p256dh' })
+  @IsString()
+  @MaxLength(256)
+  p256dh!: string;
+
+  @ApiProperty({ description: 'Base64url auth secret from PushSubscription.toJSON().keys.auth' })
+  @IsString()
+  @MaxLength(128)
+  auth!: string;
+}
+
+export class PushSubscribeDto {
+  @ApiProperty({ example: 'https://fcm.googleapis.com/fcm/send/abc…', description: 'PushSubscription.endpoint' })
+  @IsUrl({ protocols: ['https'], require_protocol: true, require_tld: false })
+  @MaxLength(2048)
+  endpoint!: string;
+
+  @ApiProperty({ type: PushSubscriptionKeysDto })
+  @ValidateNested()
+  @Type(() => PushSubscriptionKeysDto)
+  keys!: PushSubscriptionKeysDto;
+}
+
+export class PushUnsubscribeDto {
+  @ApiProperty({ description: 'The endpoint to remove (PushSubscription.endpoint)' })
+  @IsString()
+  @MaxLength(2048)
+  endpoint!: string;
+}
+
 /**
  * Notifications (FR-C10, TRD §6.7): status-change events are persisted as
  * in-app records and, when a phone is supplied, dispatched over SMS (dev logs
@@ -136,6 +174,7 @@ export class NotificationsService {
     pushAdapter: PushChannelAdapter,
     emailAdapter: EmailChannelAdapter,
     @Optional() private readonly realtime?: RealtimeService,
+    @Optional() private readonly webPush?: WebPushService,
   ) {
     this.adapters = [pushAdapter, smsAdapter, whatsappAdapter, emailAdapter];
   }
@@ -226,6 +265,14 @@ export class NotificationsService {
               RealtimeEvents.notificationCreated,
               { ...created, ...sent, readAt: null },
             );
+            // ...and to their closed tabs / installed app via Web Push (fire-and-forget).
+            void this.webPush?.sendToUser(input.userId, {
+              id: created.id,
+              event: input.event,
+              title,
+              body: input.message ?? null,
+              data: input.payload,
+            });
           }
         } catch {
           await this.prisma.notification.update({
@@ -305,6 +352,38 @@ export class NotificationsService {
     return { updated: result.count };
   }
 
+  pushConfig(): { enabled: boolean; vapidPublicKey: string | null } {
+    const vapidPublicKey = this.webPush?.vapidPublicKey() ?? null;
+    return { enabled: vapidPublicKey !== null, vapidPublicKey };
+  }
+
+  /** Stores (or re-assigns to the caller) one browser push subscription. Idempotent per endpoint. */
+  async subscribePush(user: AuthUser, dto: PushSubscribeDto, userAgent?: string) {
+    if (!this.webPush?.enabled()) {
+      throw new BadRequestException('Web push is not configured on this server');
+    }
+    const sub = await this.prisma.pushSubscription.upsert({
+      where: { endpoint: dto.endpoint },
+      update: { userId: user.sub, p256dh: dto.keys.p256dh, auth: dto.keys.auth, userAgent: userAgent ?? null },
+      create: {
+        userId: user.sub,
+        endpoint: dto.endpoint,
+        p256dh: dto.keys.p256dh,
+        auth: dto.keys.auth,
+        userAgent: userAgent ?? null,
+      },
+    });
+    return { id: sub.id, endpoint: sub.endpoint, createdAt: sub.createdAt };
+  }
+
+  /** Removes one of the caller's subscriptions (e.g. on logout or permission revoked). */
+  async unsubscribePush(user: AuthUser, dto: PushUnsubscribeDto): Promise<{ removed: number }> {
+    const result = await this.prisma.pushSubscription.deleteMany({
+      where: { endpoint: dto.endpoint, userId: user.sub },
+    });
+    return { removed: result.count };
+  }
+
   /** Every channel, defaulting to enabled when the caller has no saved preference for it. */
   async listPreferences(user: AuthUser): Promise<Array<{ channel: NotificationChannel; enabled: boolean }>> {
     const rows = await this.prisma.notificationPreference.findMany({ where: { userId: user.sub } });
@@ -359,6 +438,38 @@ export class NotificationsController {
     return this.notifications.markRead(user, dto);
   }
 
+  @Get('push/public-key')
+  @ApiOperation({
+    summary: 'Web Push config (VAPID public key)',
+    description: 'Returns { enabled, vapidPublicKey } — pass vapidPublicKey as applicationServerKey to PushManager.subscribe(). enabled=false (key null) until the server has VAPID keys.',
+  })
+  pushConfig() {
+    return this.notifications.pushConfig();
+  }
+
+  @Post('push/subscribe')
+  @ApiOperation({
+    summary: 'Register a browser push subscription',
+    description: 'Stores PushSubscription.toJSON() ({ endpoint, keys: { p256dh, auth } }) for the caller; every in-app notification is then also sent as a Web Push to it (respecting the PUSH channel preference). Idempotent per endpoint. 400 when the server has no VAPID keys.',
+  })
+  subscribePush(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: PushSubscribeDto,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.notifications.subscribePush(user, dto, userAgent?.slice(0, 500));
+  }
+
+  @Post('push/unsubscribe')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Remove a browser push subscription',
+    description: 'Deletes the caller\'s subscription with this endpoint (e.g. on logout).',
+  })
+  unsubscribePush(@CurrentUser() user: AuthUser, @Body() dto: PushUnsubscribeDto) {
+    return this.notifications.unsubscribePush(user, dto);
+  }
+
   @Get('preferences')
   @ApiOperation({
     summary: 'Get notification channel preferences',
@@ -387,6 +498,7 @@ export class NotificationsController {
     WhatsAppChannelAdapter,
     PushChannelAdapter,
     EmailChannelAdapter,
+    WebPushService,
   ],
   exports: [NotificationsService],
 })
