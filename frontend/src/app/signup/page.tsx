@@ -3,8 +3,8 @@
 import clsx from "clsx";
 import { BadgeCheck, MapPinned, Siren } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { LoginScreen } from "@shared/auth/login-screen";
 import { storeTokens as caregiverStoreTokens } from "@/features/caregiver/lib/auth";
 import { authApi } from "@/features/customer/lib/api/customer";
@@ -30,9 +30,11 @@ const ROLES = [
  * "into" someone else's account. The backend creates the account with the
  * chosen role and the name/email supplied here.
  */
-export default function SignupPage() {
+function SignupInner() {
   const router = useRouter();
-  const [role, setRole] = useState<"customer" | "caregiver">("customer");
+  // Landing CTAs can preselect the role, e.g. "Join as a caregiver" → /signup?role=caregiver.
+  const initialRole = useSearchParams().get("role") === "caregiver" ? "caregiver" : "customer";
+  const [role, setRole] = useState<"customer" | "caregiver">(initialRole);
 
   return (
     <LoginScreen
@@ -89,5 +91,14 @@ export default function SignupPage() {
         router.replace("/customer");
       }}
     />
+  );
+}
+
+export default function SignupPage() {
+  // useSearchParams requires a Suspense boundary under Next 16.
+  return (
+    <Suspense>
+      <SignupInner />
+    </Suspense>
   );
 }

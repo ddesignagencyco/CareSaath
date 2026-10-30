@@ -165,14 +165,14 @@ export default function Home() {
 
                 <div className="cs-in-3 flex flex-wrap gap-3">
                   <Link
-                    href="/customer"
+                    href="/signup"
                     className="group inline-flex min-h-14 items-center gap-2.5 rounded-full bg-brand-600 px-7 text-base font-semibold text-white transition-colors hover:bg-brand-700"
                   >
                     Find care
                     <ArrowRight className="size-5 transition-transform group-hover:translate-x-1" />
                   </Link>
                   <Link
-                    href="/caregiver"
+                    href="/signup?role=caregiver"
                     className="inline-flex min-h-14 items-center gap-2 rounded-full border border-brand-300 bg-white px-7 text-base font-semibold text-ink-800 transition-colors hover:border-brand-400 hover:text-brand-700"
                   >
                     <Stethoscope className="size-5" />
@@ -247,7 +247,7 @@ export default function Home() {
                 </span>
                 <h3 className="text-xl font-bold text-ink-900">{title}</h3>
                 <p className="text-[15px] leading-relaxed text-ink-500">{text}</p>
-                <Link href="/customer" className="group mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-semibold text-brand-700">
+                <Link href="/signup" className="group mt-auto inline-flex items-center gap-1.5 pt-1 text-sm font-semibold text-brand-700">
                   {cta}
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
@@ -383,10 +383,10 @@ export default function Home() {
               <p className="mt-3 text-[17px] leading-relaxed text-brand-50">Book a verified caregiver in minutes, or join CareSaath as a nurse or physiotherapist.</p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/customer" className="inline-flex min-h-14 items-center rounded-full bg-white px-7 text-base font-bold text-brand-700 transition-transform hover:-translate-y-0.5">
+              <Link href="/signup" className="inline-flex min-h-14 items-center rounded-full bg-white px-7 text-base font-bold text-brand-700 transition-transform hover:-translate-y-0.5">
                 Find care
               </Link>
-              <Link href="/caregiver" className="inline-flex min-h-14 items-center rounded-full border border-white/40 px-7 text-base font-semibold text-white transition-colors hover:bg-white/10">
+              <Link href="/signup?role=caregiver" className="inline-flex min-h-14 items-center rounded-full border border-white/40 px-7 text-base font-semibold text-white transition-colors hover:bg-white/10">
                 Join as a caregiver
               </Link>
             </div>
