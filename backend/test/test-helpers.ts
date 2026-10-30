@@ -47,6 +47,7 @@ export function createPrismaMock() {
     promoCode: model(),
     notification: model(),
     notificationPreference: model(),
+    pushSubscription: model(),
     auditLog: model(),
     platformConfig: model(),
     payment: model(),

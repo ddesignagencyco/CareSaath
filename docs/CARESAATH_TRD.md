@@ -26,14 +26,13 @@ Three user surfaces (SRS §2.1): customer app, caregiver panel, admin panel. One
 | Auth | JWT | Access/refresh tokens after OTP login |
 | Cache / ephemeral store | Redis | OTP storage and rate limits, caching, session/token deny-list |
 | Object storage | Cloudinary | Prescriptions, licenses, certificates, photos |
-| Email (dev) | MailHog | Capture outgoing email locally |
-| Email (optional) | Google SMTP | Real email if the project decides it needs email |
+| Email | SMTP (`info@caresaath.com`) | Real notification email; no local mail catcher |
 | Containers | Docker (Docker Compose for local) | Reproducible environments |
 | Package manager | npm | |
 
 **Not yet decided (TBD):**
 - Mobile framework for the native Android/iOS apps (see 3.2)
-- SMS gateway vendor, WhatsApp Business API provider, push provider
+- SMS gateway vendor, WhatsApp Business API provider (browser push uses Web Push/VAPID, no vendor account)
 - Card gateway vendor
 - Maps provider (SRS says "Google Maps Platform or comparable")
 - Cloud hosting provider, CI/CD tool, monitoring/logging stack
@@ -57,7 +56,7 @@ flowchart LR
     API --> WA[WhatsApp Business API]
     API --> PAY[JazzCash / Easypaisa / Raast / Card]
     API --> MAP[Maps API]
-    API --> MH[MailHog / Google SMTP]
+    API --> MH[SMTP: info@caresaath.com]
 ```
 
 Architecture style: **modular monolith** (design). One NestJS application with strict module boundaries. This meets "scale from 1–2 cities to 10+ without architecture redesign" (SRS §6) while keeping the MVP simple; modules can be split later if needed.
@@ -235,7 +234,7 @@ Caregiver confirms arrival with GPS (device location compared to booking address
 SOS button during an active visit creates a `SafetyIncident` with source SOS at highest priority, notifies admin and an emergency contact (recipient **TBD**). Complaints and caregiver reports follow the same pipeline with an audit trail. Escalation SLAs **TBD**.
 
 ### 6.7 Notifications (FR-C10, §7.3)
-Status-change events → notifications module → SMS / WhatsApp / push per user channel. Provider-side templates required for WhatsApp Business. Which events go to which channel is **TBD**. Retry on failure (design).
+Status-change events → notifications module → SMS / WhatsApp / push per user channel. Provider-side templates required for WhatsApp Business. Browser push uses the standard Web Push protocol with a VAPID keypair (`web-push`), so no vendor account is needed; endpoints are stored per user/device and expired ones are pruned. Which events go to which channel is **TBD**. Retry on failure (design).
 
 ---
 
@@ -294,7 +293,6 @@ Note: the SRS says health-data privacy must comply with "relevant Pakistani data
 | postgres | PostgreSQL | volume for data |
 | redis | Redis | |
 | cloudinary | Cloudinary (SaaS) | file storage; in-memory fallback when unconfigured |
-| mailhog | MailHog | SMTP sink + web UI |
 
 Ports, versions, and credentials go in `.env` (never committed). Version pins **TBD**.
 

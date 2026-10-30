@@ -230,6 +230,7 @@ model User {
   callsPlaced             CallLog[]                @relation("CallCaller")
   callsReceived           CallLog[]                @relation("CallCallee")
   notificationPreferences NotificationPreference[]
+  pushSubscriptions       PushSubscription[]
 }
 
 model OtpCode {
@@ -879,6 +880,28 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, channel])
+}
+
+/// A Web Push subscription registered by one of a user's browsers/devices.
+/// Browsers mint a new endpoint per install; `endpoint` is unique so a shared
+/// device is reassigned to whoever signs in last instead of delivering to both.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  platform      String    @default("WEB")
+  userAgent     String?
+  failureCount  Int       @default(0)
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model AuditLog {

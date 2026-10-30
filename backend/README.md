@@ -57,8 +57,9 @@ analytics/reports). Remaining hardening is tracked in the root README and TRD.
 
 ## Getting started
 
-Prerequisites: Node.js 24+, npm, Docker. Services (Postgres, Redis, MailHog)
-are defined in [`../docker/docker-compose.yml`](../docker/docker-compose.yml).
+Prerequisites: Node.js 24+, npm, Docker. Services (Postgres, Redis) are
+defined in [`../docker/docker-compose.yml`](../docker/docker-compose.yml).
+Email is sent through the SMTP account configured in `.env`.
 File storage uses Cloudinary; without credentials the app falls back to an
 in-memory driver so local development and tests need no external service.
 
@@ -96,6 +97,7 @@ Startup logs print the API base (`/api/v1`), Swagger UI and OpenAPI JSON URLs.
 | `npm run test:e2e` | End-to-end tests (requires Docker services) |
 | `npm run seed` | Seed demo data (refuses to run when `NODE_ENV=production`) |
 | `npm run admin:create` | Provision/promote an admin from `ADMIN_PHONE` (production-safe) |
+| `npm run push:keys` | Generate a Web Push VAPID keypair |
 
 **Definition of done for a change:** `npm run lint`, `npm run build`, `npm test`
 and `npm run test:e2e` all pass. Always run these before committing.
@@ -122,7 +124,10 @@ placeholders, or shorter than 32 characters:
 | `SMS_API_URL` (+ `SMS_API_KEY`) | Generic HTTP SMS gateway; see `.env.example` |
 
 Production also warns (does not fail) when `CORS_ORIGINS`, `SMTP_HOST`,
-`TURN_URLS`/`TURN_SHARED_SECRET`, or `PAYMENT_CHECKOUT_BASE_URL` are unset.
+`TURN_URLS`/`TURN_SHARED_SECRET`, `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`,
+`SENTRY_DSN`, or `PAYMENT_CHECKOUT_BASE_URL` are unset. A half-configured VAPID
+pair is rejected.
+Browser push is optional: without keys the in-app notification feed still works.
 
 ### First admin
 
@@ -175,7 +180,8 @@ prisma/
 | `common/decorators/public.decorator.ts` | `@Public()` to skip JWT auth |
 | `common/decorators/roles.decorator.ts` | `@Roles('CUSTOMER' \| 'CAREGIVER' \| 'ADMIN')` |
 | `common/dto/pagination.ts` | `PaginationDto`, `Paginated<T>`, `paginate()` |
-| `common/filters/http-exception.filter.ts` | Consistent JSON error envelope |
+| `common/filters/http-exception.filter.ts` | Consistent JSON error envelope; reports 5xx to Sentry |
+| `common/observability/sentry.ts` | Optional Sentry init (DSN-driven), PII-safe exception capture, shutdown flush |
 | `common/crypto/field-encryption.ts` | AES-256-GCM `encryptField`/`decryptMaybe`/`maskValue` for CNIC, medical context, payout accounts |
 | `config/platform-config.module.ts` | `ConfigService` (DB + Redis-cached, env fallback) and `/admin/config` |
 | `common/retention/retention.module.ts` | `RetentionService` scheduled purge of expired/consumed OTPs and old notifications |
@@ -226,7 +232,7 @@ resolve as Redis cache → `PlatformConfig` row → env fallback.
 /caregivers                  public search + profile
 /disputes                    raise / list own (customer + caregiver)
 /sos                         raise an SOS during an active visit (customer + caregiver)
-/notifications               own notifications
+/notifications               own notifications + browser push subscriptions
 /admin/caregivers            verification + management
 /admin/commissions           GET/PUT commission rates
 /admin/promos                GET/POST/PATCH promo codes
@@ -282,9 +288,12 @@ resolve as Redis cache → `PlatformConfig` row → env fallback.
   for state-changing actions.
 - **Notifications**: `NotificationsService.notify(...)` never throws into the
   request path — safe to call after the business write. It dispatches over each
-  enabled `NotificationChannelAdapter` (`channels.ts`): push is always on, SMS
-  when a phone is supplied, WhatsApp only when `WHATSAPP_ENABLED=true`. Adapter
-  failures mark that row `FAILED` without affecting others.
+  enabled `NotificationChannelAdapter` (`channels.ts`): the PUSH row is always
+  written as the in-app feed (and also delivered over Web Push when VAPID keys
+  are configured), SMS when a phone is supplied, WhatsApp only when
+  `WHATSAPP_ENABLED=true`. Adapter failures mark that row `FAILED` without
+  affecting others; remote push failures are logged but leave the in-app row
+  `SENT` because the feed entry is still usable.
 - **Config**: read tunable values through `ConfigService.getNumber('<key>')`
   (e.g. respond window, OTP TTLs); never read those env vars directly. Change at
   runtime via `PUT /admin/config/:key`.

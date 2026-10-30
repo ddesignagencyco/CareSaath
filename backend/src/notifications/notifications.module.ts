@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Headers,
   HttpCode,
   Injectable,
   Logger,
@@ -26,10 +29,15 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsOptional,
+  IsString,
   IsUUID,
+  IsUrl,
   Max,
+  MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import {
   NotificationChannel,
@@ -40,6 +48,7 @@ import {
 } from '../generated/prisma/client.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
@@ -48,6 +57,7 @@ import { EmailModule } from '../email/email.module.js';
 import { eventDefinition } from './events.js';
 import {
   EmailChannelAdapter,
+  isAllowedPushEndpoint,
   isCriticalNotificationEvent,
   NotificationChannelAdapter,
   PushChannelAdapter,
@@ -120,15 +130,58 @@ export class MarkNotificationsReadDto {
   before?: string;
 }
 
+export class PushSubscriptionKeysDto {
+  @ApiProperty({ description: 'Browser public key from PushSubscription.toJSON().keys.p256dh' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  p256dh!: string;
+
+  @ApiProperty({ description: 'Browser auth secret from PushSubscription.toJSON().keys.auth' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  auth!: string;
+}
+
+export class RegisterPushSubscriptionDto {
+  @ApiProperty({
+    description: 'Push service endpoint from PushSubscription.toJSON().endpoint',
+    example: 'https://fcm.googleapis.com/fcm/send/abc123',
+  })
+  @IsUrl({ require_protocol: true, protocols: ['https'] })
+  @MaxLength(2048)
+  endpoint!: string;
+
+  @ApiProperty({ type: () => PushSubscriptionKeysDto })
+  @ValidateNested()
+  @Type(() => PushSubscriptionKeysDto)
+  keys!: PushSubscriptionKeysDto;
+
+  @ApiPropertyOptional({ example: 'WEB', description: 'Client platform; defaults to WEB' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  platform?: string;
+}
+
+export class UnregisterPushSubscriptionDto {
+  @ApiProperty({ description: 'Endpoint to remove for the caller' })
+  @IsUrl({ require_protocol: true, protocols: ['https'] })
+  @MaxLength(2048)
+  endpoint!: string;
+}
+
 /**
- * Notifications (FR-C10, TRD §6.7): status-change events are persisted as
- * in-app records and, when a phone is supplied, dispatched over SMS (dev logs
- * the message). WhatsApp/push channels are TBD in the TRD.
+ * Notifications (FR-C10, TRD A6.7): status-change events are persisted as
+ * in-app records and dispatched over SMS, WhatsApp, email and browser Web Push
+ * according to the recipient's channel preferences.
  */
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly adapters: NotificationChannelAdapter[];
+  private readonly pushAdapter: PushChannelAdapter;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -138,6 +191,7 @@ export class NotificationsService {
     emailAdapter: EmailChannelAdapter,
     @Optional() private readonly realtime?: RealtimeService,
   ) {
+    this.pushAdapter = pushAdapter;
     this.adapters = [pushAdapter, smsAdapter, whatsappAdapter, emailAdapter];
   }
 
@@ -210,10 +264,13 @@ export class NotificationsService {
         });
         try {
           await adapter.send({
+            userId: input.userId,
+            notificationId: created.id,
             phone: input.phone,
             email: recipient.email,
             title,
             message: input.message,
+            payload: input.payload as Record<string, unknown>,
             event: input.event,
           });
           const sent = await this.prisma.notification.update({
@@ -306,6 +363,76 @@ export class NotificationsService {
     return { updated: result.count };
   }
 
+  /** The VAPID public key browsers need to subscribe; null when push is unconfigured. */
+  pushPublicKey(): { enabled: boolean; publicKey: string | null } {
+    const publicKey = this.pushAdapter.publicVapidKey ?? null;
+    return { enabled: Boolean(publicKey), publicKey };
+  }
+
+  /**
+   * Register or refresh one browser/device subscription. The endpoint is unique
+   * across users: on a shared browser the latest signed-in user takes it over
+   * instead of the previous user continuing to receive pushes there.
+   */
+  async registerPushSubscription(
+    user: AuthUser,
+    dto: RegisterPushSubscriptionDto,
+    userAgent?: string,
+  ) {
+    if (!isAllowedPushEndpoint(dto.endpoint)) {
+      throw new BadRequestException(
+        'Push endpoint must be an HTTPS URL from a supported push service',
+      );
+    }
+    const subscription = await this.prisma.pushSubscription.upsert({
+      where: { endpoint: dto.endpoint },
+      update: {
+        userId: user.sub,
+        p256dh: dto.keys.p256dh,
+        auth: dto.keys.auth,
+        platform: (dto.platform?.trim() || 'WEB').toUpperCase(),
+        userAgent: userAgent?.trim() || null,
+        failureCount: 0,
+      },
+      create: {
+        userId: user.sub,
+        endpoint: dto.endpoint,
+        p256dh: dto.keys.p256dh,
+        auth: dto.keys.auth,
+        platform: (dto.platform?.trim() || 'WEB').toUpperCase(),
+        userAgent: userAgent?.trim() || null,
+      },
+    });
+    return {
+      id: subscription.id,
+      endpoint: subscription.endpoint,
+      platform: subscription.platform,
+    };
+  }
+
+  async listPushSubscriptions(user: AuthUser) {
+    return this.prisma.pushSubscription.findMany({
+      where: { userId: user.sub },
+      select: {
+        id: true,
+        endpoint: true,
+        platform: true,
+        failureCount: true,
+        lastSuccessAt: true,
+        lastFailureAt: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async unregisterPushSubscription(user: AuthUser, dto: UnregisterPushSubscriptionDto) {
+    const result = await this.prisma.pushSubscription.deleteMany({
+      where: { userId: user.sub, endpoint: dto.endpoint },
+    });
+    return { removed: result.count };
+  }
+
   /** Every channel, defaulting to enabled when the caller has no saved preference for it. */
   async listPreferences(user: AuthUser): Promise<Array<{ channel: NotificationChannel; enabled: boolean }>> {
     const rows = await this.prisma.notificationPreference.findMany({ where: { userId: user.sub } });
@@ -358,6 +485,51 @@ export class NotificationsController {
   })
   markRead(@CurrentUser() user: AuthUser, @Body() dto: MarkNotificationsReadDto) {
     return this.notifications.markRead(user, dto);
+  }
+
+  @Public()
+  @Get('push/public-key')
+  @ApiOperation({
+    summary: 'Get the Web Push VAPID public key',
+    description: 'Public VAPID key the browser passes to pushManager.subscribe. Returns enabled=false and publicKey=null when Web Push is not configured on the server.',
+  })
+  pushPublicKey() {
+    return this.notifications.pushPublicKey();
+  }
+
+  @Post('push/subscriptions')
+  @ApiOperation({
+    summary: 'Register a browser push subscription',
+    description: 'Stores or refreshes the caller\'s PushSubscription JSON (endpoint + p256dh/auth keys). Re-registering the same endpoint is idempotent and reassigns it to the current user.',
+  })
+  registerPushSubscription(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: RegisterPushSubscriptionDto,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.notifications.registerPushSubscription(user, dto, userAgent);
+  }
+
+  @Get('push/subscriptions')
+  @ApiOperation({
+    summary: 'List the caller\'s push subscriptions',
+    description: 'Registered browsers/devices with delivery timestamps. Use this to decide whether to re-subscribe after a permission reset.',
+  })
+  listPushSubscriptions(@CurrentUser() user: AuthUser) {
+    return this.notifications.listPushSubscriptions(user);
+  }
+
+  @Delete('push/subscriptions')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Unregister a browser push subscription',
+    description: 'Removes the endpoint for the caller only. Call this on logout or when the browser permission is revoked.',
+  })
+  unregisterPushSubscription(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UnregisterPushSubscriptionDto,
+  ) {
+    return this.notifications.unregisterPushSubscription(user, dto);
   }
 
   @Get('preferences')

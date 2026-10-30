@@ -54,7 +54,7 @@
 |**ID**|**Module**|**Task**|
 | :-: | :-: | :-: |
 |BE-001|Setup|Initialise NestJS + TypeScript project, npm scripts, lint/format|
-|BE-002|Setup|Docker Compose: postgres, redis, mailhog, backend|
+|BE-002|Setup|Docker Compose: postgres, redis, backend|
 |BE-003|Setup|Prisma setup, initial schema from ERD, migrations, seed script|
 |BE-004|Setup|Config module + .env validation; tunable-values table|
 |BE-005|Setup|Global validation, exception filter, logging, pagination, Swagger|

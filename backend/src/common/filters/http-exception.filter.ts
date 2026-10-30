@@ -7,6 +7,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { captureServerException } from '../observability/sentry.js';
+
+type RequestContext = Request & {
+  id?: string;
+  user?: { sub?: string; role?: string };
+};
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -15,7 +21,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request & { id?: string }>();
+    const request = ctx.getRequest<RequestContext>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
@@ -33,9 +39,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     } else {
       this.logger.error(
-        `Unhandled exception on ${request.method} ${request.url}`,
+        `Unhandled exception on ${request.method} ${request.url} requestId=${request.id ?? '-'}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
+    }
+
+    // 4xx responses are expected client errors; only report real failures.
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      captureServerException(exception, {
+        requestId: request.id,
+        method: request.method,
+        path: request.path ?? request.url,
+        userId: request.user?.sub,
+        role: request.user?.role,
+      });
     }
 
     response.status(status).json({

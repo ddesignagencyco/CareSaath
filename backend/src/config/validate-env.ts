@@ -76,6 +76,22 @@ export function validateEnv(options: EnvValidationOptions = {}): void {
     }
   }
 
+  const vapidPublicKey = env['VAPID_PUBLIC_KEY']?.trim();
+  const vapidPrivateKey = env['VAPID_PRIVATE_KEY']?.trim();
+  if (Boolean(vapidPublicKey) !== Boolean(vapidPrivateKey)) {
+    const message =
+      'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together (or both left empty to disable browser push)';
+    if (isProduction) {
+      errors.push(message);
+    } else {
+      warnings.push(message);
+    }
+  } else if (isProduction && !vapidPublicKey) {
+    warnings.push(
+      'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are not set; browser push is disabled (in-app notifications still work)',
+    );
+  }
+
   if (isProduction) {
     // OTPs must never be silently written to production logs. A real provider
     // is required unless the operator explicitly opts into dev logging.
@@ -104,6 +120,19 @@ export function validateEnv(options: EnvValidationOptions = {}): void {
     if (!env['PAYMENT_CHECKOUT_BASE_URL']) {
       warnings.push(
         'PAYMENT_CHECKOUT_BASE_URL is not set; JazzCash/Easypaisa checkouts will use the placeholder host',
+      );
+    }
+    if (!env['SENTRY_DSN']) {
+      warnings.push('SENTRY_DSN is not set; 5xx errors will only be written to logs');
+    }
+  }
+
+  const sentryRate = env['SENTRY_TRACES_SAMPLE_RATE'];
+  if (sentryRate !== undefined && sentryRate !== '') {
+    const parsed = Number(sentryRate);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      errors.push(
+        `SENTRY_TRACES_SAMPLE_RATE must be a number between 0 and 1 (received "${sentryRate}")`,
       );
     }
   }

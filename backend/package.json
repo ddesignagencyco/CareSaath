@@ -30,7 +30,8 @@
     "prisma:migrate": "prisma migrate deploy --config prisma7.config.ts",
     "prisma:studio": "prisma studio --config prisma7.config.ts",
     "seed": "node prisma/seed.mjs",
-    "admin:create": "node prisma/create-admin.mjs"
+    "admin:create": "node prisma/create-admin.mjs",
+    "push:keys": "web-push generate-vapid-keys"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -43,6 +44,7 @@
     "@nestjs/websockets": "^12.2.0",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "@sentry/node": "^11.10.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -57,7 +59,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.4",
-    "stripe": "^23.0.1"
+    "stripe": "^23.0.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
@@ -69,6 +72,7 @@
     "@types/pdfkit": "^0.17.7",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",
+    "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.2",
     "oxlint": "^1.58.0",
     "oxlint-tsgolint": "^7.0.2001",

@@ -8,10 +8,12 @@ import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { validateEnv } from './config/validate-env.js';
+import { closeSentry, initSentry } from './common/observability/sentry.js';
 
 async function bootstrap() {
   // Fail before Nest boots if secrets/config are missing or still placeholders.
   validateEnv();
+  const sentryEnabled = initSentry();
 
   const isProduction = process.env['NODE_ENV'] === 'production';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
@@ -85,7 +87,7 @@ async function bootstrap() {
           '     - **Admin:** `+923000000000`',
           '     - **Customer:** `+923001110001` (Ayesha Khan) or `+923001110002` (Bilal Ahmed)',
           '     - **Caregiver:** `+923001110011` (Fatima Noor - Nurse) or `+923001110012` (Ali Raza - Physio)',
-          '   - **Step 2:** The OTP is captured locally in **MailHog** at http://localhost:18025 or logged in your server console.',
+          '   - **Step 2:** In local development the OTP is logged in your server console (`SMS_DEV_LOG` or non-production); otherwise it is sent by SMS.',
           '   - **Step 3:** Call `POST /api/v1/auth/otp/verify` with the phone and OTP to obtain the `accessToken`.',
           '   - **Step 4:** Click the green **Authorize** button at the top right of this page and enter `Bearer <accessToken>`.',
           '',
@@ -151,6 +153,11 @@ async function bootstrap() {
 
   // Let Prisma/Redis close cleanly on Render's SIGTERM instead of dropping connections.
   app.enableShutdownHooks();
+  if (sentryEnabled) {
+    // Flush queued events before the process exits.
+    process.once('SIGTERM', () => void closeSentry());
+    process.once('SIGINT', () => void closeSentry());
+  }
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port, '0.0.0.0');
@@ -163,6 +170,11 @@ async function bootstrap() {
     swaggerEnabled
       ? `Swagger UI:     ${base}/docs`
       : 'Swagger UI:     disabled (set SWAGGER_ENABLED=true to expose it)',
+  );
+  logger.log(
+    sentryEnabled
+      ? 'Error tracking: Sentry enabled'
+      : 'Error tracking: disabled (set SENTRY_DSN to enable)',
   );
 }
 await bootstrap();

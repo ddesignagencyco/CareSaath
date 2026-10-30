@@ -55,6 +55,35 @@ describe('validateEnv', () => {
     ).not.toThrow();
   });
 
+  it('rejects a half-configured VAPID keypair in production', () => {
+    expect(() =>
+      validateEnv({ env: productionEnv({ VAPID_PUBLIC_KEY: 'public-key' }) }),
+    ).toThrow(/VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY/);
+  });
+
+  it('accepts a complete VAPID keypair in production', () => {
+    expect(() =>
+      validateEnv({
+        env: productionEnv({ VAPID_PUBLIC_KEY: 'public-key', VAPID_PRIVATE_KEY: 'private-key' }),
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects an out-of-range Sentry traces sample rate', () => {
+    expect(() =>
+      validateEnv({ env: productionEnv({ SENTRY_TRACES_SAMPLE_RATE: '1.5' }) }),
+    ).toThrow(/SENTRY_TRACES_SAMPLE_RATE/);
+    expect(() =>
+      validateEnv({ env: productionEnv({ SENTRY_TRACES_SAMPLE_RATE: 'not-a-number' }) }),
+    ).toThrow(/SENTRY_TRACES_SAMPLE_RATE/);
+  });
+
+  it('accepts a zero Sentry traces sample rate', () => {
+    expect(() =>
+      validateEnv({ env: productionEnv({ SENTRY_TRACES_SAMPLE_RATE: '0' }) }),
+    ).not.toThrow();
+  });
+
   it('allows placeholders outside production', () => {
     expect(() =>
       validateEnv({

@@ -10,9 +10,5 @@ services:
   redis:
     image: redis:7
     ports: ["16379:6379"] # 6379 may be taken by another local project
-  mailhog:
-    image: mailhog/mailhog
-    # 1025/8025 may be taken by another local project; use 11025/18025
-    ports: ["11025:1025", "18025:8025"]
 volumes:
   pgdata:

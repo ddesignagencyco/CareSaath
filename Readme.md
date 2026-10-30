@@ -18,7 +18,7 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 9 | Gap-fill: OTP visit check-in, prescription upload, visit reschedule, SOS, CNIC/medical-context encryption | Done |
 | 10 | Hardening: platform config (admin-tunable), notification channels (SMS/WhatsApp/push), search caching, data retention job, CI | Done |
 | 11 | Production hardening: env validation, security headers, CORS allowlist, per-IP rate limiting, real health/readiness probes, graceful shutdown, upload signature checks, production bootstrap migration + admin CLI | Done |
-| 12+ | Remaining: real WhatsApp/push provider, JazzCash/Easypaisa merchant integration, monitoring/alerts, backups, frontend merge | In progress |
+| 12+ | Remaining: vendor credentials (real WhatsApp/SMS gateway), JazzCash/Easypaisa merchant integration, uptime alerting, backups, frontend merge | In progress |
 
 > **Deployed on Render, but read [`docs/production-runbook.md`](docs/production-runbook.md) before treating it as production-ready.** In particular, production refuses to boot without a real SMS provider (`SMS_API_URL`) or an explicit `SMS_DEV_LOG=true`, and requires all encryption keys to be set.
 
@@ -34,7 +34,7 @@ _Update this table as each phase progresses._
 | Database | PostgreSQL |
 | Cache / OTP store | Redis |
 | Object storage | Cloudinary (in-memory fallback when unconfigured) |
-| Dev email | MailHog |
+| Email | SMTP (`info@caresaath.com`) |
 | Containers | Docker Compose |
 | Package manager | npm |
 
@@ -56,7 +56,7 @@ Prerequisites: Node.js 24+, npm, Docker.
 # 1. Environment
 cp .env.example .env
 
-# 2. Start PostgreSQL, Redis, MailHog
+# 2. Start PostgreSQL and Redis
 docker compose -f docker/docker-compose.yml up -d
 
 # 3. Install and run the backend
@@ -69,9 +69,10 @@ Local service ports:
 
 | Service | Port |
 |---|---|
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| MailHog SMTP / web UI | 11025 / 18025 |
+| PostgreSQL | 15432 |
+| Redis | 16379 |
+
+Email notifications use the SMTP account configured in `.env`; there is no local mail catcher.
 
 Credentials in `.env.example` are for local development only. Never commit `.env`.
 

@@ -34,7 +34,7 @@ if (-not (Test-Path $envFile)) {
 }
 
 if (-not $SkipDocker) {
-  Step "Starting Postgres, Redis and Mailhog (docker compose)"
+  Step "Starting Postgres and Redis (docker compose)"
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker not found. Install Docker Desktop, or re-run with -SkipDocker and point .env at your own Postgres/Redis."
   }

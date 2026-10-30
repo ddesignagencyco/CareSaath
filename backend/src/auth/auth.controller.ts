@@ -21,7 +21,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Request login OTP',
     description:
-      'Generates a 6-digit one-time password and sends it via SMS gateway (captured locally in MailHog at http://localhost:18025). Rate limited to 3 requests per 10 minutes.',
+      'Generates a 6-digit one-time password and sends it via SMS gateway (logged in the server console in local development). Rate limited to 3 requests per 10 minutes.',
   })
   @ApiResponse({
     status: 200,

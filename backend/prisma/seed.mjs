@@ -94,7 +94,7 @@ for (const setting of platformConfig) {
 console.log(`Seeded ${platformConfig.length} platform config values`);
 
 // ===========================================================================
-// 2. Demo users (login via OTP -> MailHog at http://localhost:18025)
+// 2. Demo users (login via OTP -> logged in the server console in local development)
 // ===========================================================================
 
 const CUSTOMERS = [
@@ -742,7 +742,7 @@ console.log('Seeded promo code, safety incident, dispute and notifications');
 // Summary
 // ===========================================================================
 
-console.log('\n=== Demo login (OTP arrives in MailHog: http://localhost:18025) ===');
+console.log('\n=== Demo login (OTP is logged in the server console in local development) ===');
 console.log(`  ADMIN     ${adminPhone}`);
 console.log(`  CUSTOMER  ${CUSTOMERS[0].phone}  (${CUSTOMERS[0].fullName})`);
 console.log(`  CUSTOMER  ${CUSTOMERS[1].phone}  (${CUSTOMERS[1].fullName})`);

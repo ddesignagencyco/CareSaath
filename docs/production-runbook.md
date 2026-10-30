@@ -15,13 +15,14 @@ incident response.
 - [ ] `PAYMENT_WEBHOOK_SECRET` (and provider-specific secrets) set
 - [ ] `SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD` set and a test email delivered
 - [ ] `TURN_URLS` + `TURN_SHARED_SECRET` set (calls behind NAT)
+- [ ] `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` set and a test browser receives a push
 - [ ] `PAYMENT_CHECKOUT_BASE_URL` set if JazzCash/Easypaisa are offered
 - [ ] First admin provisioned with `npm run admin:create`
 - [ ] Commission rates exist for every specialty (`SELECT * FROM "CommissionRate"`)
 - [ ] Production database is **not** the demo-seeded database
 - [ ] `/health/ready` returns 200 from outside Render
 - [ ] Database backups/PITR enabled and a restore has been tested
-- [ ] Uptime monitor + error tracking + log drain configured
+- [ ] Uptime monitor + `SENTRY_DSN` + log drain configured, and a test 5xx reaches Sentry
 - [ ] `prisma migrate deploy` reviewed; a pre-migration snapshot exists
 
 ---
@@ -58,20 +59,40 @@ instance.
 Minimum signals:
 
 - **Uptime**: external probe on `/health/ready` every 1–5 minutes, alert after 2 failures
-- **Errors**: error tracker (Sentry or equivalent) wired into `AllExceptionsFilter`
+- **Errors**: Sentry (`SENTRY_DSN`) wired into `AllExceptionsFilter` for 5xx/unknown
+  failures, tagged with `X-Request-Id` and the user id. Request bodies, cookies
+  and query strings are stripped before sending; 4xx client errors are not reported.
 - **Logs**: Render log drain to a searchable store; every request has `X-Request-Id`
 - **Latency**: p95 for `/api/v1/caregivers` (search) and booking writes
-- **Business**: payment webhook failures, OTP send failures, SOS events
+- **Business**: payment webhook failures, OTP send failures, push delivery failures, SOS events
 - **Infrastructure**: Postgres connections, Redis memory, 5xx rate
 
 Alerts should page for: readiness down, 5xx spike, webhook failures, SOS.
+
+### Push notifications
+
+Web Push uses a VAPID keypair; no vendor account is required.
+
+1. Generate once with `cd backend && npm run push:keys` and store both keys in
+   Render (`VAPID_PRIVATE_KEY` is a secret; `VAPID_PUBLIC_KEY` is served to
+   browsers by `GET /api/v1/notifications/push/public-key`).
+2. The frontend registers a service worker, calls
+   `pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })`, then
+   posts the `PushSubscription` JSON to `POST /api/v1/notifications/push/subscriptions`.
+3. Verify with a real notification (e.g. a booking status change) on a device
+   that has granted permission.
+4. Endpoints the push service reports as `404`/`410` are deleted automatically;
+   call `DELETE /api/v1/notifications/push/subscriptions` on logout.
+5. Rotating the VAPID keypair invalidates existing subscriptions; clients must
+   re-register.
 
 ---
 
 ## 5. Security operations
 
 - Rotate `JWT_*`, encryption and webhook secrets on a schedule; changing an
-  encryption key requires re-encrypting existing rows first.
+  encryption key requires re-encrypting existing rows first. Rotating the VAPID
+  keypair requires clients to re-register for push.
 - Keep `SWAGGER_ENABLED=false` in production.
 - Keep `CORS_ORIGINS` to known browser origins only.
 - The per-IP rate limiter is a floor, not a substitute for the per-phone OTP

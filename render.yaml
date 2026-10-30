@@ -78,6 +78,15 @@ services:
         value: 60
       - key: DATABASE_POOL_MAX
         value: 20
+      # Sentry error tracking. Without a DSN, 5xx errors go to logs only.
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: SENTRY_RELEASE
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: 0.1
       # SMS provider. Production refuses to boot without it unless SMS_DEV_LOG=true.
       - key: SMS_API_URL
         sync: false
@@ -93,6 +102,17 @@ services:
       - key: WHATSAPP_API_URL
         sync: false
       - key: WHATSAPP_API_KEY
+        sync: false
+      # Browser Web Push (VAPID). Generate with `npm run push:keys`; the private
+      # key is a secret, the public key is handed to browsers by the API.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:info@caresaath.com
+      # Only needed for a self-hosted push service; unknown hosts are rejected.
+      - key: PUSH_ENDPOINT_ALLOWED_HOSTS
         sync: false
       # Transactional email.
       - key: SMTP_HOST

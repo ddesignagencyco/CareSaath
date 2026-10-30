@@ -234,4 +234,71 @@ describe('NotificationsService', () => {
       create: { userId: 'u-1', channel: 'WHATSAPP', enabled: false },
     });
   });
+
+  it('registers a push subscription for the caller', async () => {
+    prisma.pushSubscription.upsert.mockResolvedValue({
+      id: 'ps-1',
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      platform: 'WEB',
+    });
+    const result = await service.registerPushSubscription(
+      user,
+      {
+        endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+        keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+        platform: 'web',
+      },
+      'test-agent',
+    );
+    expect(result).toEqual({
+      id: 'ps-1',
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      platform: 'WEB',
+    });
+    expect(prisma.pushSubscription.upsert).toHaveBeenCalledWith({
+      where: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc' },
+      update: expect.objectContaining({
+        userId: 'u-1',
+        platform: 'WEB',
+        userAgent: 'test-agent',
+        failureCount: 0,
+      }),
+      create: expect.objectContaining({
+        userId: 'u-1',
+        p256dh: 'p256dh-key',
+        auth: 'auth-key',
+        platform: 'WEB',
+      }),
+    });
+  });
+
+  it('rejects a push endpoint outside the known push services', async () => {
+    await expect(
+      service.registerPushSubscription(user, {
+        endpoint: 'https://localhost/push',
+        keys: { p256dh: 'p256dh-key', auth: 'auth-key' },
+      }),
+    ).rejects.toThrow(/supported push service/);
+    expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
+  });
+
+  it('removes only the caller\'s own push subscription', async () => {
+    prisma.pushSubscription.deleteMany.mockResolvedValue({ count: 1 });
+    await expect(
+      service.unregisterPushSubscription(user, {
+        endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      }),
+    ).resolves.toEqual({ removed: 1 });
+    expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u-1', endpoint: 'https://fcm.googleapis.com/fcm/send/abc' },
+    });
+  });
+
+  it('lists the caller\'s push subscriptions', async () => {
+    prisma.pushSubscription.findMany.mockResolvedValue([{ id: 'ps-1' }]);
+    await expect(service.listPushSubscriptions(user)).resolves.toEqual([{ id: 'ps-1' }]);
+    expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u-1' } }),
+    );
+  });
 });
