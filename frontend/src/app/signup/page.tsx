@@ -32,9 +32,14 @@ const ROLES = [
  */
 function SignupInner() {
   const router = useRouter();
-  // Landing CTAs can preselect the role, e.g. "Join as a caregiver" → /signup?role=caregiver.
-  const initialRole = useSearchParams().get("role") === "caregiver" ? "caregiver" : "customer";
-  const [role, setRole] = useState<"customer" | "caregiver">(initialRole);
+  // Landing CTAs preselect the role, e.g. "Join as a caregiver" → /signup?role=caregiver.
+  // Derive `role` from the URL rather than seeding useState with it: /signup is statically
+  // prerendered, so useSearchParams() is empty during hydration and a useState initializer
+  // would latch onto "customer" and never pick up the real param. Deriving stays reactive;
+  // the toggle overrides it once the user picks.
+  const roleParam = useSearchParams().get("role") === "caregiver" ? "caregiver" : "customer";
+  const [picked, setPicked] = useState<"customer" | "caregiver" | null>(null);
+  const role = picked ?? roleParam;
 
   return (
     <LoginScreen
@@ -53,7 +58,7 @@ function SignupInner() {
               type="button"
               role="radio"
               aria-checked={role === value}
-              onClick={() => setRole(value)}
+              onClick={() => setPicked(value)}
               className={clsx("rounded-lg py-2.5 text-sm font-semibold transition-colors", role === value ? "bg-white text-ink-900 shadow-card" : "text-ink-500")}
             >
               {label}

@@ -39,9 +39,6 @@ Today immediate (ASAP) booking is per-caregiver — at booking creation the back
 
 **4c. Scope chat to a real booking (defense in depth).** The chat endpoints (`messages`, reactions, media uploads) only check that the caller is a **party** to the booking — not the booking **status**. The FE already only shows a thread for `CONFIRMED`/`COMPLETED` bookings, but the API can still be used on a `REQUESTED`/`DECLINED`/`CANCELLED` booking. Reject chat `GET/POST` + media + reactions unless the booking is `CONFIRMED`/`COMPLETED` (e.g. 403 "Chat opens once the booking is confirmed"); optionally make a completed thread read-only after a grace period.
 
-## 5. Realtime notifications — push while the app is closed
-
-In-app realtime **already works** over the Socket.IO connection (the shells connect on login, so chat, visit-status changes and the notification bell all update live with **no** browser permission needed). What's missing is **push while the tab/app is closed**: that needs **(FE)** a service worker + a Push subscription and **(BE)** VAPID keys + `POST /notifications/push/subscribe { endpoint, keys }` to store the subscription, plus a web-push send wherever a `notification.created` is emitted. The FE now asks for notification permission up front (on the first tap inside the app); the subscribe step is ready to wire once the backend endpoint + VAPID public key exist.
 
 ## 6. Visit auto-starts on accept (FE behaviour — confirm backend allows it)
 
