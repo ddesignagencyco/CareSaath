@@ -10,7 +10,7 @@ import { IconButton } from "@shared/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtime } from "@shared/api/realtime";
 import { authApi, meApi } from "@/features/admin/lib/api/admin";
-import { USE_MOCKS, http } from "@/features/admin/lib/api/http";
+import { http } from "@/features/admin/lib/api/http";
 import { decodeToken, session } from "@/features/admin/lib/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
@@ -61,7 +61,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.admin.sidebarCollapsed");
   const t = useTranslations("adminA.shell");
   const tNav = useTranslations("common.nav");
-  const tStates = useTranslations("common.states");
 
   useEffect(() => {
     if (hydrated && !current) router.replace("/login?next=/admin");
@@ -70,7 +69,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // The admin's own name (the token carries no name; /customer/me is the shared profile route).
   const me = useQuery({ queryKey: ["a-me"], queryFn: meApi.get, enabled: !!current, staleTime: 300_000 });
   const qc = useQueryClient();
-  useRealtime({ session, queryClient: qc, notificationsKey: ["a-notifications"], refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
+  useRealtime({ session, queryClient: qc, notificationsKey: ["a-notifications"], refresh: () => http.refreshSession(), enabled: !!me.data });
 
   // Close the mobile menu after navigation.
   const [lastPath, setLastPath] = useState(pathname);
@@ -131,11 +130,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </IconButton>
         </div>
         <div className="flex-1" />
-        {USE_MOCKS && (
-          <span className="hidden rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-accent-400/30 sm:inline">
-            {tStates("mockBadge")}
-          </span>
-        )}
         <LanguageToggle />
         <div className="border-s border-ink-100 ps-2">
           <ProfileMenu
@@ -147,12 +141,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           />
         </div>
       </header>
-
-      {USE_MOCKS && (
-        <div role="alert" className="flex items-center justify-center gap-2 bg-warning-600 px-4 py-1.5 text-center text-xs font-bold text-white">
-          {tStates("mockBanner")}
-        </div>
-      )}
 
       <main className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
     </div>

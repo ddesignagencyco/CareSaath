@@ -1,31 +1,26 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Languages, LogOut, MapPin, RotateCcw } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronRight, Languages, LogOut, MapPin } from "lucide-react";
 import { Switch } from "@shared/ui/switch";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { Card } from "@shared/ui/card";
-import { useToast } from "@shared/ui/toast";
 import { formatPkMobile } from "@shared/lib/phone";
 import { SECONDARY } from "@/features/caregiver/components/shell/nav";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
-import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { useMe, useSignOut } from "@/features/caregiver/lib/auth";
 import { useLocationSharing } from "@/features/caregiver/lib/use-live-location";
-import { resetMockDb } from "@/features/caregiver/lib/mock/db";
 
 /** Mobile overflow menu (the desktop sidebar lists these directly). */
 export default function MorePage() {
   const me = useMe();
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get });
   const signOut = useSignOut();
-  const client = useQueryClient();
-  const toast = useToast();
   const t = useTranslations("caregiverA");
   const tc = useTranslations("common");
   const [shareLocation, setShareLocation] = useLocationSharing();
@@ -70,18 +65,6 @@ export default function MorePage() {
       <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
 
       <Card className="divide-y divide-ink-100 overflow-hidden">
-        {USE_MOCKS && (
-          <button
-            onClick={() => {
-              resetMockDb();
-              client.invalidateQueries();
-              toast.success(tc("states.demoReset"));
-            }}
-            className="flex w-full items-center gap-3 px-5 py-4 text-start text-sm font-semibold text-ink-800 hover:bg-ink-25"
-          >
-            <RotateCcw className="size-5 text-ink-400" /> {tc("actions.resetDemo")}
-          </button>
-        )}
         <button onClick={signOut} className="flex w-full items-center gap-3 px-5 py-4 text-start text-sm font-semibold text-danger-600 hover:bg-danger-50">
           <LogOut className="size-5" /> {tc("actions.signOut")}
         </button>

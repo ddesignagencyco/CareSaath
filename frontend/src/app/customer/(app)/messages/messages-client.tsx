@@ -7,7 +7,6 @@ import { ChatProvider } from "@shared/chat/context";
 import { MessagesShell } from "@shared/chat/messages-shell";
 import type { ChatThreadMeta, ChatTransport } from "@shared/chat/types";
 import { useLabels } from "@shared/i18n/use-labels";
-import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { useCaregiverMap } from "@/features/customer/components/caregiver-bits";
 import { bookingsApi, chatApi, meApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
@@ -16,8 +15,8 @@ import { keys } from "@/features/customer/lib/api/keys";
 function useCustomerChatTransport(): ChatTransport {
   const L = useLabels();
   const th = useTranslations("customerA.home");
-  const me = useQuery({ queryKey: keys.me, queryFn: meApi.get, enabled: !USE_MOCKS });
-  const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: !USE_MOCKS });
+  const me = useQuery({ queryKey: keys.me, queryFn: meApi.get, enabled: true });
+  const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: true });
   // A chat thread only for bookings with a real relationship — accepted/active (CONFIRMED) or past
   // (COMPLETED) — never pending requests, declines or cancellations. You can't message a caregiver you
   // haven't actually booked.
@@ -35,7 +34,7 @@ function useCustomerChatTransport(): ChatTransport {
     () => ({
       myUserId: me.data?.id,
       threads,
-      threadsLoaded: USE_MOCKS || bookings.isSuccess,
+      threadsLoaded: bookings.isSuccess,
       listMessages: async (id) => (await chatApi.list(id)).items.slice().reverse(),
       send: (id, body, replyToId) => chatApi.send(id, body, replyToId),
       markRead: async (id) => {

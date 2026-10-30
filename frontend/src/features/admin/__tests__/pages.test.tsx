@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiPath, json, mockFetch, renderWithProviders, type RecordedCall } from "@/test/utils";
-import * as seed from "@/features/admin/lib/mock/data";
+import * as seed from "./fixtures";
 import CaregiversPage from "@/app/admin/(console)/caregivers/page";
 import PayoutsPage from "@/app/admin/(console)/payouts/page";
 import PromosPage from "@/app/admin/(console)/promos/page";

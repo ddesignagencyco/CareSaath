@@ -10,9 +10,8 @@ export default defineConfig({
     pool: "vmThreads",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
-    // API-layer tests exercise the real HTTP path; mock-mode tests opt in with vi.stubEnv + vi.resetModules.
+    // API-layer tests exercise the real HTTP path against a stubbed fetch.
     env: {
-      NEXT_PUBLIC_USE_MOCKS: "false",
       NEXT_PUBLIC_API_URL: "http://api.test/api/v1",
       TZ: "Asia/Karachi",
     },

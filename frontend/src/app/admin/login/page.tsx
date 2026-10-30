@@ -4,17 +4,15 @@ import { BadgeCheck, FileCheck2, Siren } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { LoginScreen } from "@shared/auth/login-screen";
-import { MockHint } from "@shared/auth/mock-hint";
+import { DevHint } from "@shared/auth/dev-hint";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { authApi } from "@/features/admin/lib/api/admin";
-import { USE_MOCKS } from "@/features/admin/lib/api/http";
 import { decodeToken, session } from "@/features/admin/lib/api/session";
-import { MOCK_OTP } from "@/features/admin/lib/mock/handlers";
 import { formatPkMobile } from "@shared/lib/phone";
 
 /** Seeded admin (backend/prisma/seed.mjs). */
 const DEMO_ADMIN_PHONE = "+923000000000";
-const SHOW_DEV_HINT = !USE_MOCKS && process.env.NODE_ENV !== "production";
+const SHOW_DEV_HINT = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,26 +34,17 @@ export default function LoginPage() {
       topRight={<LanguageToggle />}
       phoneHint={
         SHOW_DEV_HINT && (
-          <MockHint>
+          <DevHint>
             <p>{t("devOtpHint")}</p>
             <p>{t("devDemoNumbers", { phone: `\u2066${formatPkMobile(DEMO_ADMIN_PHONE)}\u2069` })}</p>
-          </MockHint>
+          </DevHint>
         )
       }
       codeHint={
-        USE_MOCKS ? (
-          <MockHint>
-            {t.rich("mockCode", {
-              code: MOCK_OTP,
-              b: (c) => <b className="tabular tracking-widest">{c}</b>,
-            })}
-          </MockHint>
-        ) : (
-          SHOW_DEV_HINT && (
-            <MockHint>
-              <p>{t("devOtpHint")}</p>
-            </MockHint>
-          )
+        SHOW_DEV_HINT && (
+          <DevHint>
+            <p>{t("devOtpHint")}</p>
+          </DevHint>
         )
       }
       requestOtp={authApi.requestOtp}

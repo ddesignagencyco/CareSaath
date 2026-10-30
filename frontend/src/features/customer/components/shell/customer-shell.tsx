@@ -14,7 +14,7 @@ import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
-import { ApiError, USE_MOCKS, http } from "@/features/customer/lib/api/http";
+import { ApiError, http } from "@/features/customer/lib/api/http";
 import { session } from "@/features/customer/lib/api/session";
 import { CallProvider } from "@shared/chat/call-context";
 import { keys } from "@/features/customer/lib/api/keys";
@@ -107,7 +107,6 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const t = useTranslations("customerA.shell");
   const tn = useTranslations("common.nav");
-  const ts = useTranslations("common.states");
   const cn = useTranslations("customerA.notifications");
   const describe = useDescribe();
   const { raw, hydrated } = useSessionRaw();
@@ -115,7 +114,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const signOut = useSignOut();
   const unread = useUnread(!!me.data);
   const qc = useQueryClient();
-  useRealtime({ session, queryClient: qc, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !USE_MOCKS && !!me.data });
+  useRealtime({ session, queryClient: qc, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !!me.data });
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.customer.sidebarCollapsed");
 
   // GET /customer/me has no role guard, so a non-customer session (e.g. a stale
@@ -135,7 +134,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const phone = me.data ? formatPkMobile(me.data.phone) : "";
 
   return (
-    <CallProvider session={session} enabled={!USE_MOCKS && !!me.data}>
+    <CallProvider session={session} enabled={!!me.data}>
     <div className={clsx("min-h-dvh transition-[padding] duration-200 ease-out", collapsed ? "lg:ps-20" : "lg:ps-64")}>
       <aside
         className={clsx(
@@ -205,11 +204,6 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
           </IconButton>
         </div>
         <div className="flex-1" />
-        {USE_MOCKS && (
-          <span className="hidden rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-accent-400/30 sm:inline">
-            {ts("mockBadge")}
-          </span>
-        )}
         <LanguageToggle onChange={(l) => meApi.update({ preferredLanguage: l === "ur" ? "UR" : "EN" }).catch(() => undefined)} />
         <NotificationBell
           queryKey={[...keys.notifications, "list"]}

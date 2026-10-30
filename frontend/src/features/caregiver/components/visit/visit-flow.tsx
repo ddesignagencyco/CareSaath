@@ -14,10 +14,8 @@ import type { CaregiverVisitDetail } from "@shared/caregiver-types";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { visitsApi } from "@/features/caregiver/lib/api/caregiver";
-import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { getPosition } from "@shared/lib/geo";
-import { MOCK_OTP } from "@/features/caregiver/lib/mock/handlers";
 import { mapsUrl, visitStart } from "@shared/lib/visit";
 
 const STEPS = [
@@ -227,7 +225,6 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
               {t("checkIn")}
             </Button>
           </div>
-          {USE_MOCKS && <p className="text-xs text-accent-700">{t("mockCode", { code: MOCK_OTP })}</p>}
         </div>
       )}
     </div>
@@ -357,7 +354,6 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
               {t("checkOutConfirm")}
             </Button>
           </div>
-          {USE_MOCKS && <p className="text-xs text-accent-700">{t("mockCode", { code: MOCK_OTP })}</p>}
         </div>
       )}
     </div>

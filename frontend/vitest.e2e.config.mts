@@ -16,7 +16,6 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 60_000,
     env: {
-      NEXT_PUBLIC_USE_MOCKS: "false",
       NEXT_PUBLIC_API_URL: process.env.E2E_API_URL ?? "http://localhost:3000/api/v1",
     },
   },

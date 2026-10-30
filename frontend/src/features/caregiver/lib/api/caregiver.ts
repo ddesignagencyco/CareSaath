@@ -1,6 +1,6 @@
 /**
  * Caregiver API surface. Each function maps 1:1 to a backend route (in the
- * comment). With USE_MOCKS on, calls go to the in-browser mock instead.
+ * comment).
  */
 import type {
   AppNotification,
@@ -37,155 +37,128 @@ import type {
 } from "@shared/caregiver-types";
 import type { CaregiverDocument, DocType, IncidentPriority, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "@shared/types";
 import type { BackendChatMessage } from "@shared/chat/types";
-import * as mock from "../mock/handlers";
-import { http, USE_MOCKS } from "./http";
-
-const M = USE_MOCKS;
+import { http } from "./http";
 
 export const authApi = {
   /** POST /auth/otp/request */
-  requestOtp: (phone: string) => (M ? mock.requestOtp(phone) : http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
+  requestOtp: (phone: string) => (http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
   /** POST /auth/otp/verify — always yields a CUSTOMER for new numbers. */
-  verifyOtp: (phone: string, code: string) => (M ? mock.verifyOtp(phone, code) : http.post<TokenPair>("/auth/otp/verify", { phone, code })),
+  verifyOtp: (phone: string, code: string) => (http.post<TokenPair>("/auth/otp/verify", { phone, code })),
   /** POST /auth/refresh — needed right after register so the token carries CAREGIVER. */
-  refresh: (refreshToken: string) => (M ? mock.refresh() : http.post<TokenPair>("/auth/refresh", { refreshToken })),
+  refresh: (refreshToken: string) => (http.post<TokenPair>("/auth/refresh", { refreshToken })),
   /** POST /auth/logout */
-  logout: (refreshToken: string) => (M ? Promise.resolve({ ok: true }) : http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
+  logout: (refreshToken: string) => (http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
 };
 
 export const meApi = {
   /** GET /customer/me — works for any role; tells us if a caregiver profile exists. */
-  get: () => (M ? mock.me() : http.get<Me>("/customer/me")),
+  get: () => (http.get<Me>("/customer/me")),
   /** PATCH /customer/me — the only way to set the display name. */
-  update: (dto: { fullName?: string; email?: string; preferredLanguage?: "EN" | "UR" }) => (M ? mock.updateMe(dto) : http.patch<Pick<Me, "id" | "phone" | "email" | "fullName" | "preferredLanguage">>("/customer/me", dto)),
+  update: (dto: { fullName?: string; email?: string; preferredLanguage?: "EN" | "UR" }) => (http.patch<Pick<Me, "id" | "phone" | "email" | "fullName" | "preferredLanguage">>("/customer/me", dto)),
 };
 
 export const profileApi = {
   /** POST /caregiver/register */
-  register: (dto: RegisterCaregiverInput) => (M ? mock.register(dto) : http.post<CaregiverProfileRow>("/caregiver/register", dto)),
+  register: (dto: RegisterCaregiverInput) => (http.post<CaregiverProfileRow>("/caregiver/register", dto)),
   /** GET /caregiver/profile */
-  get: () => (M ? mock.getProfile() : http.get<MyCaregiverProfile>("/caregiver/profile")),
+  get: () => (http.get<MyCaregiverProfile>("/caregiver/profile")),
   /** PATCH /caregiver/profile */
-  update: (dto: UpdateCaregiverProfileInput) => (M ? mock.updateProfile(dto) : http.patch<CaregiverProfileRow>("/caregiver/profile", dto)),
+  update: (dto: UpdateCaregiverProfileInput) => (http.patch<CaregiverProfileRow>("/caregiver/profile", dto)),
   /** POST /caregiver/documents (multipart: file + type) */
-  uploadDocument: (file: File, type: DocType) => (M ? mock.uploadDocument(file, type) : http.upload<CaregiverDocument>("/caregiver/documents", file, { type })),
+  uploadDocument: (file: File, type: DocType) => (http.upload<CaregiverDocument>("/caregiver/documents", file, { type })),
   /** GET /caregiver/documents/:id/url */
-  documentUrl: (id: string) => (M ? mock.documentUrl(id) : http.get<{ url: string }>(`/caregiver/documents/${id}/url`)),
+  documentUrl: (id: string) => (http.get<{ url: string }>(`/caregiver/documents/${id}/url`)),
   /** POST /caregiver/photo (multipart: file) */
-  uploadPhoto: (file: File) => (M ? mock.uploadPhoto(file) : http.upload<{ photoKey: string }>("/caregiver/photo", file)),
+  uploadPhoto: (file: File) => (http.upload<{ photoKey: string }>("/caregiver/photo", file)),
   /** GET /caregiver/photo/url — 404 "No photo uploaded" when photoKey is null. */
-  photoUrl: () => (M ? mock.photoUrl() : http.get<{ url: string }>("/caregiver/photo/url")),
+  photoUrl: () => (http.get<{ url: string }>("/caregiver/photo/url")),
   /** PATCH /caregiver/location — share live location so nearby families can book an immediate visit. */
-  updateLocation: (lat: number, lng: number) => (M ? Promise.resolve() : http.patch<void>("/caregiver/location", { lat, lng })),
+  updateLocation: (lat: number, lng: number) => (http.patch<void>("/caregiver/location", { lat, lng })),
   /** GET /caregiver/service-areas — sub-city coverage zones (empty = whole city). */
-  serviceAreas: () => (M ? Promise.resolve<CaregiverServiceArea[]>([]) : http.get<CaregiverServiceArea[]>("/caregiver/service-areas")),
+  serviceAreas: () => (http.get<CaregiverServiceArea[]>("/caregiver/service-areas")),
   /** PUT /caregiver/service-areas — full replace of the coverage zones (empty list = whole-city coverage). */
   setServiceAreas: (areas: ServiceAreaInput[]) =>
-    M ? Promise.resolve<CaregiverServiceArea[]>([]) : http.put<CaregiverServiceArea[]>("/caregiver/service-areas", { areas }),
+    http.put<CaregiverServiceArea[]>("/caregiver/service-areas", { areas }),
 };
 
 export const availabilityApi = {
   /** GET /caregiver/availability */
-  get: () => (M ? mock.getAvailability() : http.get<Availability>("/caregiver/availability")),
+  get: () => (http.get<Availability>("/caregiver/availability")),
   /** PUT /caregiver/availability — full replace. */
-  put: (rules: AvailabilityRuleInput[]) => (M ? mock.putAvailability(rules) : http.put<Availability>("/caregiver/availability", { rules })),
+  put: (rules: AvailabilityRuleInput[]) => (http.put<Availability>("/caregiver/availability", { rules })),
   /** POST /caregiver/availability/blocks */
-  addBlock: (dto: { startDate: string; endDate: string; reason?: string }) => (M ? mock.addBlock(dto) : http.post<AvailabilityBlock>("/caregiver/availability/blocks", dto)),
+  addBlock: (dto: { startDate: string; endDate: string; reason?: string }) => (http.post<AvailabilityBlock>("/caregiver/availability/blocks", dto)),
   /** DELETE /caregiver/availability/blocks/:id */
-  deleteBlock: (id: string) => (M ? mock.deleteBlock(id) : http.delete<{ ok: true }>(`/caregiver/availability/blocks/${id}`)),
+  deleteBlock: (id: string) => (http.delete<{ ok: true }>(`/caregiver/availability/blocks/${id}`)),
 };
 
 export const bookingsApi = {
   /** GET /caregiver/bookings?status= */
-  list: (q: PageQuery & { status?: CaregiverBookingStatus }) => (M ? mock.listBookings(q) : http.get<Paginated<CaregiverBookingListItem>>("/caregiver/bookings", q)),
+  list: (q: PageQuery & { status?: CaregiverBookingStatus }) => (http.get<Paginated<CaregiverBookingListItem>>("/caregiver/bookings", q)),
   /** POST /caregiver/bookings/:id/accept */
-  accept: (id: string) => (M ? mock.acceptBooking(id) : http.post<BookingDetail>(`/caregiver/bookings/${id}/accept`)),
+  accept: (id: string) => (http.post<BookingDetail>(`/caregiver/bookings/${id}/accept`)),
   /** POST /caregiver/bookings/:id/decline */
-  decline: (id: string, reason?: string) => (M ? mock.declineBooking(id, reason) : http.post<BookingDetail>(`/caregiver/bookings/${id}/decline`, reason ? { reason } : {})),
+  decline: (id: string, reason?: string) => (http.post<BookingDetail>(`/caregiver/bookings/${id}/decline`, reason ? { reason } : {})),
   /** GET /caregiver/bookings/:id/prescriptions/:documentId */
   prescriptionUrl: (bookingId: string, documentId: string) =>
-    M ? mock.prescriptionUrl(bookingId, documentId) : http.get<{ url: string; mimeType: string }>(`/caregiver/bookings/${bookingId}/prescriptions/${documentId}`),
+    http.get<{ url: string; mimeType: string }>(`/caregiver/bookings/${bookingId}/prescriptions/${documentId}`),
 };
 
 export const visitsApi = {
   /** GET /caregiver/visits?status=&date=&from=&to=&sort= (date/from/to are YYYY-MM-DD; sort by scheduled date). */
   list: (q: PageQuery & { status?: VisitStatus; date?: string; from?: string; to?: string; sort?: "asc" | "desc" }) =>
-    M ? mock.listVisits(q) : http.get<Paginated<CaregiverVisitListItem>>("/caregiver/visits", q),
+    http.get<Paginated<CaregiverVisitListItem>>("/caregiver/visits", q),
   /** GET /caregiver/visits/:id */
-  get: (id: string) => (M ? mock.getVisit(id) : http.get<CaregiverVisitDetail>(`/caregiver/visits/${id}`)),
+  get: (id: string) => (http.get<CaregiverVisitDetail>(`/caregiver/visits/${id}`)),
   /** POST /caregiver/visits/:id/en-route */
-  enRoute: (id: string) => (M ? mock.enRoute(id) : http.post<Visit>(`/caregiver/visits/${id}/en-route`)),
+  enRoute: (id: string) => (http.post<Visit>(`/caregiver/visits/${id}/en-route`)),
   /** POST /caregiver/visits/:id/location — stream the caregiver's GPS fix to the customer while EN_ROUTE. */
   postLocation: (id: string, lat: number, lng: number) =>
-    M ? Promise.resolve({ ok: true as const }) : http.post<{ ok: true }>(`/caregiver/visits/${id}/location`, { lat, lng }),
+    http.post<{ ok: true }>(`/caregiver/visits/${id}/location`, { lat, lng }),
   /** POST /caregiver/visits/:id/check-in-otp — code is SMSed to the customer. */
-  checkInOtp: (id: string) => (M ? mock.checkInOtp(id) : http.post<{ ttlSeconds: number; sentTo: string }>(`/caregiver/visits/${id}/check-in-otp`)),
+  checkInOtp: (id: string) => (http.post<{ ttlSeconds: number; sentTo: string }>(`/caregiver/visits/${id}/check-in-otp`)),
   /** POST /caregiver/visits/:id/check-in */
-  checkIn: (id: string, dto: CheckInInput) => (M ? mock.checkIn(id, dto) : http.post<Visit>(`/caregiver/visits/${id}/check-in`, dto)),
+  checkIn: (id: string, dto: CheckInInput) => (http.post<Visit>(`/caregiver/visits/${id}/check-in`, dto)),
   /** POST /caregiver/visits/:id/check-out */
-  checkOut: (id: string, dto: CheckInInput) => (M ? mock.checkOut(id, dto) : http.post<Visit>(`/caregiver/visits/${id}/check-out`, dto)),
+  checkOut: (id: string, dto: CheckInInput) => (http.post<Visit>(`/caregiver/visits/${id}/check-out`, dto)),
   /** POST /caregiver/visits/:id/note — completes the visit. */
-  note: (id: string, summary: string) => (M ? mock.submitNote(id, summary) : http.post<CaregiverVisitDetail>(`/caregiver/visits/${id}/note`, { summary })),
+  note: (id: string, summary: string) => (http.post<CaregiverVisitDetail>(`/caregiver/visits/${id}/note`, { summary })),
 };
 
 export const medicalOrdersApi = {
   /** GET /caregiver/visits/:visitId/medical-orders — diagnosis/prescription/lab-test records (newest first). */
-  list: (visitId: string) => (M ? Promise.resolve<MedicalOrder[]>([]) : http.get<MedicalOrder[]>(`/caregiver/visits/${visitId}/medical-orders`)),
+  list: (visitId: string) => (http.get<MedicalOrder[]>(`/caregiver/visits/${visitId}/medical-orders`)),
   /** POST /caregiver/visits/:visitId/medical-orders — doctor-only; the customer is notified. */
   create: (visitId: string, dto: CreateMedicalOrderInput) =>
-    M
-      ? Promise.resolve<MedicalOrder>({ id: "mo-mock", visitId, doctorId: "", patientId: "", diagnosis: dto.diagnosis ?? null, medicines: dto.medicines ?? [], labTests: dto.labTests ?? [], createdAt: new Date().toISOString() })
-      : http.post<MedicalOrder>(`/caregiver/visits/${visitId}/medical-orders`, dto),
+    http.post<MedicalOrder>(`/caregiver/visits/${visitId}/medical-orders`, dto),
 };
 
 export const paymentsApi = {
   /** POST /caregiver/payments/:id/confirm-cash — the caregiver's half of two-sided cash (Phase 15). */
   confirmCash: (paymentId: string) =>
-    M ? mock.confirmCash(paymentId) : http.post<CaregiverPaymentRow>(`/caregiver/payments/${paymentId}/confirm-cash`),
+    http.post<CaregiverPaymentRow>(`/caregiver/payments/${paymentId}/confirm-cash`),
   /** GET /caregiver/payments/:id/receipt — PDF blob (Phase 15; real backend only). */
   receipt: (id: string) => http.download(`/caregiver/payments/${id}/receipt`),
 };
 
-/** Booking-scoped in-app chat (shared REST, caregiver token). */
-const chatStub = (bookingId: string, over: Partial<BackendChatMessage> = {}): BackendChatMessage => ({
-  id: "m",
-  bookingId,
-  senderId: "",
-  type: "TEXT",
-  body: null,
-  url: null,
-  mimeType: null,
-  sizeBytes: null,
-  replyToId: null,
-  reactions: [],
-  readAt: null,
-  editedAt: null,
-  deletedAt: null,
-  createdAt: new Date().toISOString(),
-  ...over,
-});
-
 export const chatApi = {
   /** GET /bookings/:bookingId/messages — newest first. */
   list: (bookingId: string) =>
-    M ? Promise.resolve<Paginated<BackendChatMessage>>({ items: [], page: 1, limit: 100, total: 0 }) : http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
+    http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
   /** POST /bookings/:bookingId/messages */
   send: (bookingId: string, body: string, replyToId?: string) =>
-    M
-      ? Promise.resolve(chatStub(bookingId, { body }))
-      : http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body, ...(replyToId ? { replyToId } : {}) }),
+    http.post<BackendChatMessage>(`/bookings/${bookingId}/messages`, { body, ...(replyToId ? { replyToId } : {}) }),
   /** PATCH /bookings/:bookingId/messages/read */
-  markRead: (bookingId: string) => (M ? Promise.resolve({ updated: 0 }) : http.patch<{ updated: number }>(`/bookings/${bookingId}/messages/read`)),
+  markRead: (bookingId: string) => (http.patch<{ updated: number }>(`/bookings/${bookingId}/messages/read`)),
   /** POST /bookings/:bookingId/messages/:id/reactions — toggle a reaction emoji. */
   react: (bookingId: string, messageId: string, emoji: string) =>
-    M ? Promise.resolve() : http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
+    http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
   /** Resumable media upload: init → 2 MB chunks → complete (creates the media message). */
   uploadMedia: async (
     bookingId: string,
     file: Blob,
     opts?: { fileName?: string; caption?: string; replyToId?: string; onProgress?: (fraction: number) => void },
   ): Promise<BackendChatMessage> => {
-    if (M) return chatStub(bookingId, { type: "FILE" });
     const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
       mimeType: file.type || "application/octet-stream",
       totalBytes: file.size,
@@ -209,62 +182,57 @@ export const chatApi = {
 
 export const moneyApi = {
   /** GET /caregiver/earnings */
-  earnings: () => (M ? mock.earnings() : http.get<Earnings>("/caregiver/earnings")),
+  earnings: () => (http.get<Earnings>("/caregiver/earnings")),
   /** GET /caregiver/payouts?status= */
-  payouts: (q: PageQuery & { status?: PayoutStatus }) => (M ? mock.listPayouts(q) : http.get<Paginated<CaregiverPayoutRequest>>("/caregiver/payouts", q)),
+  payouts: (q: PageQuery & { status?: PayoutStatus }) => (http.get<Paginated<CaregiverPayoutRequest>>("/caregiver/payouts", q)),
   /** POST /caregiver/payouts */
-  requestPayout: (dto: { payoutAccountId: string; amount: number }) => (M ? mock.requestPayout(dto) : http.post<PayoutRequestRow>("/caregiver/payouts", dto)),
+  requestPayout: (dto: { payoutAccountId: string; amount: number }) => (http.post<PayoutRequestRow>("/caregiver/payouts", dto)),
   /** GET /caregiver/payout-accounts */
-  accounts: () => (M ? mock.listPayoutAccounts() : http.get<PayoutAccount[]>("/caregiver/payout-accounts")),
+  accounts: () => (http.get<PayoutAccount[]>("/caregiver/payout-accounts")),
   /** POST /caregiver/payout-accounts */
-  createAccount: (dto: PayoutAccountInput) => (M ? mock.createPayoutAccount(dto) : http.post<PayoutAccount>("/caregiver/payout-accounts", dto)),
+  createAccount: (dto: PayoutAccountInput) => (http.post<PayoutAccount>("/caregiver/payout-accounts", dto)),
   /** PATCH /caregiver/payout-accounts/:id */
-  updateAccount: (id: string, dto: Partial<PayoutAccountInput>) => (M ? mock.updatePayoutAccount(id, dto) : http.patch<PayoutAccount>(`/caregiver/payout-accounts/${id}`, dto)),
+  updateAccount: (id: string, dto: Partial<PayoutAccountInput>) => (http.patch<PayoutAccount>(`/caregiver/payout-accounts/${id}`, dto)),
   /** DELETE /caregiver/payout-accounts/:id */
-  deleteAccount: (id: string) => (M ? mock.deletePayoutAccount(id) : http.delete<{ ok: true }>(`/caregiver/payout-accounts/${id}`)),
+  deleteAccount: (id: string) => (http.delete<{ ok: true }>(`/caregiver/payout-accounts/${id}`)),
   /** POST /caregiver/payouts/:id/confirm-received — Phase 15: caregiver confirms the transfer arrived (TRANSFERRED → PAID). */
   confirmPayoutReceived: (id: string) =>
-    M ? mock.confirmPayoutReceived(id) : http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/confirm-received`, {}),
+    http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/confirm-received`, {}),
   /** POST /caregiver/payouts/:id/report-not-received — Phase 15: money not arrived (stays TRANSFERRED, issueNote set). */
   reportPayoutNotReceived: (id: string, note: string) =>
-    M ? mock.reportPayoutNotReceived(id, note) : http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/report-not-received`, { note }),
+    http.post<PayoutRequestRow>(`/caregiver/payouts/${id}/report-not-received`, { note }),
   /** GET /caregiver/payouts/:id/receipt — transfer PDF blob (Phase 15; real backend only). */
   payoutReceipt: (id: string) => http.download(`/caregiver/payouts/${id}/receipt`),
 };
 
 export const safetyApi = {
   /** GET /caregiver/safety-reports (plain array) */
-  list: () => (M ? mock.listSafetyReports() : http.get<SafetyIncidentRow[]>("/caregiver/safety-reports")),
+  list: () => (http.get<SafetyIncidentRow[]>("/caregiver/safety-reports")),
   /** POST /caregiver/safety-reports */
-  report: (dto: { visitId: string; description: string; priority?: IncidentPriority }) => (M ? mock.createSafetyReport(dto) : http.post<SafetyIncidentRow>("/caregiver/safety-reports", dto)),
+  report: (dto: { visitId: string; description: string; priority?: IncidentPriority }) => (http.post<SafetyIncidentRow>("/caregiver/safety-reports", dto)),
   /** POST /sos — coordinates go as strings (SosDto types them `string`, no validator). */
-  sos: (dto: SosInput) => (M ? mock.sos(dto) : http.post<SosResult>("/sos", dto)),
+  sos: (dto: SosInput) => (http.post<SosResult>("/sos", dto)),
 };
 
 export const disputesApi = {
   /** GET /disputes (plain array) */
-  list: () => (M ? mock.listDisputes() : http.get<DisputeRow[]>("/disputes")),
+  list: () => (http.get<DisputeRow[]>("/disputes")),
   /** POST /disputes */
-  raise: (dto: { visitId: string; description: string }) => (M ? mock.raiseDispute(dto) : http.post<DisputeRow>("/disputes", dto)),
+  raise: (dto: { visitId: string; description: string }) => (http.post<DisputeRow>("/disputes", dto)),
 };
 
 export const notificationsApi = {
   /** GET /notifications?channel=&unread= — one row per channel; the app shows PUSH rows only. */
   list: (q: PageQuery & { channel?: string; unread?: boolean }) =>
-    M ? mock.listNotifications(q) : http.get<Paginated<AppNotification>>("/notifications", q),
+    http.get<Paginated<AppNotification>>("/notifications", q),
   /** POST /notifications/read — mark the given ids (or everything before a time) as read. */
   markRead: (dto: { ids?: string[]; before?: string }) =>
-    M ? mock.markNotifsRead(dto) : http.post<{ updated: number }>("/notifications/read", dto),
+    http.post<{ updated: number }>("/notifications/read", dto),
   /** GET /notifications/unread-count — Phase 15. */
-  unreadCount: () => (M ? mock.unreadCount() : http.get<{ unread: number }>("/notifications/unread-count")),
+  unreadCount: () => (http.get<{ unread: number }>("/notifications/unread-count")),
   /** GET /notifications/preferences — per-channel opt-in/out (all channels, default enabled). */
-  prefs: () =>
-    M
-      ? Promise.resolve<NotificationPref[]>((["PUSH", "SMS", "WHATSAPP", "EMAIL"] as NotificationChannel[]).map((channel) => ({ channel, enabled: true })))
-      : http.get<NotificationPref[]>("/notifications/preferences"),
+  prefs: () => http.get<NotificationPref[]>("/notifications/preferences"),
   /** PATCH /notifications/preferences — opt one channel in/out (SOS always delivered). */
   setPref: (channel: NotificationChannel, enabled: boolean) =>
-    M
-      ? Promise.resolve<NotificationPref[]>((["PUSH", "SMS", "WHATSAPP", "EMAIL"] as NotificationChannel[]).map((c) => ({ channel: c, enabled: c === channel ? enabled : true })))
-      : http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
+    http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
 };

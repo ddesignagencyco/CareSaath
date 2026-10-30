@@ -22,7 +22,6 @@ import { saveBlob } from "@shared/api/http";
 import type { PaymentMethod, PaymentStatus } from "@shared/caregiver-types";
 import type { CustomerPayment, CustomerPaymentWithVisit } from "@shared/customer-types";
 import { paymentsApi } from "@/features/customer/lib/api/customer";
-import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 
 const ICON: Record<PaymentMethod, React.ComponentType<{ className?: string }>> = {
@@ -70,7 +69,7 @@ function Receipt({ id, onClose }: { id: string; onClose: () => void }) {
             <Link href={`/customer/visits/${p.visitId}`} className="text-sm font-semibold text-brand-700 hover:underline">
               {tr("viewVisit")}
             </Link>
-            {!USE_MOCKS && p.status === "PAID" && (
+            {p.status === "PAID" && (
               <Button variant="secondary" loading={download.isPending} onClick={() => download.mutate(undefined)}>
                 {tr("downloadPdf")}
               </Button>

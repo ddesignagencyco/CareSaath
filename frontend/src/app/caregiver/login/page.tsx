@@ -5,16 +5,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { LoginScreen } from "@shared/auth/login-screen";
-import { MockHint } from "@shared/auth/mock-hint";
+import { DevHint } from "@shared/auth/dev-hint";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { formatPkMobile } from "@shared/lib/phone";
 import { authApi, meApi } from "@/features/caregiver/lib/api/caregiver";
-import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { session } from "@/features/caregiver/lib/api/session";
 import { homeFor, storeTokens } from "@/features/caregiver/lib/auth";
-import { MOCK_OTP } from "@/features/caregiver/lib/mock/handlers";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,30 +35,16 @@ export default function LoginPage() {
       footerNote={t("footerNote")}
       topRight={<LanguageToggle />}
       codeHint={
-        USE_MOCKS ? (
-          <MockHint>
+        process.env.NODE_ENV !== "production" && (
+          <DevHint>
+            <p>{t("devOtp")}</p>
             <p>
-              {t.rich("mockCode", {
-                code: MOCK_OTP,
-                b: (c) => <b className="tabular tracking-widest">{c}</b>,
+              {t("devNumbers", {
+                approved: f.list([formatPkMobile("+923001110011"), formatPkMobile("+923001110012"), formatPkMobile("+923001110013")]),
+                pending: formatPkMobile("+923001110014"),
               })}
             </p>
-            <p>
-              {t("mockNumbers", { approved: formatPkMobile("+923001110011"), pending: formatPkMobile("+923001110012") })}
-            </p>
-          </MockHint>
-        ) : (
-          process.env.NODE_ENV !== "production" && (
-            <MockHint>
-              <p>{t("devOtp")}</p>
-              <p>
-                {t("devNumbers", {
-                  approved: f.list([formatPkMobile("+923001110011"), formatPkMobile("+923001110012"), formatPkMobile("+923001110013")]),
-                  pending: formatPkMobile("+923001110014"),
-                })}
-              </p>
-            </MockHint>
-          )
+          </DevHint>
         )
       }
       requestOtp={authApi.requestOtp}

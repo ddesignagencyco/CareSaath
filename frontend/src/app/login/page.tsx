@@ -6,15 +6,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { decodeToken } from "@shared/api/session";
 import { LoginScreen } from "@shared/auth/login-screen";
-import { MockHint } from "@shared/auth/mock-hint";
 import { session as adminSession } from "@/features/admin/lib/api/session";
 import { meApi as caregiverMe } from "@/features/caregiver/lib/api/caregiver";
 import { session as caregiverSession } from "@/features/caregiver/lib/api/session";
 // The OTP endpoints are public and identical across sections; use one client.
 import { authApi } from "@/features/customer/lib/api/customer";
-import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { session as customerSession } from "@/features/customer/lib/api/session";
-import { MOCK_OTP } from "@/features/customer/lib/mock/handlers";
 import { homeFor } from "@/features/caregiver/lib/auth";
 
 const FEATURES = [
@@ -46,15 +43,6 @@ function LoginInner() {
             Create an account
           </Link>
         </>
-      }
-      codeHint={
-        USE_MOCKS ? (
-          <MockHint>
-            <p>
-              Demo code: <b className="tabular tracking-widest">{MOCK_OTP}</b>
-            </p>
-          </MockHint>
-        ) : undefined
       }
       requestOtp={authApi.requestOtp}
       verifyOtp={async (phone, code) => {

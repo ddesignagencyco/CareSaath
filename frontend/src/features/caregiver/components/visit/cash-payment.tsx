@@ -11,7 +11,6 @@ import type { CaregiverVisitDetail } from "@shared/caregiver-types";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { saveBlob } from "@shared/api/http";
 import { paymentsApi } from "@/features/caregiver/lib/api/caregiver";
-import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { keys } from "@/features/caregiver/lib/api/keys";
 
 /** Cash can be handed over once the caregiver is at the home. */
@@ -58,7 +57,7 @@ export function CashPayment({ visit }: { visit: CaregiverVisitDetail }) {
             <p className="flex items-center gap-2 rounded-lg bg-success-50 px-3 py-2 text-sm font-semibold text-success-700">
               <Check className="size-4 shrink-0" /> {payment.paidAt ? t("receivedAt", { time: f.dateTime(payment.paidAt) }) : t("received")}
             </p>
-            {!USE_MOCKS && (
+            {(
               <Button variant="secondary" className="w-full" loading={receipt.isPending} onClick={() => receipt.mutate(undefined)}>
                 {t("receipt")}
               </Button>

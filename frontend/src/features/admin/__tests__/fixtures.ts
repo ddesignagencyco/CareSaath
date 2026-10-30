@@ -1,6 +1,6 @@
 /**
- * Seed data for UI development. Shapes match the API responses exactly so
- * the screens behave the same once wired to the backend.
+ * Test fixtures for the admin page render tests. Shapes match the API
+ * responses exactly so the screens render the same as against the backend.
  */
 import type {
   AdminCaregiver,

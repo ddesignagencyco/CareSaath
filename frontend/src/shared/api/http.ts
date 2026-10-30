@@ -12,9 +12,6 @@ import type { SessionStore } from "./session";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
 
-/** Mocks are on unless explicitly disabled with NEXT_PUBLIC_USE_MOCKS=false. */
-export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS !== "false";
-
 /** Message used when the API can't be reached at all (translated in apiErrors). */
 export const NETWORK_ERROR = "Cannot reach the server. Check your connection.";
 

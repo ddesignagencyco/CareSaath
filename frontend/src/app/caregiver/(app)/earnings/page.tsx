@@ -20,7 +20,7 @@ import { useLabels } from "@shared/i18n/use-labels";
 import type { PayoutAccount } from "@shared/types";
 import type { CaregiverPayoutRequest } from "@shared/caregiver-types";
 import { PayoutAccountForm } from "@/features/caregiver/components/earnings/payout-account-form";
-import { ApiError, USE_MOCKS } from "@/features/caregiver/lib/api/http";
+import { ApiError } from "@/features/caregiver/lib/api/http";
 import { moneyApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 
@@ -51,7 +51,7 @@ function PayoutRow({ p }: { p: CaregiverPayoutRequest }) {
     { invalidate: [], success: null },
   );
   const showActions = p.status === "TRANSFERRED" && !p.caregiverConfirmedAt;
-  const canReceipt = !USE_MOCKS && (p.status === "PAID" || p.status === "TRANSFERRED");
+  const canReceipt = (p.status === "PAID" || p.status === "TRANSFERRED");
   return (
     <li className="flex flex-col gap-2 px-5 py-3.5">
       <div className="flex items-center gap-3">

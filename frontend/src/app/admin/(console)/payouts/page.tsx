@@ -17,7 +17,6 @@ import { Select } from "@shared/ui/select";
 import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
 import { payoutsApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
-import { USE_MOCKS } from "@/features/admin/lib/api/http";
 import { saveBlob } from "@shared/api/http";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
@@ -126,7 +125,7 @@ export default function PayoutsPage() {
         return (
           <div className="flex items-center gap-2">
             <PayoutStatusBadge status={p.status} />
-            {!USE_MOCKS && (p.status === "TRANSFERRED" || p.status === "PAID") && (
+            {(p.status === "TRANSFERRED" || p.status === "PAID") && (
               <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
                 {t("receipt")}
               </Button>
@@ -232,7 +231,7 @@ export default function PayoutsPage() {
           loading={approve.isPending}
           onConfirm={(note) => approve.mutate({ id: act.payout.id, note })}
         >
-          {!USE_MOCKS && <p className="text-xs text-ink-500">{t("noteNotStored")}</p>}
+          {<p className="text-xs text-ink-500">{t("noteNotStored")}</p>}
         </ReasonDialog>
       )}
       {act?.kind === "pay" && (
@@ -249,7 +248,7 @@ export default function PayoutsPage() {
           loading={pay.isPending}
           onConfirm={(note) => pay.mutate({ id: act.payout.id, note })}
         >
-          {!USE_MOCKS && <p className="text-xs text-ink-500">{t("noteNotStored")}</p>}
+          {<p className="text-xs text-ink-500">{t("noteNotStored")}</p>}
         </ReasonDialog>
       )}
       {act?.kind === "reject" && (

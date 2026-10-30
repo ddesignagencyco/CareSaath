@@ -1,7 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, RotateCcw, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -15,14 +14,11 @@ import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
 import { Avatar, Skeleton } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
-import { useToast } from "@shared/ui/toast";
 import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
-import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { keys } from "@/features/customer/lib/api/keys";
 import { useMe, useSignOut } from "@/features/customer/lib/auth";
-import { resetMockDb } from "@/features/customer/lib/mock/db";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
@@ -91,8 +87,6 @@ export default function AccountPage() {
   const f = useFmt();
   const me = useMe();
   const signOut = useSignOut();
-  const client = useQueryClient();
-  const toast = useToast();
 
   return (
     <>
@@ -127,18 +121,6 @@ export default function AccountPage() {
         <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
 
         <Card className="divide-y divide-ink-100 overflow-hidden">
-          {USE_MOCKS && (
-            <button
-              onClick={() => {
-                resetMockDb();
-                client.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("c-") });
-                toast.success(tc("states.demoReset"));
-              }}
-              className="flex w-full items-center gap-3 px-5 py-4 text-start text-sm font-semibold text-ink-800 hover:bg-ink-25"
-            >
-              <RotateCcw className="size-5 text-ink-400" /> {tc("actions.resetDemo")}
-            </button>
-          )}
           <button onClick={signOut} className="flex w-full items-center gap-3 px-5 py-4 text-start text-sm font-semibold text-danger-600 hover:bg-danger-50">
             <LogOut className="size-5" /> {tc("actions.signOut")}
           </button>

@@ -6,7 +6,6 @@ import { ChatProvider } from "@shared/chat/context";
 import { MessagesShell } from "@shared/chat/messages-shell";
 import type { ChatThreadMeta, ChatTransport } from "@shared/chat/types";
 import { useLabels } from "@shared/i18n/use-labels";
-import { USE_MOCKS } from "@/features/caregiver/lib/api/http";
 import { useMe } from "@/features/caregiver/lib/auth";
 import { bookingsApi, chatApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
@@ -15,7 +14,7 @@ import { keys } from "@/features/caregiver/lib/api/keys";
 function useCaregiverChatTransport(): ChatTransport {
   const L = useLabels();
   const me = useMe();
-  const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: !USE_MOCKS });
+  const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: true });
   // Only accepted/active (CONFIRMED) or past (COMPLETED) bookings get a chat thread — not pending
   // requests, declines or cancellations.
   const items = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
@@ -33,7 +32,7 @@ function useCaregiverChatTransport(): ChatTransport {
     () => ({
       myUserId: me.data?.id,
       threads,
-      threadsLoaded: USE_MOCKS || bookings.isSuccess,
+      threadsLoaded: bookings.isSuccess,
       listMessages: async (id) => (await chatApi.list(id)).items.slice().reverse(),
       send: (id, body, replyToId) => chatApi.send(id, body, replyToId),
       markRead: async (id) => {

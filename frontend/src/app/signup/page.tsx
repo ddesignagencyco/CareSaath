@@ -6,13 +6,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LoginScreen } from "@shared/auth/login-screen";
-import { MockHint } from "@shared/auth/mock-hint";
 import { storeTokens as caregiverStoreTokens } from "@/features/caregiver/lib/auth";
 import { authApi } from "@/features/customer/lib/api/customer";
-import { USE_MOCKS } from "@/features/customer/lib/api/http";
 import { session as customerSession } from "@/features/customer/lib/api/session";
 import { clearSession } from "@/features/customer/lib/auth";
-import { MOCK_OTP } from "@/features/customer/lib/mock/handlers";
 
 const FEATURES = [
   { icon: BadgeCheck, title: "Verified caregivers", text: "Every nurse and physiotherapist is licence-checked before they appear." },
@@ -75,15 +72,6 @@ export default function SignupPage() {
             Log in
           </Link>
         </>
-      }
-      codeHint={
-        USE_MOCKS ? (
-          <MockHint>
-            <p>
-              Demo code: <b className="tabular tracking-widest">{MOCK_OTP}</b>
-            </p>
-          </MockHint>
-        ) : undefined
       }
       requestOtp={(phone, name, email) =>
         authApi.signup({ phone, fullName: (name ?? "").trim(), ...(email ? { email } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" })

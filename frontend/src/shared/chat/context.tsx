@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import { USE_MOCKS } from "@shared/api/http";
 import { useChat, type ChatScope } from "./use-chat";
 import { useChatBackend } from "./use-chat-backend";
 import type { ChatTransport } from "./types";
@@ -27,7 +26,7 @@ function BackendChatProvider({ scope, transport, children }: { scope: ChatScope;
  * demo store with the full rich feature set.
  */
 export function ChatProvider({ scope, transport, children }: { scope: ChatScope; transport?: ChatTransport; children: ReactNode }) {
-  if (!USE_MOCKS && transport) {
+  if (transport) {
     return (
       <BackendChatProvider scope={scope} transport={transport}>
         {children}
