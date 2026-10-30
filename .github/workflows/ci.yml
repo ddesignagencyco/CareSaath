@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, dev, 'phase-*']
+    branches: [main, dev, 'phase-*', 'hardening/*']
   pull_request:
     branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -18,12 +25,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: npx prisma generate --config prisma7.config.ts
       - name: Lint
         run: npm run lint
       - name: Build
@@ -73,14 +80,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: npx prisma generate --config prisma7.config.ts
       - name: Apply migrations
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy --config prisma7.config.ts
       - name: Build
         run: npm run build
       - name: Seed reference data

@@ -26,6 +26,15 @@ describe('Health (e2e)', () => {
     expect(res.body).toMatchObject({ status: 'ok' });
   });
 
+  it('GET /health/ready checks Postgres and Redis', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/health/ready');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'ok',
+      checks: { database: 'up', redis: 'up' },
+    });
+  });
+
   it('returns a consistent error shape for unknown routes', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/does-not-exist');
     expect(res.status).toBe(404);

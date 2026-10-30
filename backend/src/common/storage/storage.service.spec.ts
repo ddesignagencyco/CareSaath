@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { StorageService, withFileUrl } from './storage.module.js';
 
+const PDF = Buffer.from('%PDF-1.4\n%%EOF\n');
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const WEBM = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x00]);
+
 describe('StorageService (in-memory fallback)', () => {
   const storage = new StorageService();
 
@@ -12,13 +16,13 @@ describe('StorageService (in-memory fallback)', () => {
   });
 
   it('gives PDFs a .pdf key even when the filename has no extension', async () => {
-    const stored = await storage.put('docs', 'scan', Buffer.from('x'), 'application/pdf');
+    const stored = await storage.put('docs', 'scan', PDF, 'application/pdf');
     expect(stored.fileKey.endsWith('.pdf')).toBe(true);
   });
 
   it('drops the extension from image ids but keeps plain names intact', async () => {
-    const withExt = await storage.put('p', 'photo.png', Buffer.from('x'), 'image/png');
-    const noExt = await storage.put('p', 'scan', Buffer.from('x'), 'image/png');
+    const withExt = await storage.put('p', 'photo.png', PNG, 'image/png');
+    const noExt = await storage.put('p', 'scan', PNG, 'image/png');
     expect(withExt.fileKey).toMatch(/-photo$/);
     expect(noExt.fileKey).toMatch(/-scan$/);
   });
@@ -47,8 +51,8 @@ describe('StorageService chat media (in-memory fallback)', () => {
   });
 
   it('keeps the extension on voice/video media keys but drops it on images', async () => {
-    const voice = await storage.putChatMedia('bookings/b-1/media', 'note.webm', Buffer.from('x'), 'audio/webm');
-    const image = await storage.putChatMedia('bookings/b-1/media', 'photo.png', Buffer.from('x'), 'image/png');
+    const voice = await storage.putChatMedia('bookings/b-1/media', 'note.webm', WEBM, 'audio/webm');
+    const image = await storage.putChatMedia('bookings/b-1/media', 'photo.png', PNG, 'image/png');
     expect(voice.fileKey).toMatch(/-note\.webm$/);
     expect(image.fileKey).toMatch(/-photo$/);
   });

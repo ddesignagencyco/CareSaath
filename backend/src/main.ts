@@ -1,19 +1,44 @@
 import './config/load-env.js';
 import { NestFactory } from '@nestjs/core';
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
+import { validateEnv } from './config/validate-env.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // Fail before Nest boots if secrets/config are missing or still placeholders.
+  validateEnv();
+
+  const isProduction = process.env['NODE_ENV'] === 'production';
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   app.setGlobalPrefix('api/v1', {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
       { path: '', method: RequestMethod.GET },
     ],
   });
+
+  // Render/Cloudflare terminate TLS in front of the app; trust the first proxy
+  // hop so rate limiting and audit logs see the real client IP.
+  const trustProxy = Number(process.env['TRUST_PROXY'] ?? 1);
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+
+  app.use(
+    helmet({
+      // The status page and Swagger UI load fonts/assets from CDNs and use
+      // inline styles; a strict CSP would break them. Revisit once the docs
+      // are served from a dedicated origin.
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      // Cloudinary serves user uploads from a different origin.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   // Fan socket events out through Redis so every API instance reaches its own connected clients.
   const socketAdapter = new RedisIoAdapter(app);
   socketAdapter.connectToRedis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
@@ -26,29 +51,49 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.enableCors({ exposedHeaders: ['Content-Disposition', 'X-Cache'] });
+
+  // Explicit allowlist in production; permissive only for local development.
+  const corsOrigins = (process.env['CORS_ORIGINS'] ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowAnyOrigin = !isProduction && corsOrigins.length === 0;
+  app.enableCors({
+    origin: allowAnyOrigin ? true : corsOrigins,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+    exposedHeaders: ['Content-Disposition', 'X-Cache', 'X-Request-Id'],
+    maxAge: 86_400,
+  });
+
+  const swaggerEnabled =
+    process.env['SWAGGER_ENABLED'] === 'true' ||
+    (!isProduction && process.env['SWAGGER_ENABLED'] !== 'false');
 
   const swaggerDescription = [
     '## Welcome to CareSaath API Documentation',
     'Home nursing and physiotherapy marketplace backend for Pakistan.',
-    '',
-    '---',
-    '',
-    '### Quick Interactive Guide (Try it out!)',
-    '',
-    '1. **Authentication Flow:**',
-    '   - **Step 1:** Go to the **Auth** section and call `POST /api/v1/auth/otp/request` with any demo phone:',
-    '     - **Admin:** `+923000000000`',
-    '     - **Customer:** `+923001110001` (Ayesha Khan) or `+923001110002` (Bilal Ahmed)',
-    '     - **Caregiver:** `+923001110011` (Fatima Noor - Nurse) or `+923001110012` (Ali Raza - Physio)',
-    '   - **Step 2:** The OTP is captured locally in **MailHog** at http://localhost:18025 or logged in your server console.',
-    '   - **Step 3:** Call `POST /api/v1/auth/otp/verify` with the phone and OTP to obtain the `accessToken`.',
-    '   - **Step 4:** Click the green **Authorize** button at the top right of this page and enter `Bearer <accessToken>`.',
-    '',
-    '2. **Feature Areas:**',
-    '   - **Customer**: Search verified caregivers, manage patients/addresses, book visits, upload prescriptions, and track status.',
-    '   - **Caregiver**: Register credentials, set weekly availability, accept requests, GPS/OTP check-in, and clinical visit notes.',
-    '   - **Admin**: Approve/reject caregiver credentials, review safety incidents, resolve disputes, configure commissions, and export reports.',
+    ...(isProduction
+      ? []
+      : [
+          '',
+          '---',
+          '',
+          '### Quick Interactive Guide (Try it out!)',
+          '',
+          '1. **Authentication Flow:**',
+          '   - **Step 1:** Go to the **Auth** section and call `POST /api/v1/auth/otp/request` with any demo phone:',
+          '     - **Admin:** `+923000000000`',
+          '     - **Customer:** `+923001110001` (Ayesha Khan) or `+923001110002` (Bilal Ahmed)',
+          '     - **Caregiver:** `+923001110011` (Fatima Noor - Nurse) or `+923001110012` (Ali Raza - Physio)',
+          '   - **Step 2:** The OTP is captured locally in **MailHog** at http://localhost:18025 or logged in your server console.',
+          '   - **Step 3:** Call `POST /api/v1/auth/otp/verify` with the phone and OTP to obtain the `accessToken`.',
+          '   - **Step 4:** Click the green **Authorize** button at the top right of this page and enter `Bearer <accessToken>`.',
+          '',
+          '2. **Feature Areas:**',
+          '   - **Customer**: Search verified caregivers, manage patients/addresses, book visits, upload prescriptions, and track status.',
+          '   - **Caregiver**: Register credentials, set weekly availability, accept requests, GPS/OTP check-in, and clinical visit notes.',
+          '   - **Admin**: Approve/reject caregiver credentials, review safety incidents, resolve disputes, configure commissions, and export reports.',
+        ]),
   ].join('\n');
 
   const swaggerConfig = new DocumentBuilder()
@@ -90,17 +135,22 @@ async function bootstrap() {
     .addTag('System & Notifications', 'Dispatched SMS, Push, and WhatsApp notifications')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none',
-      filter: true,
-      displayRequestDuration: true,
-      tryItOutEnabled: true,
-    },
-    customSiteTitle: 'CareSaath API Docs',
-  });
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'none',
+        filter: true,
+        displayRequestDuration: true,
+        tryItOutEnabled: true,
+      },
+      customSiteTitle: 'CareSaath API Docs',
+    });
+  }
+
+  // Let Prisma/Redis close cleanly on Render's SIGTERM instead of dropping connections.
+  app.enableShutdownHooks();
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port, '0.0.0.0');
@@ -108,7 +158,11 @@ async function bootstrap() {
   const base = `http://localhost:${port}`;
   const logger = new Logger('Bootstrap');
   logger.log(`API base:       ${base}/api/v1`);
-  logger.log(`Swagger UI:     ${base}/docs`);
-  logger.log(`OpenAPI JSON:   ${base}/docs-json`);
+  logger.log(`Health:         ${base}/health (liveness), ${base}/health/ready (readiness)`);
+  logger.log(
+    swaggerEnabled
+      ? `Swagger UI:     ${base}/docs`
+      : 'Swagger UI:     disabled (set SWAGGER_ENABLED=true to expose it)',
+  );
 }
 await bootstrap();

@@ -1011,7 +1011,7 @@ export class CustomerBookingsController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadPrescription(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

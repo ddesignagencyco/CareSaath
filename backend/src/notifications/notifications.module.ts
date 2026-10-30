@@ -43,6 +43,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
+import { SmsService } from '../auth/sms.service.js';
 import { EmailModule } from '../email/email.module.js';
 import { eventDefinition } from './events.js';
 import {
@@ -383,6 +384,7 @@ export class NotificationsController {
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
+    SmsService,
     SmsChannelAdapter,
     WhatsAppChannelAdapter,
     PushChannelAdapter,

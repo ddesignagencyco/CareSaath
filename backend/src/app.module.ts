@@ -6,9 +6,11 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuditModule } from './common/audit/audit.module.js';
 import { compressionMiddleware } from './common/middleware/compression.js';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.js';
 import { PrismaModule } from './common/prisma/prisma.module.js';
 import { RedisModule } from './common/redis/redis.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { StorageModule } from './common/storage/storage.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -81,12 +83,14 @@ import { EmailModule } from './email/email.module.js';
   controllers: [AppController],
   providers: [
     AppService,
+    // Rate limiting runs before auth so invalid-token brute force is throttled too.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(compressionMiddleware()).forRoutes('*');
+    consumer.apply(RequestLoggerMiddleware, compressionMiddleware()).forRoutes('*');
   }
 }

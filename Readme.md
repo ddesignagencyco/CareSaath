@@ -17,7 +17,10 @@ Home nursing and physiotherapy marketplace for Pakistan (1–2 pilot cities). Cu
 | 8 | Admin promos, disputes, safety triage, analytics, CSV reports | Done |
 | 9 | Gap-fill: OTP visit check-in, prescription upload, visit reschedule, SOS, CNIC/medical-context encryption | Done |
 | 10 | Hardening: platform config (admin-tunable), notification channels (SMS/WhatsApp/push), search caching, data retention job, CI | Done |
-| 11+ | Remaining: WhatsApp/push vendor integration, SMS gateway, hosting/CD, monitoring | Not started |
+| 11 | Production hardening: env validation, security headers, CORS allowlist, per-IP rate limiting, real health/readiness probes, graceful shutdown, upload signature checks, production bootstrap migration + admin CLI | Done |
+| 12+ | Remaining: real WhatsApp/push provider, JazzCash/Easypaisa merchant integration, monitoring/alerts, backups, frontend merge | In progress |
+
+> **Deployed on Render, but read [`docs/production-runbook.md`](docs/production-runbook.md) before treating it as production-ready.** In particular, production refuses to boot without a real SMS provider (`SMS_API_URL`) or an explicit `SMS_DEV_LOG=true`, and requires all encryption keys to be set.
 
 _Update this table as each phase progresses._
 

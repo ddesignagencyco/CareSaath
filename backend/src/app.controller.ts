@@ -1,10 +1,17 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from './common/decorators/public.decorator.js';
+import { PrismaService } from './common/prisma/prisma.service.js';
+import { RedisService } from './common/redis/redis.module.js';
 
 @ApiTags('System & Health')
 @Controller()
 export class AppController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
+
   @Public()
   @Get()
   @Header('Content-Type', 'text/html')
@@ -346,17 +353,52 @@ export class AppController {
   @Public()
   @Get('health')
   @ApiOperation({
-    summary: 'Platform health status',
-    description: 'Quick health check - app is running and ready to serve requests.',
+    summary: 'Liveness probe',
+    description:
+      'Returns 200 as soon as the process is accepting requests. It deliberately does not touch Postgres or Redis, so a slow dependency never causes a restart loop.',
   })
   @ApiResponse({
     status: 200,
-    description: 'API is healthy and operational.',
+    description: 'API process is alive.',
     schema: {
       example: { status: 'ok' },
     },
   })
   health() {
     return { status: 'ok' };
+  }
+
+  @Public()
+  @Get('health/ready')
+  @ApiOperation({
+    summary: 'Readiness probe',
+    description:
+      'Checks PostgreSQL and Redis. Returns 503 when either dependency is unavailable, so the platform can stop routing traffic to an instance that cannot serve it.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Database and cache are reachable.',
+    schema: { example: { status: 'ok', checks: { database: 'up', redis: 'up' } } },
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'One or more dependencies are unavailable.',
+    schema: {
+      example: { status: 'error', checks: { database: 'down', redis: 'up' } },
+    },
+  })
+  async readiness() {
+    const [database, redis] = await Promise.all([
+      this.prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
+      this.redis.ping(),
+    ]);
+    const checks = {
+      database: database ? 'up' : 'down',
+      redis: redis ? 'up' : 'down',
+    };
+    if (!database || !redis) {
+      throw new ServiceUnavailableException({ status: 'error', checks });
+    }
+    return { status: 'ok', checks };
   }
 }

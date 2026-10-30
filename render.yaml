@@ -22,10 +22,12 @@ services:
     region: singapore
     plan: starter # paid: free tier sleeps and breaks Socket.IO / background jobs
     rootDir: backend
+    branch: main
     buildCommand: npm ci --include=dev && npx prisma generate --config prisma7.config.ts && npm run build
     preDeployCommand: npm run prisma:migrate
     startCommand: npm run start:prod
-    healthCheckPath: /health
+    # Readiness checks Postgres + Redis; liveness remains at /health.
+    healthCheckPath: /health/ready
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
@@ -61,6 +63,61 @@ services:
         value: true
       - key: WHATSAPP_ENABLED
         value: false
+      # HTTP hardening. CORS_ORIGINS is required for browser clients.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SWAGGER_ENABLED
+        value: false
+      - key: TRUST_PROXY
+        value: 1
+      - key: RATE_LIMIT_ENABLED
+        value: true
+      - key: RATE_LIMIT_MAX
+        value: 300
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: 60
+      - key: DATABASE_POOL_MAX
+        value: 20
+      # SMS provider. Production refuses to boot without it unless SMS_DEV_LOG=true.
+      - key: SMS_API_URL
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
+      - key: SMS_SENDER_ID
+        value: CareSaath
+      - key: SMS_TIMEOUT_MS
+        value: 10000
+      - key: SMS_DEV_LOG
+        value: false
+      # Optional WhatsApp provider.
+      - key: WHATSAPP_API_URL
+        sync: false
+      - key: WHATSAPP_API_KEY
+        sync: false
+      # Transactional email.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: CareSaath
+      # WebRTC calls (TURN is required behind carrier-grade NAT).
+      - key: STUN_URLS
+        value: stun:stun.l.google.com:19302
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_SHARED_SECRET
+        sync: false
+      - key: TURN_CREDENTIAL_TTL_SECONDS
+        value: 3600
+      - key: VISIT_GEOFENCE_RADIUS_METERS
+        value: 300
       # Supplied by the client; set in the dashboard.
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
@@ -77,4 +134,7 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: PAYMENT_RETURN_URL
+        sync: false
+      # Real JazzCash/Easypaisa checkout host; empty means those methods are unavailable.
+      - key: PAYMENT_CHECKOUT_BASE_URL
         sync: false

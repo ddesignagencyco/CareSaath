@@ -57,6 +57,41 @@ const AUDIO_VIDEO_EXTENSIONS = ['mp3', 'm4a', 'weba', 'webm', 'ogg', 'mp4'];
 const CHAT_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
+ * Trust the bytes, not the client-supplied Content-Type. Without this an
+ * attacker can upload an HTML/JS payload labelled `image/png` and have it
+ * served back from the CDN.
+ */
+function hasExpectedSignature(buffer: Buffer, mimeType: string): boolean {
+  const startsWith = (bytes: number[]) =>
+    buffer.length >= bytes.length && bytes.every((byte, index) => buffer[index] === byte);
+  const ascii = (start: number, end: number) =>
+    buffer.length >= end ? buffer.subarray(start, end).toString('latin1') : '';
+
+  switch (mimeType) {
+    case 'application/pdf':
+      return ascii(0, 5) === '%PDF-';
+    case 'image/png':
+      return startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/jpeg':
+      return startsWith([0xff, 0xd8, 0xff]);
+    case 'image/webp':
+      return ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP';
+    case 'audio/mpeg':
+      return ascii(0, 3) === 'ID3' || (buffer.length > 1 && buffer[0] === 0xff && (buffer[1]! & 0xe0) === 0xe0);
+    case 'audio/mp4':
+    case 'video/mp4':
+      return ascii(4, 8) === 'ftyp';
+    case 'audio/webm':
+    case 'video/webm':
+      return startsWith([0x1a, 0x45, 0xdf, 0xa3]);
+    case 'audio/ogg':
+      return ascii(0, 4) === 'OggS';
+    default:
+      return false;
+  }
+}
+
+/**
  * File storage backed by Cloudinary (TRD §7). Images are uploaded as public
  * `image` resources and PDFs as public `raw` resources (public_id ends in
  * `.pdf`), referenced by their Cloudinary public_id (`fileKey`). `presignedGet`
@@ -107,6 +142,7 @@ export class StorageService implements OnModuleInit {
     mimeType: string,
   ): Promise<StoredFile> {
     this.validateUpload(mimeType, buffer.length);
+    this.assertSignature(buffer, mimeType);
     const isPdf = mimeType === 'application/pdf';
     const safeName = filename.replace(/[^\w.-]/g, '_');
     // Raw resources keep their extension in the public_id, so make sure PDFs have one.
@@ -210,6 +246,13 @@ export class StorageService implements OnModuleInit {
     }
   }
 
+  /** Reject a file whose bytes do not match the declared MIME type. */
+  assertSignature(buffer: Buffer, mimeType: string): void {
+    if (!hasExpectedSignature(buffer, mimeType)) {
+      throw new BadRequestException('File content does not match its declared type');
+    }
+  }
+
   /** Resource type Cloudinary needs for an upload, from the mime type rather than a stored key's extension. */
   private resourceTypeForMime(mimeType: string): 'image' | 'raw' | 'video' {
     if (mimeType.startsWith('image/')) return 'image';
@@ -225,6 +268,7 @@ export class StorageService implements OnModuleInit {
     mimeType: string,
   ): Promise<StoredFile> {
     this.validateChatMediaUpload(mimeType, buffer.length);
+    this.assertSignature(buffer, mimeType);
     const resourceType = this.resourceTypeForMime(mimeType);
     const isPdf = mimeType === 'application/pdf';
     const safeName = filename.replace(/[^\w.-]/g, '_');

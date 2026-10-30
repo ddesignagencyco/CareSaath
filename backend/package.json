@@ -29,7 +29,8 @@
     "prisma:generate": "prisma generate --config prisma7.config.ts",
     "prisma:migrate": "prisma migrate deploy --config prisma7.config.ts",
     "prisma:studio": "prisma studio --config prisma7.config.ts",
-    "seed": "node prisma/seed.mjs"
+    "seed": "node prisma/seed.mjs",
+    "admin:create": "node prisma/create-admin.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -47,6 +48,7 @@
     "class-validator": "^0.15.1",
     "cloudinary": "^2.11.0",
     "dotenv": "^18.0.8",
+    "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "nodemailer": "^10.2.1",
     "pdfkit": "^0.20.2",

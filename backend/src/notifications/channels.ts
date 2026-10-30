@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationChannel, UserRole } from '../generated/prisma/client.js';
+import { SmsService } from '../auth/sms.service.js';
 import { EmailService } from '../email/email.service.js';
 import { renderNotificationEmail } from '../email/templates.js';
 import { eventDefinition } from './events.js';
@@ -28,7 +29,8 @@ export interface NotificationChannelAdapter {
 @Injectable()
 export class SmsChannelAdapter implements NotificationChannelAdapter {
   readonly channel = NotificationChannel.SMS;
-  private readonly logger = new Logger(SmsChannelAdapter.name);
+
+  constructor(private readonly sms: SmsService) {}
 
   enabled(): boolean {
     return true;
@@ -38,7 +40,7 @@ export class SmsChannelAdapter implements NotificationChannelAdapter {
     if (!delivery.phone) {
       return;
     }
-    this.logger.log(`[DEV-SMS] ${delivery.phone}: ${delivery.message ?? delivery.event}`);
+    await this.sms.sendSms(delivery.phone, delivery.message ?? delivery.event);
   }
 }
 
@@ -46,17 +48,35 @@ export class SmsChannelAdapter implements NotificationChannelAdapter {
 export class WhatsAppChannelAdapter implements NotificationChannelAdapter {
   readonly channel = NotificationChannel.WHATSAPP;
   private readonly logger = new Logger(WhatsAppChannelAdapter.name);
+  private readonly apiUrl = process.env['WHATSAPP_API_URL']?.trim();
+  private readonly apiKey = process.env['WHATSAPP_API_KEY']?.trim();
 
   enabled(): boolean {
-    // WhatsApp Business vendor TBD (TRD §2); disabled until configured.
-    return process.env['WHATSAPP_ENABLED'] === 'true';
+    // Disabled until the operator opts in and supplies a provider URL.
+    return process.env['WHATSAPP_ENABLED'] === 'true' && Boolean(this.apiUrl);
   }
 
   async send(delivery: ChannelDelivery): Promise<void> {
     if (!delivery.phone) {
       return;
     }
-    this.logger.log(`[DEV-WHATSAPP] ${delivery.phone}: ${delivery.message ?? delivery.event}`);
+    if (!this.apiUrl) {
+      this.logger.warn(
+        `[DEV-WHATSAPP] ${delivery.phone}: ${delivery.message ?? delivery.event} (set WHATSAPP_API_URL to deliver)`,
+      );
+      return;
+    }
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
+      },
+      body: JSON.stringify({ to: delivery.phone, message: delivery.message ?? delivery.event }),
+    });
+    if (!response.ok) {
+      throw new Error(`WhatsApp gateway responded ${response.status}`);
+    }
   }
 }
 
