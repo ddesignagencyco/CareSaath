@@ -59,7 +59,11 @@ describe('AuthService.requestOtp', () => {
       'EX',
       expect.any(Number),
     );
-    expect(sms.sendOtp).toHaveBeenCalledWith('+923001234567', expect.stringMatching(/^\d{6}$/));
+    expect(sms.sendOtp).toHaveBeenCalledWith(
+      '+923001234567',
+      expect.stringMatching(/^\d{6}$/),
+      expect.objectContaining({ purpose: 'LOGIN', email: null, userId: null }),
+    );
   });
 
   it('enforces the request rate limit', async () => {
@@ -242,7 +246,11 @@ describe('AuthService.requestPhoneChange / verifyPhoneChange', () => {
       'EX',
       expect.any(Number),
     );
-    expect(sms.sendOtp).toHaveBeenCalledWith('+923009990001', expect.any(String));
+    expect(sms.sendOtp).toHaveBeenCalledWith(
+      '+923009990001',
+      expect.any(String),
+      expect.objectContaining({ purpose: 'CHANGE_PHONE', userId: 'u-1', phone: '+923009990001' }),
+    );
   });
 
   it('moves the account to the new number once the OTP matches', async () => {

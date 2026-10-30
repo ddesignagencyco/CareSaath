@@ -86,6 +86,11 @@ services:
         sync: false
       - key: SMTP_FROM_NAME
         value: CareSaath
+      # Every OTP (login / signup / change-phone / visit check-in) is mirrored to
+      # the ops inbox with its purpose + phone/email context, so testers never have
+      # to dig through server logs. Turn off before real production.
+      - key: OTP_MIRROR_EMAIL
+        value: info@caresaath.com
       # Web Push (browser notifications while the app is closed). Generate with
       # `npx web-push generate-vapid-keys`; push stays off until both are set.
       - key: VAPID_PUBLIC_KEY

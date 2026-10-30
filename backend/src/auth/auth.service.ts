@@ -135,7 +135,13 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(phone, code);
+    await this.sms.sendOtp(phone, code, {
+      purpose: OtpPurpose.LOGIN,
+      email: existing?.email ?? null,
+      fullName: existing?.fullName ?? null,
+      role: existing?.role,
+      userId: existing?.id ?? null,
+    });
     if (existing?.email) {
       this.emailOtp(existing.email, code, ttlSeconds);
     }
@@ -231,7 +237,12 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(dto.phone, code);
+    await this.sms.sendOtp(dto.phone, code, {
+      purpose: OtpPurpose.SIGNUP,
+      email: dto.email ?? null,
+      fullName: dto.fullName,
+      role: dto.role,
+    });
     return { ttlSeconds };
   }
 
@@ -321,7 +332,17 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(newPhone, code);
+    const userForOtp = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, fullName: true },
+    });
+    await this.sms.sendOtp(newPhone, code, {
+      purpose: OtpPurpose.CHANGE_PHONE,
+      userId,
+      email: userForOtp?.email ?? null,
+      fullName: userForOtp?.fullName ?? null,
+      phone: newPhone,
+    });
     return { ttlSeconds };
   }
 
