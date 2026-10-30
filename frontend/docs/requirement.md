@@ -44,6 +44,10 @@ Today immediate (ASAP) booking is per-caregiver — at booking creation the back
 
 The caregiver "accept" now navigates straight to the visit and, for **immediate** bookings, auto-calls `POST /caregiver/visits/:id/en-route` so the caregiver lands on the check-in / live-location screen without a separate "Start travel" tap. Please confirm `en-route` is accepted immediately after `accept` for an immediate visit (no earliest-start-time guard that would 400 it). Scheduled visits still start travel manually when it's time.
 
-## 7. Nice-to-have
+## 7. Dev convenience — echo the OTP in non-production (no more reading the server console)
+
+In dev/staging there's no SMS, so the OTP only shows in the backend console. Return the code in the response **when `NODE_ENV !== 'production'`** (and only then — never in prod): add a `devCode` field to the `POST /auth/otp/request` and `POST /auth/signup` responses (alongside `ttlSeconds`). The frontend already reads it defensively — it **prefills the code input and shows a "Dev code … auto-filled" hint** — so once the backend echoes it, testing needs no console. (Alternative: accept a fixed dev OTP like `000000` in non-prod.)
+
+## 8. Nice-to-have
 
 - **`priorVisitsWithCaregiver` on `CaregiverBookingListItem`** (`GET /caregiver/bookings`) — the caregiver request card shows a "returning customer" count computed client-side from the last 50 bookings; adding the field (already computed on `BookingDetail`) makes it exact.
