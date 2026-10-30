@@ -17,7 +17,18 @@ function useCaregiverChatTransport(): ChatTransport {
   const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: true });
   // Only accepted/active (CONFIRMED) or past (COMPLETED) bookings get a chat thread — not pending
   // requests, declines or cancellations.
-  const items = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
+  const booked = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
+  // One thread per customer (the chat is with the family, not a single booking): keep the
+  // most relevant booking — an active (CONFIRMED) one over a past (COMPLETED) one, latest
+  // within the same status. Full cross-booking history needs a relationship-scoped chat on
+  // the backend (see docs/requirement.md).
+  const rank = (b: (typeof booked)[number]) => (b.status === "CONFIRMED" ? 1 : 0);
+  const byCustomer = new Map<string, (typeof booked)[number]>();
+  for (const b of booked) {
+    const cur = byCustomer.get(b.customerId);
+    if (!cur || rank(b) > rank(cur) || (rank(b) === rank(cur) && b.startDate.localeCompare(cur.startDate) > 0)) byCustomer.set(b.customerId, b);
+  }
+  const items = [...byCustomer.values()].sort((a, b) => b.startDate.localeCompare(a.startDate));
   const activeVisitId = (visits: { id: string; status: string }[]) =>
     (visits.find((v) => !["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status)) ?? visits[0])?.id;
 

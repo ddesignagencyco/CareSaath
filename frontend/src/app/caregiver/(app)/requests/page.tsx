@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { CalendarDays, Check, Clock3, Inbox, MapPin, Repeat, X, Zap } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { useAction } from "@shared/api/use-action";
@@ -20,7 +21,7 @@ import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import type { CaregiverBookingListItem } from "@shared/caregiver-types";
 import { RespondCountdown } from "@shared/ui/respond-countdown";
-import { bookingsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { bookingsApi, profileApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { useNow } from "@shared/hooks/use-now";
 
@@ -87,9 +88,20 @@ function RequestCard({ booking, commissionPct, priorVisits }: { booking: Caregiv
   const L = useLabels();
   const [declining, setDeclining] = useState(false);
   const qc = useQueryClient();
+  const router = useRouter();
   const accept = useAction(() => bookingsApi.accept(booking.id), {
     invalidate: [keys.bookings, keys.visits],
     success: t("accepted", { count: booking.visits.length }),
+    // Accepting takes the caregiver straight into the visit. For an immediate ("now")
+    // booking we auto-start travel so they land on the check-in / live-location screen
+    // without a separate "Start travel" tap; a scheduled visit opens on its detail and
+    // starts travel when it's actually time.
+    onSuccess: async (detail) => {
+      const visitId = detail.visits?.[0]?.id;
+      if (!visitId) return;
+      if (booking.isImmediate) await visitsApi.enRoute(visitId).catch(() => undefined);
+      router.push(`/caregiver/visits/${visitId}`);
+    },
     // If the request is already gone (customer cancelled/another caregiver took it), drop the stale card.
     onError: () => {
       qc.invalidateQueries({ queryKey: keys.bookings });

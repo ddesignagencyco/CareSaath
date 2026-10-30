@@ -20,7 +20,19 @@ function useCustomerChatTransport(): ChatTransport {
   // A chat thread only for bookings with a real relationship — accepted/active (CONFIRMED) or past
   // (COMPLETED) — never pending requests, declines or cancellations. You can't message a caregiver you
   // haven't actually booked.
-  const items = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
+  const booked = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
+  // One thread per caregiver, not per booking: booking the same caregiver more than
+  // once must not show duplicate conversations. Keep the most relevant booking as the
+  // thread's booking — an active (CONFIRMED) one over a past (COMPLETED) one, and the
+  // latest within the same status. (History from the other bookings isn't merged here;
+  // that needs a relationship-scoped chat on the backend — see docs/requirement.md.)
+  const rank = (b: (typeof booked)[number]) => (b.status === "CONFIRMED" ? 1 : 0);
+  const byCaregiver = new Map<string, (typeof booked)[number]>();
+  for (const b of booked) {
+    const cur = byCaregiver.get(b.caregiverId);
+    if (!cur || rank(b) > rank(cur) || (rank(b) === rank(cur) && b.startDate.localeCompare(cur.startDate) > 0)) byCaregiver.set(b.caregiverId, b);
+  }
+  const items = [...byCaregiver.values()].sort((a, b) => b.startDate.localeCompare(a.startDate));
   const caregiverMap = useCaregiverMap(items.map((b) => b.caregiverId));
 
   const sig = items.map((b) => `${b.id}:${caregiverMap[b.caregiverId]?.user.fullName ?? ""}:${b.serviceType}`).join("|");

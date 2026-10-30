@@ -12,6 +12,7 @@ import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
+import { usePermissionPrime } from "@shared/hooks/use-permission-prime";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
 import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
@@ -57,6 +58,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useRealtime({ session, queryClient: client, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !!me.data });
   // Share live location (for immediate/ASAP bookings) while an approved caregiver has the app open.
   useLiveLocation(approved);
+  // Ask for notification + location permission up front (on first tap) so visits + alerts work live.
+  usePermissionPrime({ warmLocation: approved });
   // Only for the avatar photo; pages share this cache entry.
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get, enabled: approved });
   const requests = useRequestCount(approved);

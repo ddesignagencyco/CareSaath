@@ -9,7 +9,8 @@ import type { ChatScope, SendInput } from "./types";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** Local-only delete (no backend delete endpoint yet); reactions are now real. */
+/** Delete is local-only for now — there is no backend delete-message endpoint, so a
+ *  deleted message reappears on refresh/other devices (see docs/requirement.md). */
 type Patch = { deleted?: boolean };
 
 const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice" };
@@ -22,11 +23,11 @@ function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: str
 }
 
 /**
- * Real-backend chat: one thread per booking, text persisted via the REST API and
- * delivered live by the shared realtime hook (it invalidates queries on
- * `entity.updated`). Media, voice, reactions and replies live only in memory here
- * — they show for the sender but are never sent to the backend or other devices.
- * Returns the same surface as the mock `useChat`, plus `markRead`.
+ * Real-backend chat for a booking thread. Text, media/voice (resumable upload),
+ * reactions and replies are all persisted via the REST API and delivered live by
+ * the shared realtime hook (it invalidates the message queries on `entity.updated`).
+ * The only client-only piece is delete (no backend endpoint yet). Exposes the chat
+ * surface the ChatPanel consumes, plus `markRead`.
  */
 export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
   const qc = useQueryClient();
