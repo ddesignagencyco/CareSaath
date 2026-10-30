@@ -105,3 +105,19 @@ export interface ChatTransport {
   /** Toggle a reaction emoji on a message. */
   react: (bookingId: string, messageId: string, emoji: string) => Promise<void>;
 }
+
+/** Which role's chat this is (customer ↔ caregiver). */
+export type ChatScope = "customer" | "caregiver";
+
+/** What the composer hands to the transport when sending a message. */
+export interface SendInput {
+  text?: string;
+  type?: ChatMessageType;
+  mediaUrl?: string;
+  mediaName?: string;
+  mediaSize?: number;
+  durationMs?: number;
+  replyToId?: string;
+  /** The raw bytes to upload for a media/voice message. */
+  file?: Blob;
+}

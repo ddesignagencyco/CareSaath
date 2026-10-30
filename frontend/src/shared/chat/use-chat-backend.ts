@@ -5,7 +5,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useToast } from "@shared/ui/toast";
 import type { BackendChatMessage, BackendChatType, ChatConversation, ChatMessage, ChatMessageType, ChatReaction, ChatTransport } from "./types";
-import type { ChatScope, SendInput } from "./use-chat";
+import type { ChatScope, SendInput } from "./types";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 

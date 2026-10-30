@@ -7,8 +7,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { formatBytes } from "@shared/lib/format";
 import { Avatar } from "@shared/ui/misc";
-import type { ChatConversation, ChatMessage } from "./types";
-import type { SendInput } from "./use-chat";
+import type { ChatConversation, ChatMessage, SendInput } from "./types";
 import { useCallOptional } from "./call-context";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
