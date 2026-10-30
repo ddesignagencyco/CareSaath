@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Nastaliq_Urdu, Plus_Jakarta_Sans } from "next/font/google";
+import { Noto_Naskh_Arabic, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@shared/app/providers";
 import { Splash } from "@shared/app/splash";
 import "./globals.css";
@@ -9,8 +9,8 @@ const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
 });
 
-/** All Urdu text: Noto Nastaliq Urdu. */
-const urdu = Noto_Nastaliq_Urdu({
+/** All Urdu text: Noto Naskh Arabic. */
+const urdu = Noto_Naskh_Arabic({
   variable: "--font-urdu",
   subsets: ["arabic"],
   weight: ["400", "600", "700"],
