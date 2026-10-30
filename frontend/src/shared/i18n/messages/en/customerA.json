@@ -1,0 +1,302 @@
+{
+  "login": {
+    "product": "Home care",
+    "headline": "Trusted nurses and physiotherapists, at home.",
+    "heroFooter": "© CareSaath · Verified home care in Pakistan",
+    "phoneTitle": "Sign in or create an account",
+    "phoneDescription": "Enter your mobile number. We'll text you a 6-digit code. No password needed.",
+    "footerNote": "We never share your number without your permission.",
+    "newHere": "New to CareSaath?",
+    "createAccount": "Create account",
+    "features": {
+      "verified": {
+        "title": "Verified professionals",
+        "text": "Every nurse and physio's license is checked with the council"
+      },
+      "track": {
+        "title": "Track every visit",
+        "text": "Know when your caregiver is on the way and when care starts"
+      },
+      "safety": {
+        "title": "Safety built in",
+        "text": "SOS button during visits, alerts your family and our team"
+      }
+    },
+    "mockCode": "Mock mode: code <b>{code}</b>",
+    "mockNumbers": "{phone} = family with bookings · any other number = new account",
+    "roleCaregiver": "This number is registered as a caregiver. Use the caregiver app instead.",
+    "roleOther": "This number can't be used for customer bookings.",
+    "devCode": "Dev server: the 6-digit code is printed in the backend console.",
+    "devNumbers": "Demo customers: {ayesha} (Ayesha Khan) · {bilal} (Bilal Ahmed) · any new number creates an account"
+  },
+  "signup": {
+    "title": "Create your account",
+    "description": "Enter your name and mobile number. We'll text you a 6-digit code to verify.",
+    "nameLabel": "Full name",
+    "namePlaceholder": "e.g. Ayesha Khan",
+    "haveAccount": "Already have an account?",
+    "signIn": "Sign in"
+  },
+  "shell": {
+    "product": "Home care",
+    "role": "Customer",
+    "fallbackName": "Welcome",
+    "navCount": "{label} ({count})",
+    "nav": {
+      "home": "Home",
+      "findCare": "Find care",
+      "bookings": "Bookings",
+      "account": "Account"
+    },
+    "groups": {
+      "care": "Care",
+      "family": "Family",
+      "account": "Account"
+    },
+    "items": {
+      "patients": "Patients",
+      "addresses": "Addresses",
+      "contacts": "Emergency contacts",
+      "payments": "Payments",
+      "notifications": "Notifications",
+      "messages": "Messages",
+      "profile": "Profile",
+      "disputes": "Disputes"
+    }
+  },
+  "home": {
+    "greeting": "{period, select, morning {Good morning} afternoon {Good afternoon} evening {Good evening} other {Welcome}}",
+    "greetingNamed": "{period, select, morning {Good morning} afternoon {Good afternoon} evening {Good evening} other {Welcome}}, {name}",
+    "subtitle": "Verified nurses and physiotherapists, at home.",
+    "yourCaregiver": "Your caregiver",
+    "track": "Track",
+    "firstTime": {
+      "title": "Start by adding who needs care",
+      "text": "Add yourself or a family member with their medical details, then book a caregiver.",
+      "cta": "Add patient"
+    },
+    "servicesTitle": "What care do you need?",
+    "services": {
+      "NURSING": "Injections, IV, wound care",
+      "PHYSIOTHERAPY": "Rehab and mobility",
+      "POST_SURGERY_CARE": "Recovery after hospital",
+      "ELDERLY_CARE": "Daily help and company",
+      "DOCTOR": "Diagnosis and prescriptions"
+    },
+    "upcomingTitle": "Upcoming visits",
+    "allBookings": "All bookings",
+    "noUpcoming": "No upcoming visits.",
+    "findCaregiver": "Find a caregiver",
+    "caregiverFallback": "Caregiver",
+    "forPatient": "{specialty} · for {patient}"
+  },
+  "find": {
+    "title": "Find care",
+    "description": "Every caregiver here has a license verified by CareSaath.",
+    "all": "All",
+    "city": "City",
+    "allCities": "All cities",
+    "count": "{count, plural, one {# caregiver} other {# caregivers}}",
+    "countInCity": "{count, plural, one {# caregiver} other {# caregivers}} in {city}",
+    "emptyTitle": "No caregivers match",
+    "emptyText": "Try another city or service."
+  },
+  "profile": {
+    "back": "Find care",
+    "perVisit": "per visit",
+    "licenseVerified": "License verified by CareSaath",
+    "experience": "{years} years of experience",
+    "cities": "Visits homes in {cities}",
+    "coversAreas": "Covers: {areas}",
+    "about": "About",
+    "weeklyHours": "Weekly hours",
+    "weeklyHoursHint": "When this caregiver usually takes visits.",
+    "notAvailable": "Not available",
+    "bookHint": "Choose the patient, address and time. {name} will confirm your request.",
+    "bookVisit": "Book a visit",
+    "bookMobile": "Book {name} · {price}/visit",
+    "visitsTogether": "{count, plural, one {# visit together} other {# visits together}}",
+    "recentVisitsTitle": "Recent visits with you",
+    "recentVisitsHint": "Your most recent visits with this caregiver.",
+    "recentVisitsEmpty": "No visits with this caregiver yet.",
+    "safeTitle": "Safe care, every visit",
+    "safety": {
+      "identity": "Identity and license checked before joining.",
+      "notified": "You're notified when the caregiver is on the way and arrives.",
+      "sos": "SOS button during every visit alerts our team and your emergency contact."
+    }
+  },
+  "book": {
+    "back": "Caregiver profile",
+    "title": "Book {name}",
+    "perVisit": "per visit",
+    "stepsLabel": "Booking steps",
+    "steps": {
+      "who": "Who",
+      "where": "Where",
+      "when": "When",
+      "review": "Review"
+    },
+    "who": {
+      "aria": "Patient",
+      "title": "Who needs care?",
+      "text": "Their medical details are shared only with the caregiver you book.",
+      "you": "You",
+      "family": "Family",
+      "add": "Add a patient"
+    },
+    "where": {
+      "aria": "Address",
+      "title": "Where should they come?",
+      "cities": "{name} visits homes in {cities}.",
+      "outOfArea": "Outside this caregiver's cities; they may decline.",
+      "add": "Add an address"
+    },
+    "when": {
+      "title": "When?",
+      "typeAria": "Booking type",
+      "single": "One visit",
+      "recurring": "Regular visits",
+      "immediate": "Book now",
+      "asapTitle": "Immediate visit (ASAP)",
+      "asapBody": "The caregiver gets a short window to respond and must be nearby. If none can, try scheduling instead.",
+      "asapSummary": "Immediate visit · the caregiver will respond shortly",
+      "asapShort": "Immediate (ASAP)",
+      "date": "Date",
+      "from": "From",
+      "until": "Until",
+      "upTo": "Up to {n} days",
+      "onDays": "On these days",
+      "arriveBetween": "Arrive between",
+      "and": "and",
+      "summary": "<b>{count, plural, one {# visit} other {# visits}}</b> · {days} · {window}",
+      "offHours": "Outside {name}'s usual hours on {days}. They may decline; check their weekly hours on the profile."
+    },
+    "errors": {
+      "chooseDate": "Choose a date",
+      "past": "Date can't be in the past",
+      "pastTime": "Arrival time can't be in the past",
+      "endTime": "End time must be after start time",
+      "chooseEnd": "Choose an end date",
+      "endBefore": "End date must be on or after start date",
+      "maxRange": "Recurring bookings can span up to {n} days",
+      "pickDay": "Pick at least one day",
+      "noDates": "These days don't fall in the date range"
+    },
+    "review": {
+      "title": "Review and send",
+      "patient": "Patient",
+      "address": "Address",
+      "schedule": "Schedule",
+      "scheduleValue": "{count, plural, one {# visit} other {# visits}} · {days} · {window}",
+      "rxTitle": "Prescription or care plan",
+      "rxAdd": "Add a photo or PDF (optional)",
+      "removeFile": "Remove file",
+      "rxBadType": "Only JPEG, PNG, WEBP or PDF files are allowed",
+      "rxTooBig": "File must be 10MB or smaller",
+      "promo": "Promo code",
+      "promoHint": "Applied when you send the request.",
+      "promoPlaceholder": "e.g. WELCOME10",
+      "promoApply": "Apply",
+      "promoOk": "Code applied — you save {amount} per visit",
+      "promoLine": "Promo {code}",
+      "total": "Total",
+      "price": "{price} × {count, plural, one {# visit} other {# visits}}",
+      "payNote": "You pay per visit after the caregiver confirms: cash on visit, JazzCash, Easypaisa or card. Promo discounts apply to each visit."
+    },
+    "send": "Send booking request",
+    "success": "Request sent. You'll be notified when the caregiver responds.",
+    "rxFailed": "Booking sent, but the prescription didn't upload. Add it from the booking page."
+  },
+  "bits": {
+    "starsAria": "{value} out of 5 stars",
+    "newOn": "New on CareSaath",
+    "verified": "Verified",
+    "experience": "{n} years experience",
+    "perVisit": "per visit"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "events": {
+      "bookingConfirmed": {
+        "title": "Booking confirmed",
+        "body": "Your caregiver accepted the request."
+      },
+      "bookingDeclined": {
+        "title": "Booking declined",
+        "body": "The caregiver can't take this booking. Choose another caregiver."
+      },
+      "enRoute": {
+        "title": "Caregiver on the way",
+        "body": "Track the visit live."
+      },
+      "checkedIn": {
+        "title": "Caregiver has arrived",
+        "body": "The visit has started."
+      },
+      "inProgress": {
+        "title": "Care in progress"
+      },
+      "checkedOut": {
+        "title": "Visit finishing",
+        "body": "The caregiver is writing the visit note."
+      },
+      "completed": {
+        "title": "Visit completed",
+        "body": "Read the visit note and rate your caregiver."
+      },
+      "rescheduled": {
+        "title": "Visit rescheduled"
+      },
+      "paymentPaid": {
+        "title": "Payment confirmed",
+        "body": "You paid {amount}."
+      },
+      "disputeRaised": {
+        "title": "Dispute raised",
+        "body": "A caregiver raised a dispute about a visit."
+      },
+      "disputeResolved": {
+        "title": "Dispute resolved",
+        "body": "CareSaath has resolved your dispute."
+      },
+      "safetyUpdated": {
+        "title": "Safety report updated",
+        "body": "Status: {status}."
+      },
+      "sosContact": {
+        "title": "SOS alert sent",
+        "body": "{contact} was alerted by SMS."
+      },
+      "visitConfirmed": {
+        "title": "Visit confirmed",
+        "body": "Your visit is scheduled."
+      },
+      "visitDeclined": {
+        "title": "Visit declined",
+        "body": "The caregiver can't make this visit. Choose another caregiver."
+      },
+      "visitCancelled": {
+        "title": "Visit cancelled",
+        "body": "This visit was cancelled."
+      },
+      "bookingCompleted": {
+        "title": "Booking completed",
+        "body": "All visits in this booking are done."
+      },
+      "cashCaregiverConfirmed": {
+        "title": "Caregiver confirmed the cash",
+        "body": "Confirm you handed over the cash to finish the payment."
+      },
+      "paymentFailed": {
+        "title": "Payment failed",
+        "body": "Your payment didn't go through. Try another method."
+      },
+      "medicalOrder": {
+        "title": "Doctor's orders ready",
+        "body": "Your doctor recorded a diagnosis and prescription for this visit."
+      }
+    }
+  }
+}

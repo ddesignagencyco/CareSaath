@@ -1,0 +1,93 @@
+{
+  "notificationPrefs": {
+    "title": "Notifications",
+    "description": "Choose how CareSaath reaches you. You can turn any channel off.",
+    "sosNote": "Safety-critical alerts (SOS) are always delivered, regardless of these settings.",
+    "channels": {
+      "PUSH": { "label": "In-app", "hint": "Your notification feed inside the app" },
+      "SMS": { "label": "SMS", "hint": "Text messages to your mobile number" },
+      "WHATSAPP": { "label": "WhatsApp", "hint": "Messages on WhatsApp" },
+      "EMAIL": { "label": "Email", "hint": "Updates to your email address" }
+    }
+  },
+  "login": {
+    "progress": "Sign-in progress",
+    "stepPhone": "Mobile number",
+    "stepVerify": "Verify code",
+    "nameRequired": "Enter your name",
+    "emailInvalid": "Enter a valid email address",
+    "sendCode": "Send verification code",
+    "couldNotSend": "Could not send code",
+    "differentNumber": "Use a different number",
+    "checkPhone": "Check your phone",
+    "enterCode": "Enter the 6-digit code sent by SMS to <phone></phone>",
+    "verify": "Verify and sign in",
+    "verificationFailed": "Verification failed",
+    "didntGet": "Didn't get it?",
+    "resendIn": "Resend in {time}",
+    "resend": "Resend code",
+    "mockCode": "Mock mode: code {code}",
+    "codeSent": "Verification code sent to {phone}",
+    "signedIn": "Signed in — opening your dashboard"
+  },
+  "phone": {
+    "label": "Mobile number",
+    "empty": "Enter your mobile number",
+    "digitsOnly": "Use digits only",
+    "notPakistan": "Only Pakistani (+92) numbers are supported",
+    "length92": "With 92, the number must be 12 digits (92 300 1234567)",
+    "length0": "With a leading 0, the number must be 11 digits (0300 1234567)",
+    "length10": "The number must be 10 digits (300 1234567)",
+    "lengthAfter92": "The number after +92 must be 10 digits",
+    "notMobile": "Enter a mobile number (starts with 03)",
+    "operator": "Not a valid Pakistani mobile operator code (030–035)"
+  },
+  "otp": {
+    "group": "One-time code",
+    "digit": "Digit {n}"
+  },
+  "sos": {
+    "title": "Send an SOS alert?",
+    "sentTitle": "Help is being alerted",
+    "send": "Send SOS now",
+    "whatsHappening": "What's happening?",
+    "hint": "Optional. Sending fast matters more than detail.",
+    "placeholder": "e.g. Patient collapsed, ambulance needed",
+    "callDirectly": "Call directly",
+    "rescue": "Rescue 1122",
+    "rescueNote": "Ambulance & rescue",
+    "police": "Police 15",
+    "policeNote": "Police emergency",
+    "edhi": "Edhi 115",
+    "edhiNote": "Ambulance",
+    "result": "{admins, plural, one {# safety team member} other {# safety team members}} and {contacts, plural, one {# emergency contact} other {# emergency contacts}} notified. If anyone is in danger, call emergency services now.",
+    "failed": "Couldn't send SOS. Call emergency services directly.",
+    "button": "SOS · Emergency help"
+  },
+  "fileViewer": {
+    "confidential": "Confidential: view only",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen"
+  },
+  "countdown": {
+    "passed": "Response time passed",
+    "left": "{time} left",
+    "hours": "{h}h {m}m"
+  },
+  "map": {
+    "title": "Map: {label}"
+  },
+  "reason": {
+    "counter": "{count}/{max}",
+    "counterOptional": "{count}/{max} · optional",
+    "label": "Reason"
+  },
+  "medicalOrders": {
+    "recordedOn": "Recorded {date}",
+    "diagnosis": "Diagnosis",
+    "medicines": "Prescription",
+    "labTests": "Lab tests"
+  }
+}

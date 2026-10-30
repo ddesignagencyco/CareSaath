@@ -1,0 +1,187 @@
+{
+  "specialty": {
+    "NURSING": "نرسنگ",
+    "PHYSIOTHERAPY": "فزیوتھراپی",
+    "POST_SURGERY_CARE": "آپریشن کے بعد کی دیکھ بھال",
+    "ELDERLY_CARE": "بزرگوں کی دیکھ بھال",
+    "DOCTOR": "ڈاکٹر"
+  },
+  "specialtyHint": {
+    "NURSING": "انجیکشن، ڈرپ، زخم کی پٹی، بلڈ پریشر اور شوگر",
+    "PHYSIOTHERAPY": "بحالی، چلنے پھرنے میں مدد، فالج کے بعد تھراپی",
+    "POST_SURGERY_CARE": "پٹی، ڈرین، صحت یابی میں مدد",
+    "ELDERLY_CARE": "روزمرہ دیکھ بھال اور ساتھ",
+    "DOCTOR": "تشخیص، نسخے، لیب ٹیسٹ"
+  },
+  "caregiverBadge": {
+    "BRONZE": "کانسی",
+    "SILVER": "چاندی",
+    "GOLD": "گولڈ",
+    "PLATINUM": "پلاٹینم"
+  },
+  "licenseBody": {
+    "PNC": "پاکستان نرسنگ کونسل",
+    "PMDC": "پاکستان میڈیکل اینڈ ڈینٹل کونسل",
+    "OTHER": "دیگر ادارہ"
+  },
+  "licenseBodyOption": {
+    "PNC": "پاکستان نرسنگ کونسل",
+    "PMDC": "پاکستان میڈیکل اینڈ ڈینٹل کونسل",
+    "OTHER": "دیگر پیشہ ورانہ ادارہ"
+  },
+  "licenseBodyHint": {
+    "PNC": "نرسز کے لیے",
+    "PMDC": "ڈاکٹرز اور کچھ الائیڈ ہیلتھ",
+    "OTHER": "مثلاً فزیوتھراپی ایسوسی ایشن"
+  },
+  "docType": {
+    "LICENSE": "پیشہ ورانہ لائسنس",
+    "CERTIFICATE": "سرٹیفکیٹ",
+    "CNIC_COPY": "شناختی کارڈ کی کاپی",
+    "OTHER": "دیگر دستاویز"
+  },
+  "visitCaregiver": {
+    "REQUESTED": "آپ کے جواب کا منتظر",
+    "CONFIRMED": "طے شدہ",
+    "EN_ROUTE": "راستے میں",
+    "CHECKED_IN": "چیک اِن ہو گیا",
+    "IN_PROGRESS": "جاری ہے",
+    "CHECKED_OUT": "نوٹ باقی ہے",
+    "COMPLETED": "مکمل",
+    "DECLINED": "مسترد",
+    "CANCELLED": "منسوخ"
+  },
+  "visitCustomer": {
+    "REQUESTED": "کیئرگیور کے جواب کا انتظار",
+    "CONFIRMED": "تصدیق شدہ",
+    "EN_ROUTE": "کیئرگیور راستے میں ہیں",
+    "CHECKED_IN": "کیئرگیور پہنچ گئے ہیں",
+    "IN_PROGRESS": "دیکھ بھال جاری ہے",
+    "CHECKED_OUT": "وزٹ مکمل ہو رہا ہے",
+    "COMPLETED": "مکمل",
+    "DECLINED": "مسترد",
+    "CANCELLED": "منسوخ"
+  },
+  "timeline": {
+    "REQUESTED": "درخواست بھیجی گئی",
+    "CONFIRMED": "تصدیق ہو گئی",
+    "EN_ROUTE": "روانہ ہوئے",
+    "CHECKED_IN": "چیک اِن کیا",
+    "IN_PROGRESS": "دیکھ بھال شروع ہوئی",
+    "CHECKED_OUT": "چیک آؤٹ کیا",
+    "COMPLETED": "وزٹ نوٹ جمع ہوا",
+    "DECLINED": "مسترد",
+    "CANCELLED": "منسوخ"
+  },
+  "bookingCustomer": {
+    "REQUESTED": "کیئرگیور کے جواب کا انتظار",
+    "CONFIRMED": "تصدیق شدہ",
+    "DECLINED": "مسترد",
+    "CANCELLED": "منسوخ",
+    "COMPLETED": "مکمل"
+  },
+  "bookingCaregiver": {
+    "REQUESTED": "درخواست",
+    "CONFIRMED": "قبول کر لی",
+    "DECLINED": "مسترد",
+    "CANCELLED": "منسوخ",
+    "COMPLETED": "مکمل"
+  },
+  "payout": {
+    "REQUESTED": "درخواست دی گئی",
+    "PROCESSING": "کارروائی جاری",
+    "TRANSFERRED": "منتقل ہو گیا",
+    "PAID": "ادا ہو گیا",
+    "REJECTED": "مسترد"
+  },
+  "payoutAccount": {
+    "BANK": "بینک اکاؤنٹ",
+    "MOBILE_WALLET": "موبائل والیٹ"
+  },
+  "priority": {
+    "LOW": "کم",
+    "MEDIUM": "درمیانی",
+    "HIGH": "زیادہ",
+    "CRITICAL": "انتہائی سنگین"
+  },
+  "incidentStatus": {
+    "OPEN": "کھلا ہے",
+    "IN_REVIEW": "زیرِ جائزہ",
+    "RESOLVED": "حل ہو گیا"
+  },
+  "incidentSource": {
+    "CUSTOMER_COMPLAINT": "صارف کی شکایت",
+    "CAREGIVER_REPORT": "کیئرگیور کی رپورٹ",
+    "SOS": "SOS الرٹ"
+  },
+  "dispute": {
+    "OPEN": "کھلا ہے",
+    "RESOLVED": "حل ہو گیا"
+  },
+  "paymentMethod": {
+    "CASH": "نقد",
+    "CARD": "کارڈ",
+    "JAZZCASH": "جاز کیش",
+    "EASYPAISA": "ایزی پیسہ"
+  },
+  "paymentStatus": {
+    "PENDING": "زیرِ التوا",
+    "PAID": "ادا شدہ",
+    "FAILED": "ناکام",
+    "REFUNDED": "رقم واپس"
+  },
+  "relation": {
+    "SELF": "میں خود",
+    "FAMILY_MEMBER": "خاندان کا فرد"
+  },
+  "gender": {
+    "Female": "خاتون",
+    "Male": "مرد",
+    "Other": "دیگر"
+  },
+  "role": {
+    "CUSTOMER": "صارف",
+    "CAREGIVER": "کیئرگیور",
+    "ADMIN": "ایڈمن"
+  },
+  "time": {
+    "today": "آج",
+    "tomorrow": "کل",
+    "yesterday": "گزشتہ کل",
+    "everyDay": "ہر روز",
+    "weekdays": "پیر تا جمعہ",
+    "ageYears": "{n} سال",
+    "justNow": "ابھی"
+  },
+  "patient": {
+    "self": "خود بکنگ کی",
+    "family": "خاندان کا فرد"
+  },
+  "verification": {
+    "PENDING": "زیرِ غور",
+    "APPROVED": "منظور شدہ",
+    "REJECTED": "مسترد",
+    "SUSPENDED": "معطل"
+  },
+  "userStatus": {
+    "ACTIVE": "اکاؤنٹ فعال",
+    "SUSPENDED": "اکاؤنٹ معطل",
+    "DEACTIVATED": "اکاؤنٹ غیر فعال"
+  },
+  "visitAdmin": {
+    "REQUESTED": "وزٹ کی درخواست",
+    "CONFIRMED": "وزٹ کی تصدیق",
+    "EN_ROUTE": "وزٹ: راستے میں",
+    "CHECKED_IN": "وزٹ: پہنچ گئے",
+    "IN_PROGRESS": "وزٹ جاری",
+    "CHECKED_OUT": "وزٹ: روانہ ہو گئے",
+    "COMPLETED": "وزٹ مکمل",
+    "DECLINED": "وزٹ مسترد",
+    "CANCELLED": "وزٹ منسوخ"
+  },
+  "licenseBodyShort": {
+    "PNC": "PNC",
+    "PMDC": "PMDC",
+    "OTHER": "دیگر"
+  }
+}

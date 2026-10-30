@@ -1,0 +1,322 @@
+{
+  "login": {
+    "product": "Admin console",
+    "headline": "Every caregiver verified before they visit a home.",
+    "features": {
+      "credentials": {
+        "title": "Credential verification",
+        "text": "Licenses checked against PNC & PMDC registers"
+      },
+      "safety": {
+        "title": "Safety first",
+        "text": "SOS alerts and complaints triaged by priority"
+      },
+      "audit": {
+        "title": "Full audit trail",
+        "text": "Every decision logged with time and actor"
+      }
+    },
+    "heroFooter": "© CareSaath · Authorised staff only",
+    "phoneTitle": "Welcome back",
+    "phoneDescription": "Sign in with your registered admin mobile number. We'll text you a 6-digit code.",
+    "footerNote": "Restricted to authorised CareSaath staff. Sign-ins are logged.",
+    "mockCode": "Mock mode: use code <b>{code}</b>",
+    "notAdmin": "This number is not registered as a CareSaath admin.",
+    "devOtpHint": "Development: the 6-digit code is printed in the backend console.",
+    "devDemoNumbers": "Demo admin number: {phone}"
+  },
+  "shell": {
+    "logoSubtitle": "Admin",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "adminName": "Platform Admin",
+    "role": "Administrator",
+    "platformSettings": "Platform settings",
+    "health": {
+      "checking": "Checking API…",
+      "healthy": "API connected",
+      "degraded": "API degraded",
+      "unreachable": "API unreachable",
+      "detailHealthy": "API, database and cache are all up.",
+      "detailDegraded": "Down: {services}",
+      "detailUnreachable": "Cannot reach the API at {url}",
+      "postgres": "Database (PostgreSQL)",
+      "redis": "Cache (Redis)"
+    }
+  },
+  "nav": {
+    "overview": "Overview",
+    "bookings": "Bookings & visits",
+    "customers": "Customers",
+    "verification": "Verification",
+    "reverification": "Re-verification",
+    "safety": "Safety incidents",
+    "disputes": "Disputes",
+    "payouts": "Payouts",
+    "payments": "Payments",
+    "callLogs": "Call history",
+    "auditLogs": "Audit log",
+    "commissions": "Commissions",
+    "promos": "Promo codes",
+    "reports": "Reports",
+    "settings": "Settings",
+    "withCount": "{label} ({count})",
+    "groups": {
+      "caregivers": "Caregivers",
+      "trust": "Trust & safety",
+      "finance": "Finance",
+      "platform": "Platform"
+    }
+  },
+  "dashboard": {
+    "title": "Overview",
+    "description": "Platform-wide bookings, revenue and caregiver supply.",
+    "ranges": {
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "all": "All time"
+    },
+    "bookingStatus": {
+      "REQUESTED": "Requested",
+      "CONFIRMED": "Confirmed",
+      "COMPLETED": "Completed",
+      "DECLINED": "Declined",
+      "CANCELLED": "Cancelled"
+    },
+    "barTitle": "{status}: {count} ({share})",
+    "stats": {
+      "grossRevenue": "Gross revenue",
+      "commissionEarned": "{amount} commission earned",
+      "bookings": "Bookings",
+      "visitsCompleted": "{count} visits completed",
+      "cancellationRate": "Cancellation rate",
+      "bookingsCancelled": "{count} bookings cancelled",
+      "activeCaregivers": "Active caregivers",
+      "awaitingVerification": "{count} awaiting verification"
+    },
+    "byStatus": {
+      "title": "Bookings by status",
+      "description": "{count} bookings in range"
+    },
+    "attention": {
+      "title": "Needs attention",
+      "description": "Queues waiting on an admin",
+      "critical": "Critical SOS / incidents",
+      "openIncidents": "Open safety incidents",
+      "toVerify": "Caregivers to verify",
+      "disputes": "Open disputes",
+      "payouts": "Payout requests"
+    },
+    "revenue": {
+      "title": "Revenue breakdown",
+      "description": "Paid payments in the selected range",
+      "barAria": "Commission versus caregiver share of gross revenue",
+      "commission": "Commission",
+      "caregiverShare": "Caregiver share",
+      "gross": "Gross collected",
+      "grossNote": "{count} paid payments",
+      "platformCommission": "Platform commission",
+      "takeRate": "{rate} effective take rate",
+      "caregiverShareNote": "Owed to caregivers",
+      "paidOut": "Paid out",
+      "paidOutNote": "Settled payout requests"
+    }
+  },
+  "caregivers": {
+    "title": "Caregiver verification",
+    "description": "Review license and certificate documents. Only approved caregivers appear to customers.",
+    "statuses": {
+      "PENDING": "Pending review",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "SUSPENDED": "Suspended"
+    },
+    "allStatuses": "All",
+    "searchPlaceholder": "Search by name, phone or license…",
+    "emptyPendingTitle": "Verification queue is clear",
+    "emptyPendingText": "New caregiver registrations will appear here for review.",
+    "emptyTitle": "No caregivers here",
+    "columns": {
+      "caregiver": "Caregiver",
+      "specialty": "Specialty",
+      "license": "License",
+      "documents": "Documents",
+      "rate": "Rate / visit",
+      "status": "Status"
+    },
+    "unnamed": "Unnamed",
+    "registered": "{cities} · registered {when}",
+    "noneUploaded": "None uploaded",
+    "fileCount": "{count, plural, one {# file} other {# files}}"
+  },
+  "drawer": {
+    "unnamed": "Unnamed caregiver",
+    "toast": {
+      "approved": "{name} approved and now visible in search",
+      "rejected": "{name}'s registration rejected",
+      "suspended": "{name} suspended and hidden from search",
+      "reverify": "Re-verification requested for {name}",
+      "deactivated": "{name}'s account deactivated",
+      "reactivated": "{name} reactivated",
+      "badge": "{name}'s tier badge updated",
+      "strikes": "{name}'s strikes updated"
+    },
+    "actions": {
+      "reject": "Reject",
+      "approve": "Approve",
+      "requestReverify": "Request re-verification",
+      "suspend": "Suspend",
+      "reactivate": "Reactivate",
+      "deactivate": "Deactivate account"
+    },
+    "reviews": "{rating} · {count} reviews",
+    "tier": {
+      "none": "No tier yet",
+      "auto": "Auto-computed from ratings & completed visits",
+      "overridden": "Manually set by an admin",
+      "overrideLabel": "Override tier",
+      "overrideHint": "Choose “Auto” to let the system compute it from performance.",
+      "optAuto": "Auto (computed)",
+      "overridePending": "Manual tier override becomes available once the backend endpoint ships."
+    },
+    "strikes": {
+      "current": "Current strikes: {count}",
+      "addReason": "Add a strike for",
+      "add": "Add strike",
+      "reset": "Reset to 0",
+      "reason": {
+        "DECLINED": "Declined booking",
+        "LATE_ARRIVAL": "Late arrival",
+        "NO_SHOW": "No-show"
+      }
+    },
+    "sections": {
+      "credentials": "Credentials to cross-check",
+      "documents": "Documents",
+      "profile": "Profile",
+      "tier": "Ranking tier",
+      "strikes": "Strikes"
+    },
+    "fields": {
+      "licenseNumber": "License number",
+      "licensingBody": "Licensing body",
+      "cnic": "CNIC",
+      "specialty": "Specialty",
+      "experience": "Experience",
+      "experienceYears": "{count} years",
+      "rate": "Rate per visit",
+      "bracket": "Rate bracket",
+      "strikes": "Strikes",
+      "serviceArea": "Service area",
+      "registered": "Registered",
+      "approved": "Approved",
+      "reverifyDue": "Re-verification due",
+      "overdue": " (overdue {days}d)",
+      "cnicUnavailable": "Unavailable (could not be decrypted)"
+    },
+    "verifyHint": "Verify the license against the {body, select, OTHER {relevant professional body's} other {{body}}} register before approving.",
+    "dialogs": {
+      "approve": {
+        "title": "Approve {name}?",
+        "description": "The profile goes live in customer search. Re-verification is scheduled for one year from today.",
+        "label": "Verification notes",
+        "placeholder": "e.g. PNC registry record validated and active.",
+        "confirm": "Approve caregiver",
+        "checked": "I have checked license {license} against the {body} register."
+      },
+      "reject": {
+        "title": "Reject {name}?",
+        "description": "The caregiver is told their documents failed verification.",
+        "placeholder": "e.g. License number not found on the PNC register.",
+        "confirm": "Reject registration"
+      },
+      "suspend": {
+        "title": "Suspend {name}?",
+        "description": "The profile is hidden from search until reactivated. Use this for policy violations or unresolved safety complaints.",
+        "placeholder": "e.g. Pending investigation of safety incident #inc-0004.",
+        "confirm": "Suspend caregiver"
+      },
+      "deactivate": {
+        "title": "Deactivate {name}'s account?",
+        "description": "Blocks the caregiver from signing in. This is stronger than suspension.",
+        "confirm": "Deactivate account"
+      },
+      "reverify": {
+        "title": "Request re-verification",
+        "description": "The caregiver returns to Pending and is hidden from search until their credentials are approved again.",
+        "confirm": "Request re-verification",
+        "daysLabel": "Next re-verification in (days)",
+        "daysHint": "Default is 365 days (annual)."
+      },
+      "reactivate": {
+        "title": "Reactivate {name}?",
+        "description": "Restores the caregiver's account so they can sign in and appear in search again.",
+        "confirm": "Reactivate",
+        "suspendedNote": "This caregiver is suspended. The API's reactivate action doesn't lift a suspension yet, so this also re-approves their credentials and restarts the re-verification date at 365 days.",
+        "auditReason": "Reactivated after suspension"
+      }
+    }
+  },
+  "documents": {
+    "none": "No documents uploaded. The caregiver can't be approved until a license or certificate is provided.",
+    "noneOnFile": "No documents on file.",
+    "meta": "{type} · {size}",
+    "viewerDescription": "{size} · uploaded {date}"
+  },
+  "reverification": {
+    "title": "Re-verification",
+    "description": "Approved caregivers must have their credentials re-checked periodically (annually by default).",
+    "windows": {
+      "overdue": "Overdue",
+      "next30": "Next 30 days",
+      "next90": "Next 90 days",
+      "all": "All approved"
+    },
+    "empty": "Nothing due in this window",
+    "searchPlaceholder": "Search caregivers…",
+    "columns": {
+      "caregiver": "Caregiver",
+      "license": "License",
+      "approved": "Approved",
+      "due": "Due"
+    },
+    "due": {
+      "overdue": "Overdue {days}d",
+      "dueIn": "Due in {days}d",
+      "inDays": "In {days}d"
+    },
+    "noDueDate": "{count, plural, one {# approved caregiver has} other {# approved caregivers have}} no re-verification date yet and {count, plural, one {isn't} other {aren't}} listed here.",
+    "truncated": "Showing the first {shown} of {total} approved caregivers."
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Export financial and operational data as CSV. Files open in Excel and Google Sheets.",
+    "columnsLabel": "Columns:",
+    "download": "Download CSV",
+    "downloaded": "{title} report downloaded",
+    "exportFailed": "Export failed",
+    "items": {
+      "payments": {
+        "title": "Payments",
+        "description": "Every customer payment with method, status and the commission split.",
+        "columns": "method, status, amount, commission, caregiver amount, paid at"
+      },
+      "payouts": {
+        "title": "Payouts",
+        "description": "Caregiver withdrawal requests and when they were processed.",
+        "columns": "caregiver, account, amount, status, requested, processed"
+      },
+      "bookings": {
+        "title": "Bookings",
+        "description": "All bookings with service type, status, rate and discounts.",
+        "columns": "customer, caregiver, service, status, rate, discount, dates"
+      },
+      "caregivers": {
+        "title": "Caregivers",
+        "description": "Caregiver directory with verification status, rates and ratings.",
+        "columns": "name, phone, specialty, verification, rate, rating"
+      }
+    }
+  }
+}

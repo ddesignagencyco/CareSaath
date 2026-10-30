@@ -1,0 +1,279 @@
+/*
+ * CareSaath brand tokens.
+ * Brand: deep "care" teal (trust, clinical calm, a nod to Pakistan green).
+ * Accent: marigold (warmth, family) — used sparingly for highlights.
+ * Ink: green-tinted neutrals so greys sit comfortably next to the teal.
+ */
+@theme inline {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-nastaliq: var(--font-urdu), serif;
+
+  --color-brand-50: #edf8f6;
+  --color-brand-100: #d3efea;
+  --color-brand-200: #a8ded5;
+  --color-brand-300: #73c6b9;
+  --color-brand-400: #43a89a;
+  --color-brand-500: #238c7f;
+  --color-brand-600: #167267;
+  --color-brand-700: #135c54;
+  --color-brand-800: #134a45;
+  --color-brand-900: #123e3a;
+  --color-brand-950: #072522;
+
+  --color-accent-50: #fff8eb;
+  --color-accent-100: #fdebc6;
+  --color-accent-200: #fbd88d;
+  --color-accent-400: #f5b544;
+  --color-accent-500: #ee9b1d;
+  --color-accent-600: #d27a12;
+  --color-accent-700: #ae5913;
+
+  --color-ink-0: #ffffff;
+  --color-ink-25: #f7f9f8;
+  --color-ink-50: #f0f4f3;
+  --color-ink-100: #e4eae8;
+  --color-ink-200: #d2dad8;
+  --color-ink-300: #b2bdba;
+  --color-ink-400: #85918e;
+  --color-ink-500: #63706c;
+  --color-ink-600: #4b5754;
+  --color-ink-700: #38423f;
+  --color-ink-800: #242c2a;
+  --color-ink-900: #141a18;
+
+  --color-success-50: #ecfdf3;
+  --color-success-600: #15803d;
+  --color-success-700: #166534;
+  --color-warning-50: #fffbeb;
+  --color-warning-600: #b45309;
+  --color-warning-700: #92400e;
+  --color-danger-50: #fef2f2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+  --color-info-50: #eff6ff;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  --shadow-card: 0 1px 2px rgb(20 26 24 / 0.04), 0 1px 3px rgb(20 26 24 / 0.06);
+  --shadow-pop: 0 10px 30px -10px rgb(20 26 24 / 0.25), 0 4px 10px -4px rgb(20 26 24 / 0.1);
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-ink-25);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+/*
+ * Urdu. The language provider sets <html lang="ur" dir="rtl">.
+ * All Urdu text uses Nastaliq (the script Pakistani readers know best).
+ * Jakarta comes first in each stack: it has no Arabic glyphs, so Latin
+ * letters and digits stay in Jakarta and Urdu falls through to Nastaliq.
+ * Nastaliq is tall, so lines get extra height; Arabic script must never be
+ * letter-spaced (it breaks the joins).
+ */
+/* Jakarta by name (Latin + digits), then Nastaliq. Not var(--font-jakarta):
+   that includes Next's Arial-based fallback, and Arial's own Arabic glyphs
+   would draw the Urdu before Nastaliq is ever reached. */
+html[lang="ur"] {
+  --font-urdu-stack: "Plus Jakarta Sans", var(--font-urdu), sans-serif;
+}
+
+html[lang="ur"] body {
+  font-family: var(--font-urdu-stack);
+  line-height: 2;
+}
+
+html[lang="ur"] h1,
+html[lang="ur"] h2,
+html[lang="ur"] h3 {
+  line-height: 2.1;
+  font-weight: 700;
+}
+
+/* Tailwind's leading-* utilities are tuned for Latin; give Nastaliq room. */
+html[lang="ur"] [class*="leading-"] {
+  line-height: 1.9;
+}
+
+/* Nastaliq needs more size and height than Latin at small sizes to stay legible. */
+html[lang="ur"] .text-xs {
+  font-size: 0.8125rem;
+  line-height: 1.9;
+}
+html[lang="ur"] [class*="text-[10px]"],
+html[lang="ur"] [class*="text-[11px]"] {
+  font-size: 11.5px;
+  line-height: 1.9;
+}
+
+html[lang="ur"] [class*="tracking-"],
+html[lang="ur"] [class*="uppercase"] {
+  letter-spacing: 0 !important;
+}
+
+html[lang="ur"] input,
+html[lang="ur"] textarea,
+html[lang="ur"] button {
+  font-family: var(--font-urdu-stack);
+}
+
+/* Explicit Urdu snippets inside English screens (e.g. the brand tagline). */
+[lang="ur"]:not(html) {
+  font-family: var(--font-urdu);
+  line-height: 2;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Brand loader (shared/ui/brand-loader.tsx): halves draw up from the bottom
+   point and meet at the top, heads pop in, one heartbeat, loop. */
+.cs-loader-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: cs-draw 1.9s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.cs-loader-head {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cs-pop 1.9s ease-out infinite;
+}
+.cs-loader-heart {
+  transform-origin: 24px 28px;
+  animation: cs-beat 1.9s ease-in-out infinite;
+}
+.cs-loader-word {
+  animation: cs-fade 1.9s ease-in-out infinite;
+}
+@keyframes cs-draw {
+  0% { stroke-dashoffset: 1; }
+  45%, 82% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -1; }
+}
+@keyframes cs-pop {
+  0%, 40% { transform: scale(0); opacity: 0; }
+  52% { transform: scale(1.25); opacity: 1; }
+  60%, 82% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+@keyframes cs-beat {
+  0%, 58% { transform: scale(1); }
+  66% { transform: scale(1.1); }
+  74% { transform: scale(0.97); }
+  82%, 100% { transform: scale(1); }
+}
+@keyframes cs-fade {
+  0%, 100% { opacity: 0.55; }
+  55% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cs-loader-line, .cs-loader-head, .cs-loader-heart, .cs-loader-word {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- Landing page (src/app/page.tsx) ----------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  [data-reveal][data-shown] {
+    opacity: 1;
+    transform: none;
+  }
+  .cs-in {
+    animation: cs-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .cs-in-1 {
+    animation: cs-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+  .cs-in-2 {
+    animation: cs-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  }
+  .cs-in-3 {
+    animation: cs-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both;
+  }
+  .cs-floaty {
+    animation: cs-floaty 8s ease-in-out infinite;
+  }
+  .cs-pulse-ring::before,
+  .cs-pulse-ring::after {
+    animation: cs-pulse 2.8s ease-out infinite;
+  }
+  .cs-pulse-ring::after {
+    animation-delay: 1.4s;
+  }
+}
+
+@keyframes cs-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cs-floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+@keyframes cs-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Live location pin with expanding rings. */
+.cs-pulse-ring {
+  position: relative;
+}
+.cs-pulse-ring::before,
+.cs-pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid var(--color-accent-400);
+}
+
+/* Faint grid wash behind the dark hero. */
+.cs-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 35%, transparent 72%);
+}
