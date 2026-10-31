@@ -41,6 +41,8 @@ export interface ChatConversation {
   role: string;
   online?: boolean;
   messages: ChatMessage[];
+  /** Every booking in this thread — lets a bookingId deep-link (e.g. "Message" from a booking) resolve here. */
+  bookingIds?: string[];
   /** For real WebRTC calls: an active visit shared with the other party. */
   visitId?: string;
   /** For real WebRTC calls: the other party's user id (the call callee). */
@@ -86,6 +88,8 @@ export interface ChatThreadMeta {
   online?: boolean;
   /** Where new messages go (newest CONFIRMED booking); null = read-only (all completed). */
   activeBookingId: string | null;
+  /** Every booking in this thread, so a bookingId deep-link resolves to this thread. */
+  bookingIds?: string[];
   /** An active visit shared with the other party (enables WebRTC calls). */
   visitId?: string;
   /** The other party's user id, the call callee. */

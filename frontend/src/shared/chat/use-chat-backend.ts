@@ -80,7 +80,7 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
             return m;
           })
           .sort((a, b) => a.createdAt - b.createdAt);
-        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, messages };
+        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, bookingIds: th.bookingIds, messages };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dataSig stands in for the per-thread query data
     [threads, dataSig, extra, patches, mapBackend],

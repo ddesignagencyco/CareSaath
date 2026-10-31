@@ -55,11 +55,18 @@ export function ConversationScreen({ conversationId, basePath }: { conversationI
   const t = useTranslations("common.chat");
   const router = useRouter();
   const { conversations, send, react, remove, markUploaded, markRead } = useChatContext();
-  const conversation = conversations.find((c) => c.id === conversationId);
+  // Resolve by the thread id (counterpartUserId) OR any bookingId in it, so a "Message" deep-link
+  // from a booking/visit (which only knows the bookingId) still opens the right thread.
+  const conversation = conversations.find((c) => c.id === conversationId || c.bookingIds?.includes(conversationId));
+  const resolvedId = conversation?.id;
+  // Normalize a bookingId deep-link to the canonical thread URL (list highlight + stable markRead).
+  useEffect(() => {
+    if (resolvedId && resolvedId !== conversationId) router.replace(`${basePath}/${resolvedId}`);
+  }, [resolvedId, conversationId, basePath, router]);
   // Opening a thread marks the other party's messages read (real backend); no-op in the mock.
   useEffect(() => {
-    markRead(conversationId);
-  }, [conversationId, markRead]);
+    if (resolvedId) markRead(resolvedId);
+  }, [resolvedId, markRead]);
   if (!conversation) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">

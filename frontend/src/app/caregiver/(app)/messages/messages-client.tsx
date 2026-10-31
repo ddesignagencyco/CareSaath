@@ -31,7 +31,7 @@ function useCaregiverChatTransport(): ChatTransport {
   }, [bookings.data]);
 
   const sig = items
-    .map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${metaByCustomer[c.counterpartUserId]?.visitId ?? ""}:${metaByCustomer[c.counterpartUserId]?.serviceType ?? ""}`)
+    .map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${metaByCustomer[c.counterpartUserId]?.visitId ?? ""}:${metaByCustomer[c.counterpartUserId]?.serviceType ?? ""}`)
     .join("|");
   const threads = useMemo<ChatThreadMeta[]>(
     () =>
@@ -42,6 +42,7 @@ function useCaregiverChatTransport(): ChatTransport {
           name: c.counterpartName,
           role: meta?.serviceType ? L.specialty(meta.serviceType) : "",
           activeBookingId: c.activeBookingId,
+          bookingIds: c.bookingIds,
           visitId: meta?.visitId,
           peerUserId: c.counterpartUserId,
         };

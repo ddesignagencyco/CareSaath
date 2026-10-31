@@ -18,12 +18,12 @@ function useCustomerChatTransport(): ChatTransport {
   const items = convs.data ?? [];
   const caregiverMap = useCaregiverMap(items.map((c) => c.caregiverId));
 
-  const sig = items.map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${caregiverMap[c.caregiverId]?.specialty ?? ""}`).join("|");
+  const sig = items.map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${caregiverMap[c.caregiverId]?.specialty ?? ""}`).join("|");
   const threads = useMemo<ChatThreadMeta[]>(
     () =>
       items.map((c) => {
         const cg = caregiverMap[c.caregiverId];
-        return { id: c.counterpartUserId, name: c.counterpartName, role: cg ? L.specialty(cg.specialty) : "", activeBookingId: c.activeBookingId, peerUserId: c.counterpartUserId };
+        return { id: c.counterpartUserId, name: c.counterpartName, role: cg ? L.specialty(cg.specialty) : "", activeBookingId: c.activeBookingId, bookingIds: c.bookingIds, peerUserId: c.counterpartUserId };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures every field the threads depend on, stably
     [sig],
