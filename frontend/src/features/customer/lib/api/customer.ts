@@ -39,7 +39,7 @@ import type {
   VisitLocation,
 } from "@shared/customer-types";
 import type { DisputeStatus, IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
-import type { BackendChatMessage } from "@shared/chat/types";
+import type { BackendChatMessage, ChatConversationSummary } from "@shared/chat/types";
 import { http } from "./http";
 
 export const authApi = {
@@ -154,6 +154,14 @@ export const visitsApi = {
 };
 
 export const chatApi = {
+  /** GET /chat/conversations — one thread per counterpart, spanning all their bookings. */
+  listConversations: () => http.get<ChatConversationSummary[]>("/chat/conversations"),
+  /** GET /chat/conversations/:counterpartUserId/messages — full cross-booking history, newest first. */
+  conversationMessages: (counterpartUserId: string) =>
+    http.get<Paginated<BackendChatMessage>>(`/chat/conversations/${counterpartUserId}/messages`, { limit: 100 }),
+  /** PATCH /chat/conversations/:counterpartUserId/read — mark the whole conversation read. */
+  markConversationRead: (counterpartUserId: string) =>
+    http.patch<{ updated: number }>(`/chat/conversations/${counterpartUserId}/read`).then(() => undefined),
   /** GET /bookings/:bookingId/messages — newest first. */
   list: (bookingId: string) =>
     http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),

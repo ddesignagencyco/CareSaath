@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useToast } from "@shared/ui/toast";
@@ -23,11 +23,11 @@ function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: str
 }
 
 /**
- * Real-backend chat for a booking thread. Text, media/voice (resumable upload),
- * reactions and replies are all persisted via the REST API and delivered live by
- * the shared realtime hook (it invalidates the message queries on `entity.updated`).
- * The only client-only piece is delete (no backend endpoint yet). Exposes the chat
- * surface the ChatPanel consumes, plus `markRead`.
+ * Real-backend chat, one thread per counterpart (spanning all their bookings).
+ * Messages come from the conversation endpoint; each carries the bookingId it was
+ * sent on. New messages/uploads go to the thread's activeBookingId; reactions and
+ * deletes target the message's own bookingId. Everything is persisted via REST and
+ * delivered live by the shared realtime hook. Exposes the ChatPanel surface + markRead.
  */
 export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
   const qc = useQueryClient();
@@ -52,6 +52,7 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
     (m: BackendChatMessage): ChatMessage => ({
       id: m.id,
       conversationId: m.bookingId,
+      bookingId: m.bookingId,
       sender: m.senderId === myUserId ? "me" : "them",
       type: m.deletedAt ? "text" : TYPE_MAP[m.type],
       text: m.deletedAt ? undefined : (m.body ?? undefined),
@@ -69,7 +70,8 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
   const conversations = useMemo<ChatConversation[]>(
     () =>
       threads.map((th, i) => {
-        const backend = (results[i]?.data ?? []).map(mapBackend);
+        // Each thread is a counterpart; stamp the message's thread id (its own bookingId stays on `bookingId`).
+        const backend = (results[i]?.data ?? []).map((m) => ({ ...mapBackend(m), conversationId: th.id }));
         const locals = extra[th.id] ?? [];
         const messages = [...backend, ...locals]
           .map((m) => {
@@ -84,18 +86,38 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
     [threads, dataSig, extra, patches, mapBackend],
   );
 
+  // msgId → the booking it lives on, so reactions/deletes target the right booking.
+  const bookingByMsg = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of conversations) for (const m of c.messages) if (m.bookingId) map[m.id] = m.bookingId;
+    return map;
+  }, [conversations]);
+  const bookingByMsgRef = useRef(bookingByMsg);
+  useEffect(() => {
+    bookingByMsgRef.current = bookingByMsg;
+  }, [bookingByMsg]);
+
+  // The booking new messages go to for a thread (its activeBookingId; null once read-only).
+  const activeBookingFor = useCallback((convId: string) => threads.find((th) => th.id === convId)?.activeBookingId ?? null, [threads]);
+
   const send = useCallback(
     (convId: string, input: SendInput) => {
       const type = input.type ?? "text";
+      // New messages go on the thread's active booking; a read-only (all-completed) thread can't send.
+      const bookingId = activeBookingFor(convId);
       if (type === "text") {
         const text = input.text?.trim();
         if (!text) return;
+        if (!bookingId) {
+          toast.error(t("sendFailed"));
+          return;
+        }
         // Optimistic bubble; the POST + refetch replaces it with the stored row.
         const tempId = `tmp-${uid()}`;
-        const temp: ChatMessage = { id: tempId, conversationId: convId, sender: "me", type: "text", text: input.text, replyToId: input.replyToId, reactions: [], createdAt: Date.now(), readByThem: false };
+        const temp: ChatMessage = { id: tempId, conversationId: convId, bookingId, sender: "me", type: "text", text: input.text, replyToId: input.replyToId, reactions: [], createdAt: Date.now(), readByThem: false };
         setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
         transport
-          .send(convId, text, input.replyToId)
+          .send(bookingId, text, input.replyToId)
           .then(() => {
             setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
             void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
@@ -106,10 +128,15 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       // Media / voice → resumable upload to the backend; an optimistic bubble shows the local
       // preview while it uploads, then the stored (signed-URL) message replaces it on refetch.
       if (!input.file) return;
+      if (!bookingId) {
+        toast.error(t("sendFailed"));
+        return;
+      }
       const tempId = `tmp-${uid()}`;
       const temp: ChatMessage = {
         id: tempId,
         conversationId: convId,
+        bookingId,
         sender: "me",
         type,
         text: input.text,
@@ -125,7 +152,7 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       };
       setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
       transport
-        .uploadMedia(convId, input.file, { fileName: input.mediaName, caption: input.text, replyToId: input.replyToId })
+        .uploadMedia(bookingId, input.file, { fileName: input.mediaName, caption: input.text, replyToId: input.replyToId })
         .then(() => {
           setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
           void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
@@ -135,13 +162,15 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
           toast.error(t("sendFailed"));
         });
     },
-    [qc, scope, transport, toast, t],
+    [qc, scope, transport, toast, t, activeBookingFor],
   );
 
   const react = useCallback(
     (convId: string, msgId: string, emoji: string) => {
+      const bookingId = bookingByMsgRef.current[msgId];
+      if (!bookingId) return; // an unsynced optimistic bubble has no server message to react to
       transport
-        .react(convId, msgId, emoji)
+        .react(bookingId, msgId, emoji)
         .then(() => void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] }))
         .catch(() => toast.error(t("sendFailed")));
     },
@@ -153,12 +182,13 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       // Optimistic tombstone; the DELETE + refetch (or the realtime entity.updated) confirms it.
       setPatches((p) => ({ ...p, [msgId]: { ...p[msgId], deleted: true } }));
       // A not-yet-sent optimistic bubble just vanishes locally — there's nothing on the server.
-      if (msgId.startsWith("tmp-")) {
+      const bookingId = bookingByMsgRef.current[msgId];
+      if (msgId.startsWith("tmp-") || !bookingId) {
         setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== msgId) }));
         return;
       }
       transport
-        .deleteMessage(convId, msgId)
+        .deleteMessage(bookingId, msgId)
         .then(() => void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] }))
         .catch(() => {
           // Roll the tombstone back if the server refused.

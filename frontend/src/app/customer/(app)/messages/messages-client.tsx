@@ -2,42 +2,29 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { ChatProvider } from "@shared/chat/context";
 import { MessagesShell } from "@shared/chat/messages-shell";
 import type { ChatThreadMeta, ChatTransport } from "@shared/chat/types";
 import { useLabels } from "@shared/i18n/use-labels";
 import { useCaregiverMap } from "@/features/customer/components/caregiver-bits";
-import { bookingsApi, chatApi, meApi } from "@/features/customer/lib/api/customer";
+import { chatApi, meApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 
-/** One chat thread per booking; the other party is the caregiver (name from the public profile). */
+/** One thread per caregiver (spanning all their bookings), from GET /chat/conversations. */
 function useCustomerChatTransport(): ChatTransport {
   const L = useLabels();
-  const th = useTranslations("customerA.home");
   const me = useQuery({ queryKey: keys.me, queryFn: meApi.get, enabled: true });
-  const bookings = useQuery({ queryKey: [...keys.bookings, "chat"], queryFn: () => bookingsApi.list({}), enabled: true });
-  // A chat thread only for bookings with a real relationship — accepted/active (CONFIRMED) or past
-  // (COMPLETED) — never pending requests, declines or cancellations. You can't message a caregiver you
-  // haven't actually booked.
-  const booked = (bookings.data?.items ?? []).filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED");
-  // One thread per caregiver, not per booking: booking the same caregiver more than
-  // once must not show duplicate conversations. Keep the most relevant booking as the
-  // thread's booking — an active (CONFIRMED) one over a past (COMPLETED) one, and the
-  // latest within the same status. (History from the other bookings isn't merged here;
-  // that needs a relationship-scoped chat on the backend — see docs/requirement.md.)
-  const rank = (b: (typeof booked)[number]) => (b.status === "CONFIRMED" ? 1 : 0);
-  const byCaregiver = new Map<string, (typeof booked)[number]>();
-  for (const b of booked) {
-    const cur = byCaregiver.get(b.caregiverId);
-    if (!cur || rank(b) > rank(cur) || (rank(b) === rank(cur) && b.startDate.localeCompare(cur.startDate) > 0)) byCaregiver.set(b.caregiverId, b);
-  }
-  const items = [...byCaregiver.values()].sort((a, b) => b.startDate.localeCompare(a.startDate));
-  const caregiverMap = useCaregiverMap(items.map((b) => b.caregiverId));
+  const convs = useQuery({ queryKey: ["chat-conversations", "customer"], queryFn: () => chatApi.listConversations(), refetchInterval: 30_000 });
+  const items = convs.data ?? [];
+  const caregiverMap = useCaregiverMap(items.map((c) => c.caregiverId));
 
-  const sig = items.map((b) => `${b.id}:${caregiverMap[b.caregiverId]?.user.fullName ?? ""}:${b.serviceType}`).join("|");
+  const sig = items.map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${caregiverMap[c.caregiverId]?.specialty ?? ""}`).join("|");
   const threads = useMemo<ChatThreadMeta[]>(
-    () => items.map((b) => ({ id: b.id, name: caregiverMap[b.caregiverId]?.user.fullName ?? th("caregiverFallback"), role: L.specialty(b.serviceType) })),
+    () =>
+      items.map((c) => {
+        const cg = caregiverMap[c.caregiverId];
+        return { id: c.counterpartUserId, name: c.counterpartName, role: cg ? L.specialty(cg.specialty) : "", activeBookingId: c.activeBookingId, peerUserId: c.counterpartUserId };
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures every field the threads depend on, stably
     [sig],
   );
@@ -46,17 +33,17 @@ function useCustomerChatTransport(): ChatTransport {
     () => ({
       myUserId: me.data?.id,
       threads,
-      threadsLoaded: bookings.isSuccess,
-      listMessages: async (id) => (await chatApi.list(id)).items.slice().reverse(),
-      send: (id, body, replyToId) => chatApi.send(id, body, replyToId),
-      markRead: async (id) => {
-        await chatApi.markRead(id);
+      threadsLoaded: convs.isSuccess,
+      listMessages: async (counterpartUserId) => (await chatApi.conversationMessages(counterpartUserId)).items.slice().reverse(),
+      send: (bookingId, body, replyToId) => chatApi.send(bookingId, body, replyToId),
+      markRead: async (counterpartUserId) => {
+        await chatApi.markConversationRead(counterpartUserId);
       },
-      uploadMedia: (id, file, opts) => chatApi.uploadMedia(id, file, opts),
-      react: (id, msgId, emoji) => chatApi.react(id, msgId, emoji),
-      deleteMessage: (id, msgId) => chatApi.deleteMessage(id, msgId),
+      uploadMedia: (bookingId, file, opts) => chatApi.uploadMedia(bookingId, file, opts),
+      react: (bookingId, msgId, emoji) => chatApi.react(bookingId, msgId, emoji),
+      deleteMessage: (bookingId, msgId) => chatApi.deleteMessage(bookingId, msgId),
     }),
-    [me.data?.id, threads, bookings.isSuccess],
+    [me.data?.id, threads, convs.isSuccess],
   );
 }
 
