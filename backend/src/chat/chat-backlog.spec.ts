@@ -37,13 +37,14 @@ describe('ChatService — booking scope', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('keeps a COMPLETED thread readable but read-only', async () => {
+  it('keeps a COMPLETED thread readable AND writable (chat continues after the visit)', async () => {
     const { service, prisma } = makeService();
     prisma.booking.findFirst.mockResolvedValue(booking('COMPLETED'));
     prisma.chatMessage.count.mockResolvedValue(0);
     prisma.chatMessage.findMany.mockResolvedValue([]);
     await expect(service.list(customer, 'b-1', { page: 1, limit: 50 })).resolves.toMatchObject({ total: 0 });
-    await expect(service.send(customer, 'b-1', { body: 'hi' })).rejects.toBeInstanceOf(BadRequestException);
+    prisma.chatMessage.create.mockResolvedValue({ id: 'm-x', bookingId: 'b-1', senderId: 'u-cust', body: 'hi', mediaKey: null });
+    await expect(service.send(customer, 'b-1', { body: 'hi' })).resolves.toBeDefined();
   });
 
   it('lets an admin read any thread', async () => {

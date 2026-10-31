@@ -72,7 +72,19 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       threads.map((th, i) => {
         // Each thread is a counterpart; stamp the message's thread id (its own bookingId stays on `bookingId`).
         const backend = (results[i]?.data ?? []).map((m) => ({ ...mapBackend(m), conversationId: th.id }));
-        const locals = extra[th.id] ?? [];
+        // Hide an optimistic bubble once its real (server) copy has arrived in `backend`, so a sent
+        // message doesn't flicker (show → vanish → reappear) around the send+refetch.
+        const locals = (extra[th.id] ?? []).filter(
+          (loc) =>
+            loc.uploading ||
+            !backend.some(
+              (b) =>
+                b.sender === "me" &&
+                b.type === loc.type &&
+                (b.text ?? "") === (loc.text ?? "") &&
+                Math.abs(b.createdAt - loc.createdAt) < 30_000,
+            ),
+        );
         const messages = [...backend, ...locals]
           .map((m) => {
             const p = patches[m.id];
@@ -118,9 +130,11 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
         setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
         transport
           .send(bookingId, text, input.replyToId)
-          .then(() => {
+          .then(async () => {
+            // Refetch first (so the stored message is already on screen), then drop the optimistic
+            // bubble — removing it BEFORE the refetch is what made the message blink out and come back.
+            await qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
             setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
-            void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
           })
           .catch(() => toast.error(t("sendFailed"))); // keep the bubble, but surface the failure
         return;
@@ -153,9 +167,10 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       setExtra((e) => ({ ...e, [convId]: [...(e[convId] ?? []), temp] }));
       transport
         .uploadMedia(bookingId, input.file, { fileName: input.mediaName, caption: input.text, replyToId: input.replyToId })
-        .then(() => {
+        .then(async () => {
+          // Refetch first (stored message on screen), then drop the optimistic bubble — avoids the blink-out.
+          await qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
           setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
-          void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
         })
         .catch(() => {
           setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));

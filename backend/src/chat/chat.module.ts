@@ -184,9 +184,11 @@ export class ChatService {
     return booking;
   }
 
-  /** The thread opens once the booking is CONFIRMED and is read-only once it's closed (completed/cancelled/declined). */
+  /** The thread opens once the booking is CONFIRMED and STAYS writable after it COMPLETES, so the
+   *  pair can keep chatting (follow-ups) after the visit. Only not-yet-confirmed / cancelled /
+   *  declined bookings are read-only. */
   private assertBookingWritable(booking: { status: BookingStatus }): void {
-    if (booking.status !== BookingStatus.CONFIRMED) {
+    if (booking.status !== BookingStatus.CONFIRMED && booking.status !== BookingStatus.COMPLETED) {
       throw new BadRequestException(
         `This chat is read-only while the booking is ${booking.status}`,
       );
@@ -423,8 +425,9 @@ export class ChatService {
 
   /**
    * One thread per person: every open chat booking with the same counterpart
-   * collapses into one conversation. `activeBookingId` is where new messages
-   * go (the newest CONFIRMED booking; null once all are completed, i.e. read-only).
+   * collapses into one conversation. `activeBookingId` is where new messages go —
+   * the newest CONFIRMED booking, else the newest COMPLETED one, so the pair can
+   * keep chatting after the visit (only an empty relationship is read-only).
    */
   async listConversations(user: AuthUser) {
     const bookings = await this.chatBookingsByCounterpart(user);
@@ -450,7 +453,10 @@ export class ChatService {
           counterpartName: group[0]!.counterpartName,
           caregiverId: group[0]!.caregiver.id,
           bookingIds,
-          activeBookingId: group.find((b) => b.status === BookingStatus.CONFIRMED)?.id ?? null,
+          activeBookingId:
+            group.find((b) => b.status === BookingStatus.CONFIRMED)?.id ??
+            group.find((b) => b.status === BookingStatus.COMPLETED)?.id ??
+            null,
           lastMessage: lastMessage ? await this.present(lastMessage) : null,
           unreadCount,
           lastActivityAt: lastMessage?.createdAt ?? group[0]!.createdAt,
