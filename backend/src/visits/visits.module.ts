@@ -56,6 +56,7 @@ import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import { EmailModule } from '../email/email.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
@@ -305,7 +306,7 @@ export class VisitsService {
           patient: true,
           address: true,
           prescriptions: true,
-          customer: { select: { id: true, phone: true, fullName: true } },
+          customer: { select: { id: true, phone: true, fullName: true, email: true } },
           caregiver: {
             select: {
               id: true,
@@ -622,7 +623,13 @@ export class VisitsService {
         expiresAt: new Date(Date.now() + ttlSeconds * 1000),
       },
     });
-    await this.sms.sendOtp(visit.booking.customer.phone, code);
+    await this.sms.sendOtp(visit.booking.customer.phone, code, {
+      purpose: OtpPurpose.VISIT_CHECKIN,
+      visitId: id,
+      email: visit.booking.customer.email ?? null,
+      fullName: visit.booking.customer.fullName ?? null,
+      phone: visit.booking.customer.phone,
+    });
     await this.audit.log({
       actorId: user.sub,
       action: 'visit.checkin_otp.requested',
@@ -917,7 +924,7 @@ export class CustomerVisitsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PlatformConfigModule, CaregiversModule],
+  imports: [NotificationsModule, PlatformConfigModule, CaregiversModule, EmailModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
   providers: [VisitsService, SmsService],
   exports: [VisitsService],

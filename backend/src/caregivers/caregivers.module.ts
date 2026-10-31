@@ -21,7 +21,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -34,6 +34,7 @@ import {
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -51,6 +52,7 @@ import {
   Specialty,
   StrikeReason,
   VerificationStatus,
+  VisitStatus,
 } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import {
@@ -73,7 +75,7 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 import { todayInPakistan } from '../availability/availability.module.js';
 import { distanceMeters } from '../common/geo.js';
-import { computeCaregiverBadge } from './badge.js';
+import { resolveCaregiverBadge } from './badge.js';
 
 /** ERD §3.1 / TRD §9: caregiver CNIC is stored encrypted at rest. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
@@ -232,6 +234,15 @@ export class UpdateLocationDto {
   lng!: number;
 }
 
+export class SetAvailableNowDto {
+  @ApiProperty({
+    example: true,
+    description: 'true opts in to immediate (ASAP / emergency) requests right now; false opts out. Only counts while the live location is fresh.',
+  })
+  @IsBoolean()
+  available!: boolean;
+}
+
 export class ServiceAreaDto {
   @ApiProperty({ example: 'Lahore', description: 'City this zone is within (must be one of serviceCities)' })
   @IsString()
@@ -307,6 +318,16 @@ export class SearchQueryDto {
   @Max(180)
   lng?: number;
 
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Nearby-now (emergency) search: only APPROVED caregivers who are available now with a fresh live location within booking.immediateMaxDistanceMeters of lat/lng (both required). Each result carries distanceMeters and etaMinutes, sorted nearest first. Never cached.',
+  })
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : value))
+  @IsBoolean()
+  immediate?: boolean;
+
   @ApiPropertyOptional({ example: 1, default: 1, description: 'Page number' })
   @IsOptional()
   @Type(() => Number)
@@ -322,6 +343,13 @@ export class SearchQueryDto {
   @Max(100)
   limit = 20;
 }
+
+/** A caregiver actively engaged with a patient right now (mirrors BookingsModule): can't take an ASAP request. */
+const ON_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+];
 
 /** A caregiver's rate must sit within the bracket they set for themselves. */
 function assertRateWithinBracket(rate: number, min: number, max: number): void {
@@ -450,7 +478,8 @@ export class CaregiversService {
       documents: await Promise.all(profile.documents.map((doc) => withFileUrl(this.storage, doc))),
       cnic: cnic ? maskValue(cnic, 4) : null,
       photoUrl: await this.photoUrlFor(profile.photoKey),
-      badge: computeCaregiverBadge({
+      availableNow: await this.isAvailableNow(profile),
+      badge: resolveCaregiverBadge(profile.badgeOverride, {
         experienceYears: profile.experienceYears,
         ratingAverage: profile.ratingAverage,
         ratingCount: profile.ratingCount,
@@ -728,6 +757,7 @@ export class CaregiversService {
       ratingCount: true,
       serviceArea: true,
       photoKey: true,
+      badgeOverride: true,
       user: { select: { fullName: true } },
     } satisfies Prisma.CaregiverProfileSelect;
 
@@ -776,7 +806,7 @@ export class CaregiversService {
         return {
           ...rest,
           photoUrl: await this.photoUrlFor(photoKey),
-          badge: computeCaregiverBadge({
+          badge: resolveCaregiverBadge(rest.badgeOverride, {
             experienceYears: rest.experienceYears,
             ratingAverage: rest.ratingAverage,
             ratingCount: rest.ratingCount,
@@ -814,6 +844,7 @@ export class CaregiversService {
         serviceArea: true,
         ratingAverage: true,
         ratingCount: true,
+        badgeOverride: true,
         createdAt: true,
         user: { select: { fullName: true } },
         availabilityRules: {
@@ -842,7 +873,7 @@ export class CaregiversService {
     return {
       ...rest,
       photoUrl: await this.photoUrlFor(photoKey),
-      badge: computeCaregiverBadge({
+      badge: resolveCaregiverBadge(profile.badgeOverride, {
         experienceYears: profile.experienceYears,
         ratingAverage: profile.ratingAverage,
         ratingCount: profile.ratingCount,
@@ -912,9 +943,147 @@ export class CaregiversService {
     }
     await this.prisma.caregiverProfile.update({
       where: { id: profile.id },
-      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+      // No location means no ASAP requests either: switch "available now" off too.
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null, acceptingImmediate: false },
     });
     return { ok: true as const };
+  }
+
+  /**
+   * "Available now" = opted in (acceptingImmediate) AND a live fix no older
+   * than caregiver.availableNowMaxFixAgeMinutes AND not mid-visit AND not on a
+   * blacked-out date. The location heartbeat (PATCH /caregiver/location) is
+   * what keeps it alive; when the app stops sending fixes it lapses on its own.
+   */
+  async isAvailableNow(
+    profile: { id: string; acceptingImmediate: boolean; locationUpdatedAt: Date | null; verificationStatus: VerificationStatus },
+    now = new Date(),
+  ): Promise<boolean> {
+    if (!profile.acceptingImmediate || profile.verificationStatus !== VerificationStatus.APPROVED) {
+      return false;
+    }
+    const maxAgeMinutes = await this.config.getNumber('caregiver.availableNowMaxFixAgeMinutes');
+    if (!profile.locationUpdatedAt || now.getTime() - profile.locationUpdatedAt.getTime() > maxAgeMinutes * 60_000) {
+      return false;
+    }
+    const today = todayInPakistan(now);
+    const [onVisit, blocked] = await Promise.all([
+      this.prisma.visit.count({ where: { status: { in: ON_VISIT_STATUSES }, booking: { caregiverId: profile.id } } }),
+      this.prisma.availabilityBlock.count({
+        where: { caregiverId: profile.id, startDate: { lte: today }, endDate: { gte: today } },
+      }),
+    ]);
+    return onVisit === 0 && blocked === 0;
+  }
+
+  /** The caregiver's "available now" toggle for immediate / emergency requests. */
+  async setAvailableNow(user: AuthUser, dto: SetAvailableNowDto) {
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { userId: user.sub },
+      select: { id: true, verificationStatus: true },
+    });
+    if (!profile) {
+      throw new NotFoundException('Caregiver profile not found');
+    }
+    if (dto.available && profile.verificationStatus !== VerificationStatus.APPROVED) {
+      throw new BadRequestException('Only verified (APPROVED) caregivers can take immediate requests');
+    }
+    const updated = await this.prisma.caregiverProfile.update({
+      where: { id: profile.id },
+      data: { acceptingImmediate: dto.available },
+      select: { id: true, acceptingImmediate: true, locationUpdatedAt: true, verificationStatus: true },
+    });
+    await this.audit.log({
+      actorId: user.sub,
+      action: dto.available ? 'caregiver.available_now.on' : 'caregiver.available_now.off',
+      entityType: 'CaregiverProfile',
+      entityId: profile.id,
+    });
+    return {
+      acceptingImmediate: updated.acceptingImmediate,
+      availableNow: await this.isAvailableNow(updated),
+      locationUpdatedAt: updated.locationUpdatedAt,
+    };
+  }
+
+  /**
+   * Nearby-now (emergency) discovery: APPROVED caregivers of ACTIVE users who
+   * are available now (see isAvailableNow) with a live fix within
+   * booking.immediateMaxDistanceMeters of the customer's point, nearest first,
+   * each with distanceMeters and a rough etaMinutes. Live data, never cached.
+   * Same distance rule as the immediate-booking check, so a listed caregiver
+   * can actually be booked ASAP.
+   */
+  async searchNearbyNow(query: SearchQueryDto): Promise<Paginated<unknown>> {
+    if (query.lat === undefined || query.lng === undefined) {
+      throw new BadRequestException('immediate=true requires lat and lng');
+    }
+    const lat = query.lat;
+    const lng = query.lng;
+    const now = new Date();
+    const [maxDistanceMeters, maxAgeMinutes, speedKmh] = await Promise.all([
+      this.config.getNumber('booking.immediateMaxDistanceMeters'),
+      this.config.getNumber('caregiver.availableNowMaxFixAgeMinutes'),
+      this.config.getNumber('booking.immediateAvgSpeedKmh'),
+    ]);
+    const today = todayInPakistan(now);
+    // Cheap bounding box first so the DB narrows the candidates; the exact
+    // great-circle distance is applied in memory below.
+    const latDelta = maxDistanceMeters / 111_320;
+    const lngDelta = maxDistanceMeters / (111_320 * Math.max(Math.cos((lat * Math.PI) / 180), 0.01));
+    const candidates = await this.prisma.caregiverProfile.findMany({
+      where: {
+        verificationStatus: VerificationStatus.APPROVED,
+        user: { status: 'ACTIVE' },
+        acceptingImmediate: true,
+        locationUpdatedAt: { gte: new Date(now.getTime() - maxAgeMinutes * 60_000) },
+        currentLat: { gte: lat - latDelta, lte: lat + latDelta },
+        currentLng: { gte: lng - lngDelta, lte: lng + lngDelta },
+        ...(query.specialty ? { specialty: query.specialty } : {}),
+        ...(query.city ? { serviceArea: { path: ['cities'], array_contains: [query.city] } } : {}),
+        bookings: { none: { visits: { some: { status: { in: ON_VISIT_STATUSES } } } } },
+        availabilityBlocks: { none: { startDate: { lte: today }, endDate: { gte: today } } },
+      },
+      select: {
+        id: true,
+        specialty: true,
+        ratePerVisit: true,
+        experienceYears: true,
+        bio: true,
+        ratingAverage: true,
+        ratingCount: true,
+        serviceArea: true,
+        photoKey: true,
+        badgeOverride: true,
+        currentLat: true,
+        currentLng: true,
+        locationUpdatedAt: true,
+        user: { select: { fullName: true } },
+      },
+    });
+    const metersPerMinute = (Math.max(speedKmh, 1) * 1000) / 60;
+    const nearby = candidates
+      .map(({ currentLat, currentLng, ...rest }) => {
+        const meters = Math.round(distanceMeters(lat, lng, Number(currentLat), Number(currentLng)));
+        return { ...rest, distanceMeters: meters, etaMinutes: Math.max(1, Math.ceil(meters / metersPerMinute)) };
+      })
+      .filter((c) => c.distanceMeters <= maxDistanceMeters)
+      .sort((a, b) => a.distanceMeters - b.distanceMeters);
+    const page = nearby.slice((query.page - 1) * query.limit, query.page * query.limit);
+    const items = await Promise.all(
+      page.map(async ({ photoKey, ...rest }) => ({
+        ...rest,
+        availableNow: true,
+        photoUrl: await this.photoUrlFor(photoKey),
+        badge: resolveCaregiverBadge(rest.badgeOverride, {
+          experienceYears: rest.experienceYears,
+          ratingAverage: rest.ratingAverage,
+          ratingCount: rest.ratingCount,
+          completedVisits: await this.completedVisitsCount(rest.id),
+        }),
+      })),
+    );
+    return paginate(items, query.page, query.limit, nearby.length);
   }
 
   /**
@@ -922,20 +1091,31 @@ export class CaregiversService {
    * caregiver.strikeThreshold auto-suspends the caregiver (reuses
    * VerificationStatus.SUSPENDED) and alerts both the caregiver and admins.
    */
-  async recordStrike(caregiverId: string, reason: StrikeReason, bookingId?: string): Promise<void> {
+  async recordStrike(
+    caregiverId: string,
+    reason: StrikeReason,
+    bookingId?: string,
+    options: { note?: string; actorId?: string } = {},
+  ): Promise<void> {
     await this.prisma.caregiverStrike.create({
-      data: { caregiverId, bookingId: bookingId ?? null, reason },
+      data: { caregiverId, bookingId: bookingId ?? null, reason, note: options.note ?? null },
     });
     const profile = await this.prisma.caregiverProfile.update({
       where: { id: caregiverId },
       data: { strikeCount: { increment: 1 } },
     });
     await this.audit.log({
-      actorId: null,
+      actorId: options.actorId ?? null,
       action: 'caregiver.strike.recorded',
       entityType: 'CaregiverProfile',
       entityId: caregiverId,
-      metadata: { reason, bookingId: bookingId ?? null, strikeCount: profile.strikeCount },
+      metadata: {
+        reason,
+        bookingId: bookingId ?? null,
+        strikeCount: profile.strikeCount,
+        manual: Boolean(options.actorId),
+        note: options.note ?? null,
+      },
     });
     await this.notifications?.notify({
       userId: profile.userId,
@@ -1024,6 +1204,16 @@ export class CaregiverController {
   })
   stopSharingLocation(@CurrentUser() user: AuthUser) {
     return this.caregivers.stopSharingLocation(user);
+  }
+
+  @Put('available-now')
+  @ApiOperation({
+    summary: 'Toggle "available now" for immediate requests',
+    description:
+      'Opts in/out of immediate (ASAP / emergency) requests. While on, the caregiver shows in the nearby-now search only as long as the app keeps sending live fixes (PATCH /caregiver/location) no older than caregiver.availableNowMaxFixAgeMinutes, they are not mid-visit, and today is not blacked out. Returns { acceptingImmediate, availableNow, locationUpdatedAt }.',
+  })
+  setAvailableNow(@CurrentUser() user: AuthUser, @Body() dto: SetAvailableNowDto) {
+    return this.caregivers.setAvailableNow(user, dto);
   }
 
   @Get('service-areas')
@@ -1193,9 +1383,13 @@ export class PublicCaregiverController {
   @ApiOperation({
     summary: 'Search verified caregivers',
     description:
-      'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks. The X-Cache header reports whether the page came from Redis (HIT) or PostgreSQL (MISS).',
+      'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks. The X-Cache header reports whether the page came from Redis (HIT) or PostgreSQL (MISS). With ?immediate=true&lat=&lng= it becomes the nearby-now (emergency) search: only caregivers available right now within booking.immediateMaxDistanceMeters, each with distanceMeters + etaMinutes, nearest first (X-Cache: BYPASS).',
   })
   async search(@Query() query: SearchQueryDto, @Res({ passthrough: true }) res: Response) {
+    if (query.immediate) {
+      res.setHeader('x-cache', 'BYPASS');
+      return this.caregivers.searchNearbyNow(query);
+    }
     const { result, cache } = await this.caregivers.search(query);
     res.setHeader('x-cache', cache);
     return result;

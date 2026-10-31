@@ -104,6 +104,8 @@ export interface ChatTransport {
   uploadMedia: (bookingId: string, file: Blob, opts?: { fileName?: string; caption?: string; replyToId?: string; onProgress?: (fraction: number) => void }) => Promise<BackendChatMessage>;
   /** Toggle a reaction emoji on a message. */
   react: (bookingId: string, messageId: string, emoji: string) => Promise<void>;
+  /** Soft-delete one of your own messages (shows as a "deleted" tombstone for everyone). */
+  deleteMessage: (bookingId: string, messageId: string) => Promise<void>;
 }
 
 /** Which role's chat this is (customer ↔ caregiver). */

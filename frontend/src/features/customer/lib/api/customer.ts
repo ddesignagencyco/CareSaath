@@ -161,6 +161,9 @@ export const chatApi = {
   /** POST /bookings/:bookingId/messages/:id/reactions — toggle a reaction emoji. */
   react: (bookingId: string, messageId: string, emoji: string) =>
     http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
+  /** DELETE /bookings/:bookingId/messages/:id — soft-delete your own message. */
+  deleteMessage: (bookingId: string, messageId: string) =>
+    http.delete<unknown>(`/bookings/${bookingId}/messages/${messageId}`).then(() => undefined),
   /** Resumable media upload: init → 2 MB chunks → complete (creates the media message). */
   uploadMedia: async (
     bookingId: string,

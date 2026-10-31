@@ -195,7 +195,11 @@ describe('VisitsService transitions', () => {
 
     expect(result.sentTo).toBe('+923000000001');
     expect(redis.client.set).toHaveBeenCalled();
-    expect(sms.sendOtp).toHaveBeenCalledWith('+923000000001', expect.any(String));
+    expect(sms.sendOtp).toHaveBeenCalledWith(
+      '+923000000001',
+      expect.any(String),
+      expect.objectContaining({ purpose: 'VISIT_CHECKIN', visitId: 'v-1', phone: '+923000000001' }),
+    );
   });
 
   it('rejects a check-in OTP request on a completed visit', async () => {

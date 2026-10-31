@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { VerificationService } from './verification.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -30,8 +30,10 @@ describe('VerificationService', () => {
   let storage: ReturnType<typeof createStorageMock>;
   let redis: ReturnType<typeof createRedisMock>;
   let service: VerificationService;
+  let caregivers: { recordStrike: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
+    caregivers = { recordStrike: vi.fn().mockResolvedValue(undefined) };
     prisma = createPrismaMock();
     storage = createStorageMock();
     wireTransaction(prisma);
@@ -42,6 +44,7 @@ describe('VerificationService', () => {
       storage as never,
       redis as never,
       createNotificationsMock() as never,
+      caregivers as never,
     );
   });
 

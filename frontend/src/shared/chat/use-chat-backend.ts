@@ -9,8 +9,8 @@ import type { ChatScope, SendInput } from "./types";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** Delete is local-only for now — there is no backend delete-message endpoint, so a
- *  deleted message reappears on refresh/other devices (see docs/requirement.md). */
+/** Local optimistic tombstone applied the instant you delete a message, before the
+ *  DELETE round-trip (and the server's `deletedAt`) confirms it. */
 type Patch = { deleted?: boolean };
 
 const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice" };
@@ -148,9 +148,30 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
     [transport, qc, scope, toast, t],
   );
 
-  const remove = useCallback((_convId: string, msgId: string) => {
-    setPatches((p) => ({ ...p, [msgId]: { ...p[msgId], deleted: true } }));
-  }, []);
+  const remove = useCallback(
+    (convId: string, msgId: string) => {
+      // Optimistic tombstone; the DELETE + refetch (or the realtime entity.updated) confirms it.
+      setPatches((p) => ({ ...p, [msgId]: { ...p[msgId], deleted: true } }));
+      // A not-yet-sent optimistic bubble just vanishes locally — there's nothing on the server.
+      if (msgId.startsWith("tmp-")) {
+        setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== msgId) }));
+        return;
+      }
+      transport
+        .deleteMessage(convId, msgId)
+        .then(() => void qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] }))
+        .catch(() => {
+          // Roll the tombstone back if the server refused.
+          setPatches((p) => {
+            const next = { ...p };
+            delete next[msgId];
+            return next;
+          });
+          toast.error(t("sendFailed"));
+        });
+    },
+    [transport, qc, scope, toast, t],
+  );
 
   const markUploaded = useCallback((convId: string, msgId: string) => {
     setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).map((m) => (m.id === msgId ? { ...m, uploading: false } : m)) }));

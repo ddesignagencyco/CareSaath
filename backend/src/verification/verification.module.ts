@@ -15,15 +15,29 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiProperty,
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import {
+  CaregiverBadge,
   CredentialDecision,
   CredentialReviewKind,
   Prisma,
+  StrikeReason,
   UserStatus,
   VerificationStatus,
 } from '../generated/prisma/client.js';
@@ -39,6 +53,7 @@ import { NotificationsModule, NotificationsService } from '../notifications/noti
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { paginate } from '../common/dto/pagination.js';
 import { computeCaregiverBadge } from '../caregivers/badge.js';
+import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
 
 /** Must match the key used by CaregiversModule to encrypt CNIC. */
 const CNIC_KEY = deriveKey('CNIC_ENCRYPTION_KEY', 'caresaath-dev-cnic-key');
@@ -61,6 +76,35 @@ export class ReverifyDto {
   @IsOptional()
   @IsString()
   reverifyInDays?: string;
+}
+
+export class SetBadgeDto {
+  @ApiProperty({
+    enum: CaregiverBadge,
+    nullable: true,
+    example: CaregiverBadge.GOLD,
+    description: 'Tier to pin the caregiver to; null clears the override (back to the auto-computed tier).',
+  })
+  @ValidateIf((_, value) => value !== null)
+  @IsEnum(CaregiverBadge)
+  badge!: CaregiverBadge | null;
+}
+
+export class ManageStrikesDto {
+  @ApiProperty({ enum: ['add', 'reset'], description: 'add: record one manual strike; reset: clear every strike (count back to 0).' })
+  @IsIn(['add', 'reset'])
+  op!: 'add' | 'reset';
+
+  @ApiPropertyOptional({ enum: StrikeReason, description: 'Required for op=add.' })
+  @ValidateIf((dto: ManageStrikesDto) => dto.op === 'add')
+  @IsEnum(StrikeReason)
+  reason?: StrikeReason;
+
+  @ApiPropertyOptional({ example: 'Customer reported repeated lateness by phone.', description: 'Optional note for op=add.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }
 
 export class ListCaregiversQueryDto {
@@ -107,6 +151,7 @@ export class VerificationService {
     private readonly storage: StorageService,
     private readonly redis: RedisService,
     private readonly notifications: NotificationsService,
+    private readonly caregivers: CaregiversService,
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
@@ -195,10 +240,13 @@ export class VerificationService {
    * The badge is otherwise computed only on the caregiver's own GET
    * /caregiver/profile; the admin list/detail returned raw columns, so the
    * drawer couldn't show the tier. Same ranking logic, computed here too.
+   * `badge` is what everyone sees (override wins), `computedBadge` the
+   * automatic tier, `badgeOverride` the admin pin (null = auto).
    */
   private async withBadge<
     T extends {
       id: string;
+      badgeOverride: CaregiverBadge | null;
       experienceYears: number | null;
       ratingAverage: number | string | { toString(): string };
       ratingCount: number;
@@ -207,15 +255,13 @@ export class VerificationService {
     const completedVisits = await this.prisma.visit.count({
       where: { status: 'COMPLETED', booking: { caregiverId: profile.id } },
     });
-    return {
-      ...profile,
-      badge: computeCaregiverBadge({
-        experienceYears: profile.experienceYears,
-        ratingAverage: profile.ratingAverage,
-        ratingCount: profile.ratingCount,
-        completedVisits,
-      }),
-    };
+    const computedBadge = computeCaregiverBadge({
+      experienceYears: profile.experienceYears,
+      ratingAverage: profile.ratingAverage,
+      ratingCount: profile.ratingCount,
+      completedVisits,
+    });
+    return { ...profile, badge: profile.badgeOverride ?? computedBadge, computedBadge };
   }
 
   private async load(id: string) {
@@ -426,6 +472,51 @@ export class VerificationService {
     });
   }
 
+  /** Pin (or with null, un-pin) the caregiver's tier badge. */
+  async setBadge(admin: AuthUser, id: string, dto: SetBadgeDto) {
+    const profile = await this.load(id);
+    await this.prisma.caregiverProfile.update({
+      where: { id },
+      data: { badgeOverride: dto.badge },
+    });
+    await this.audit.log({
+      actorId: admin.sub,
+      action: dto.badge ? 'caregiver.badge.overridden' : 'caregiver.badge.override_cleared',
+      entityType: 'CaregiverProfile',
+      entityId: id,
+      metadata: { from: profile.badgeOverride, to: dto.badge },
+    });
+    await this.invalidateSearchCache();
+    return this.finish(id, 'badge_set');
+  }
+
+  /**
+   * Manual strike management. `add` goes through the same path as automatic
+   * strikes (so crossing caregiver.strikeThreshold still auto-suspends);
+   * `reset` deletes the strike rows and zeroes strikeCount. A reset does not
+   * lift a suspension by itself; use reactivate for that.
+   */
+  async manageStrikes(admin: AuthUser, id: string, dto: ManageStrikesDto) {
+    const profile = await this.load(id);
+    if (dto.op === 'add') {
+      await this.caregivers.recordStrike(id, dto.reason!, undefined, { note: dto.note, actorId: admin.sub });
+    } else {
+      const cleared = await this.prisma.$transaction(async (tx) => {
+        const removed = await tx.caregiverStrike.deleteMany({ where: { caregiverId: id } });
+        await tx.caregiverProfile.update({ where: { id }, data: { strikeCount: 0 } });
+        return removed.count;
+      });
+      await this.audit.log({
+        actorId: admin.sub,
+        action: 'caregiver.strikes.reset',
+        entityType: 'CaregiverProfile',
+        entityId: id,
+        metadata: { previousStrikeCount: profile.strikeCount, strikesCleared: cleared },
+      });
+    }
+    return this.finish(id, dto.op === 'add' ? 'strike_added' : 'strikes_reset');
+  }
+
   async documentUrl(id: string, documentId: string) {
     const profile = await this.load(id);
     const doc = profile.documents.find((d) => d.id === documentId);
@@ -538,6 +629,32 @@ export class VerificationController {
     return this.verification.listStrikes(id);
   }
 
+  @Post(':id/badge')
+  @ApiOperation({
+    summary: 'Override caregiver tier badge',
+    description: 'Pins the caregiver to a tier (BRONZE/SILVER/GOLD/PLATINUM); { badge: null } clears the override so the auto-computed tier applies again. The record carries badge (effective), badgeOverride and computedBadge.',
+  })
+  setBadge(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetBadgeDto,
+  ) {
+    return this.verification.setBadge(admin, id, dto);
+  }
+
+  @Post(':id/strikes')
+  @ApiOperation({
+    summary: 'Add a manual strike or reset strikes',
+    description: "{ op: 'add', reason, note? } records one strike (auto-suspends at caregiver.strikeThreshold, like automatic strikes); { op: 'reset' } clears every strike and sets strikeCount to 0 (a suspension is not lifted; use reactivate). Returns the updated caregiver record.",
+  })
+  manageStrikes(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ManageStrikesDto,
+  ) {
+    return this.verification.manageStrikes(admin, id, dto);
+  }
+
   @Get(':id/documents/:documentId/url')
   @ApiOperation({
     summary: 'Admin view caregiver credential document',
@@ -552,7 +669,7 @@ export class VerificationController {
 }
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, CaregiversModule],
   controllers: [VerificationController],
   providers: [VerificationService],
 })

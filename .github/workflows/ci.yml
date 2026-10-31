@@ -85,5 +85,23 @@ jobs:
         run: npm run build
       - name: Seed reference data
         run: npm run seed
+      # Same command Render runs on every deploy (preDeployCommand): must be a
+      # safe re-run under NODE_ENV=production that keeps existing data.
+      - name: Re-seed like a deploy (idempotent)
+        run: npm run seed
+        env:
+          NODE_ENV: production
+          SEED_ALLOW_PRODUCTION: 'true'
+      - name: Verify seeded test accounts
+        run: |
+          result=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
+            SELECT CASE WHEN
+              (SELECT count(*) FROM \"User\" WHERE role = 'ADMIN' AND email = 'info@caresaath.com') = 1
+              AND (SELECT count(*) FROM \"User\" WHERE role = 'CUSTOMER') >= 2
+              AND (SELECT count(*) FROM \"CaregiverProfile\" WHERE \"verificationStatus\" = 'APPROVED') >= 3
+              AND (SELECT count(*) FROM \"Booking\") >= 5
+            THEN 'ok' ELSE 'missing' END")
+          echo "seed check: $result"
+          test "$result" = ok
       - name: End-to-end tests
         run: npm run test:e2e

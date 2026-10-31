@@ -26,7 +26,10 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.enableCors({ exposedHeaders: ['Content-Disposition', 'X-Cache'] });
+  app.enableCors({
+    origin: ['https://caresaath-ui.vercel.app'],
+    exposedHeaders: ['Content-Disposition', 'X-Cache'],
+  });
 
   const swaggerDescription = [
     '## Welcome to CareSaath API Documentation',

@@ -101,6 +101,24 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     description: 'Maximum distance (metres) between a caregiver\'s last known location and the visit address to request an immediate booking.',
   },
   {
+    key: 'caregiver.availableNowMaxFixAgeMinutes',
+    envVar: 'CAREGIVER_AVAILABLE_NOW_MAX_FIX_AGE_MINUTES',
+    envDefault: 10,
+    description: 'A caregiver with "available now" on only counts as available (nearby-now search) while their live GPS fix is at most this many minutes old.',
+  },
+  {
+    key: 'booking.immediateAvgSpeedKmh',
+    envVar: 'BOOKING_IMMEDIATE_AVG_SPEED_KMH',
+    envDefault: 20,
+    description: 'Average urban travel speed (km/h) used to estimate etaMinutes in the nearby-now caregiver search.',
+  },
+  {
+    key: 'chat.deleteGraceMinutes',
+    envVar: 'CHAT_DELETE_GRACE_MINUTES',
+    envDefault: 60,
+    description: 'Minutes after sending during which the sender may delete a chat message (it becomes a "message deleted" tombstone for everyone).',
+  },
+  {
     key: 'caregiver.strikeThreshold',
     envVar: 'CAREGIVER_STRIKE_THRESHOLD',
     envDefault: 3,

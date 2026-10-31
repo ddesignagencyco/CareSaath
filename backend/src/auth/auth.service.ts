@@ -3,7 +3,9 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -14,6 +16,8 @@ import { RedisService } from '../common/redis/redis.module.js';
 import { ConfigService } from '../config/platform-config.module.js';
 import type { LoginAudience, SignupRole } from './dto/auth.dto.js';
 import { SmsService } from './sms.service.js';
+import { EmailService } from '../email/email.service.js';
+import { renderNotificationEmail } from '../email/templates.js';
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_REQUEST_LIMIT = 3;
@@ -39,13 +43,32 @@ const AUDIENCE_ROLES: Record<LoginAudience, UserRole[]> = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly jwt: JwtService,
     private readonly sms: SmsService,
     private readonly config: ConfigService,
+    @Optional() private readonly email?: EmailService,
   ) {}
+
+  /**
+   * Until a real SMS gateway is wired, an account with an email on file also
+   * gets its login code by email (when SMTP is configured). Best-effort: a mail
+   * failure never fails the OTP request, and the code is never logged here.
+   */
+  private emailOtp(to: string, code: string, ttlSeconds: number): void {
+    if (!this.email || !process.env['SMTP_HOST']) return;
+    const html = renderNotificationEmail({
+      title: 'Your CareSaath login code',
+      message: `Your login code is ${code}. It expires in ${Math.max(1, Math.round(ttlSeconds / 60))} minutes. If you did not request it, ignore this email.`,
+    });
+    this.email.sendEmail(to, `CareSaath login code: ${code}`, html).catch((err: Error) => {
+      this.logger.warn(`Login OTP email failed: ${err.message}`);
+    });
+  }
 
   private async otpTtlSeconds(): Promise<number> {
     return this.config.getNumber('otp.ttlSeconds');
@@ -112,7 +135,16 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(phone, code);
+    await this.sms.sendOtp(phone, code, {
+      purpose: OtpPurpose.LOGIN,
+      email: existing?.email ?? null,
+      fullName: existing?.fullName ?? null,
+      role: existing?.role,
+      userId: existing?.id ?? null,
+    });
+    if (existing?.email) {
+      this.emailOtp(existing.email, code, ttlSeconds);
+    }
     return { ttlSeconds };
   }
 
@@ -205,7 +237,12 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(dto.phone, code);
+    await this.sms.sendOtp(dto.phone, code, {
+      purpose: OtpPurpose.SIGNUP,
+      email: dto.email ?? null,
+      fullName: dto.fullName,
+      role: dto.role,
+    });
     return { ttlSeconds };
   }
 
@@ -295,7 +332,17 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(newPhone, code);
+    const userForOtp = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, fullName: true },
+    });
+    await this.sms.sendOtp(newPhone, code, {
+      purpose: OtpPurpose.CHANGE_PHONE,
+      userId,
+      email: userForOtp?.email ?? null,
+      fullName: userForOtp?.fullName ?? null,
+      phone: newPhone,
+    });
     return { ttlSeconds };
   }
 

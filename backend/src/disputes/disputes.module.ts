@@ -99,6 +99,34 @@ export class ListDisputesQueryDto {
   limit = 20;
 }
 
+export class ListMyDisputesQueryDto {
+  @ApiPropertyOptional({ enum: DisputeStatus })
+  @IsOptional()
+  @IsEnum(DisputeStatus)
+  status?: DisputeStatus;
+
+  @ApiPropertyOptional({ example: 'late', description: 'Free-text search: description, the other party\'s name, or the patient\'s name' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Passing page and/or limit returns Paginated<DisputeRow>; with neither, the legacy plain array is returned.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ description: 'Max 100. See page.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+}
+
 @Injectable()
 export class DisputesService {
   constructor(
@@ -189,12 +217,47 @@ export class DisputesService {
     } satisfies Prisma.DisputeInclude;
   }
 
-  listMine(user: AuthUser): Promise<unknown[]> {
-    return this.prisma.dispute.findMany({
-      where: { OR: [{ raisedById: user.sub }, { againstUserId: user.sub }] },
-      orderBy: { createdAt: 'desc' },
-      include: { visit: { select: { id: true, bookingId: true, status: true, scheduledDate: true } } },
-    });
+  /**
+   * Disputes raised by or against the caller. With page/limit it returns the
+   * same Paginated<DisputeRow> shape as /admin/disputes; without, the legacy
+   * plain array (kept so existing clients don't break).
+   */
+  async listMine(user: AuthUser, query: ListMyDisputesQueryDto = {}): Promise<unknown[] | Paginated<unknown>> {
+    const q = query.q?.trim();
+    const where: Prisma.DisputeWhereInput = {
+      AND: [
+        { OR: [{ raisedById: user.sub }, { againstUserId: user.sub }] },
+        ...(query.status ? [{ status: query.status }] : []),
+        ...(q
+          ? [
+              {
+                OR: [
+                  { description: { contains: q, mode: 'insensitive' as const } },
+                  { raisedBy: { fullName: { contains: q, mode: 'insensitive' as const } } },
+                  { againstUser: { fullName: { contains: q, mode: 'insensitive' as const } } },
+                  { visit: { booking: { patient: { name: { contains: q, mode: 'insensitive' as const } } } } },
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
+    if (query.page === undefined && query.limit === undefined) {
+      return this.prisma.dispute.findMany({ where, orderBy: { createdAt: 'desc' }, include: this.disputeInclude() });
+    }
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.dispute.count({ where }),
+      this.prisma.dispute.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: this.disputeInclude(),
+      }),
+    ]);
+    return paginate(items, page, limit, total);
   }
 
   async listAll(query: ListDisputesQueryDto): Promise<Paginated<unknown>> {
@@ -334,10 +397,10 @@ export class DisputesController {
   @Get()
   @ApiOperation({
     summary: 'List my disputes',
-    description: 'Retrieves disputes raised by or involving the authenticated user.',
+    description: 'Disputes raised by or involving the authenticated user, newest first. Filter with ?status= and free-text ?q= (description, other party, patient). Pass ?page=&limit= for Paginated<DisputeRow> (same row shape as /admin/disputes); without them the legacy plain array is returned.',
   })
-  listMine(@CurrentUser() user: AuthUser) {
-    return this.disputes.listMine(user);
+  listMine(@CurrentUser() user: AuthUser, @Query() query: ListMyDisputesQueryDto) {
+    return this.disputes.listMine(user, query);
   }
 }
 

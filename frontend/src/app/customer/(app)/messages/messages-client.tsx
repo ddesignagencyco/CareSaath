@@ -54,6 +54,7 @@ function useCustomerChatTransport(): ChatTransport {
       },
       uploadMedia: (id, file, opts) => chatApi.uploadMedia(id, file, opts),
       react: (id, msgId, emoji) => chatApi.react(id, msgId, emoji),
+      deleteMessage: (id, msgId) => chatApi.deleteMessage(id, msgId),
     }),
     [me.data?.id, threads, bookings.isSuccess],
   );

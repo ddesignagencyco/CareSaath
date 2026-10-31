@@ -4,9 +4,33 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 
 loadEnv({ path: resolve(import.meta.dirname, '../../.env'), override: true });
 
-if (process.env['NODE_ENV'] === 'production') {
-  console.error('Refusing to seed demo data: NODE_ENV is production.');
+// Deployed test/staging environments run with NODE_ENV=production, so seeding
+// there is an explicit opt-in (render.yaml sets SEED_ALLOW_PRODUCTION=true).
+if (process.env['NODE_ENV'] === 'production' && process.env['SEED_ALLOW_PRODUCTION'] !== 'true') {
+  console.error('Refusing to seed demo data: NODE_ENV is production (set SEED_ALLOW_PRODUCTION=true to allow).');
   process.exit(1);
+}
+
+// Re-running is safe: accounts/reference data are upserted every time, but the
+// demo bookings/visits/payments graph is only (re)built when it is missing or
+// SEED_RESET=true, so a redeploy never wipes what testers did in the app.
+const SEED_RESET = process.env['SEED_RESET'] === 'true';
+
+// Login is phone + OTP. Until an SMS gateway is wired the OTP is also emailed
+// to the account's email, so every seeded account gets one: the admin gets
+// ADMIN_EMAIL and the demo accounts plus-addressed aliases of it
+// (info+ayesha@caresaath.com, ...) so all test OTPs land in one inbox.
+// SEED_DEMO_EMAILS=false leaves the demo accounts without an email.
+const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'info@caresaath.com').trim().toLowerCase();
+const SEED_DEMO_EMAILS = process.env['SEED_DEMO_EMAILS'] !== 'false';
+/** "Dr. Hira Siddiqui" -> "hira" */
+function caregiverTag(c) {
+  return c.fullName.replace(/^Dr\.\s*/, '').split(' ')[0].toLowerCase();
+}
+function demoEmail(tag) {
+  if (!SEED_DEMO_EMAILS || !ADMIN_EMAIL.includes('@')) return null;
+  const [local, domain] = ADMIN_EMAIL.split('@');
+  return `${local}+${tag}@${domain}`;
 }
 
 const { PrismaClient, Specialty, UserRole, PromoDiscountType } = await import(
@@ -60,12 +84,27 @@ function hoursInto(day, hour) {
 // ===========================================================================
 
 const adminPhone = process.env['ADMIN_PHONE'] ?? '+923000000000';
+/** Sets `email` only when no other account already holds it (email is unique). */
+async function freeEmail(email, phone) {
+  if (!email) return undefined;
+  const holder = await prisma.user.findUnique({ where: { email }, select: { phone: true } });
+  return !holder || holder.phone === phone ? email : undefined;
+}
+const adminEmail = await freeEmail(ADMIN_EMAIL, adminPhone);
 const adminUser = await prisma.user.upsert({
   where: { phone: adminPhone },
-  update: { role: UserRole.ADMIN, lastLoginAt: now },
-  create: { phone: adminPhone, role: UserRole.ADMIN, fullName: 'Platform Admin', lastLoginAt: now },
+  update: { role: UserRole.ADMIN, status: 'ACTIVE', ...(adminEmail ? { email: adminEmail } : {}) },
+  create: {
+    phone: adminPhone,
+    role: UserRole.ADMIN,
+    fullName: 'Platform Admin',
+    ...(adminEmail ? { email: adminEmail } : {}),
+  },
 });
-console.log(`Seeded admin user ${adminPhone}`);
+if (!adminEmail && ADMIN_EMAIL) {
+  console.warn(`  ${ADMIN_EMAIL} already belongs to another account; admin ${adminPhone} seeded without it.`);
+}
+console.log(`Seeded admin user ${adminPhone}${adminEmail ? ` <${adminEmail}>` : ''}`);
 
 for (const category of Object.values(Specialty)) {
   await prisma.commissionRate.upsert({
@@ -98,8 +137,8 @@ console.log(`Seeded ${platformConfig.length} platform config values`);
 // ===========================================================================
 
 const CUSTOMERS = [
-  { phone: '+923001110001', fullName: 'Ayesha Khan', preferredLanguage: 'EN' },
-  { phone: '+923001110002', fullName: 'Bilal Ahmed', preferredLanguage: 'UR' },
+  { phone: '+923001110001', fullName: 'Ayesha Khan', preferredLanguage: 'EN', emailTag: 'ayesha' },
+  { phone: '+923001110002', fullName: 'Bilal Ahmed', preferredLanguage: 'UR', emailTag: 'bilal' },
 ];
 
 const CAREGIVERS = [
@@ -197,15 +236,23 @@ const CAREGIVERS = [
 
 const customers = [];
 for (const c of CUSTOMERS) {
+  const email = await freeEmail(demoEmail(c.emailTag), c.phone);
   const user = await prisma.user.upsert({
     where: { phone: c.phone },
-    update: { fullName: c.fullName, role: UserRole.CUSTOMER, preferredLanguage: c.preferredLanguage, lastLoginAt: now },
+    update: {
+      fullName: c.fullName,
+      role: UserRole.CUSTOMER,
+      status: 'ACTIVE',
+      preferredLanguage: c.preferredLanguage,
+      ...(email ? { email } : {}),
+    },
     create: {
       lastLoginAt: now,
       phone: c.phone,
       role: UserRole.CUSTOMER,
       fullName: c.fullName,
       preferredLanguage: c.preferredLanguage,
+      ...(email ? { email } : {}),
     },
   });
   customers.push(user);
@@ -214,10 +261,11 @@ for (const c of CUSTOMERS) {
 const caregiverProfiles = [];
 const caregiverUsers = [];
 for (const c of CAREGIVERS) {
+  const email = await freeEmail(demoEmail(caregiverTag(c)), c.phone);
   const user = await prisma.user.upsert({
     where: { phone: c.phone },
-    update: { fullName: c.fullName, role: UserRole.CAREGIVER, lastLoginAt: now },
-    create: { phone: c.phone, role: UserRole.CAREGIVER, fullName: c.fullName, lastLoginAt: now },
+    update: { fullName: c.fullName, role: UserRole.CAREGIVER, status: 'ACTIVE', ...(email ? { email } : {}) },
+    create: { phone: c.phone, role: UserRole.CAREGIVER, fullName: c.fullName, lastLoginAt: now, ...(email ? { email } : {}) },
   });
   caregiverUsers.push(user);
   const commission = await prisma.commissionRate.findUniqueOrThrow({
@@ -249,12 +297,27 @@ for (const c of CAREGIVERS) {
       reverifyDueAt: approved ? reverifyDueAt : null,
       ratingAverage: c.ratingAverage,
       ratingCount: c.ratingCount,
+      // Approved demo caregivers opt in to emergency requests; they appear in the
+      // nearby-now search once their app sends a live location.
+      acceptingImmediate: approved,
     },
   });
   caregiverProfiles.push(profile);
 }
 
 console.log(`Seeded ${customers.length} customers and ${caregiverProfiles.length} caregivers`);
+
+const existingDemoBookings = await prisma.booking.count({
+  where: { customerId: { in: customers.map((u) => u.id) } },
+});
+if (existingDemoBookings > 0 && !SEED_RESET) {
+  console.log(
+    `Demo bookings already exist (${existingDemoBookings}); keeping them. Set SEED_RESET=true to rebuild the demo graph.`,
+  );
+  printSummary();
+  await prisma.$disconnect();
+  process.exit(0);
+}
 
 // Wipe dependent rows owned by the demo users so every run produces a clean,
 // deterministic graph (no duplicate bookings/visits accumulating).
@@ -269,7 +332,25 @@ await prisma.incidentEvent.deleteMany({
   where: { incident: { reportedById: { in: customerIds } } },
 });
 await prisma.safetyIncident.deleteMany({ where: { reportedById: { in: customerIds } } });
-await prisma.dispute.deleteMany({ where: { raisedById: { in: customerIds } } });
+await prisma.dispute.deleteMany({
+  where: {
+    OR: [
+      { raisedById: { in: customerIds } },
+      { visit: { booking: { customerId: { in: customerIds } } } },
+    ],
+  },
+});
+// Rows testers create in the app on the demo bookings (chat, calls, doctor
+// orders, check-in OTPs, strikes) must go before their visits/bookings.
+const demoBookingWhere = { booking: { customerId: { in: customerIds } } };
+await prisma.messageReaction.deleteMany({ where: { message: demoBookingWhere } });
+await prisma.chatMessage.updateMany({ where: demoBookingWhere, data: { replyToId: null } });
+await prisma.chatMessage.deleteMany({ where: demoBookingWhere });
+await prisma.callLog.deleteMany({ where: { visit: demoBookingWhere } });
+await prisma.medicalOrder.deleteMany({ where: { visit: demoBookingWhere } });
+await prisma.otpCode.deleteMany({ where: { visit: demoBookingWhere } });
+await prisma.caregiverStrike.deleteMany({ where: demoBookingWhere });
+await prisma.safetyIncident.updateMany({ where: { visit: demoBookingWhere }, data: { visitId: null } });
 await prisma.review.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
 // Scoped by the visit (via its booking's customer) rather than by caregiverId:
 // a note's caregiverId can drift from its visit's current caregiver on a dirty
@@ -742,16 +823,20 @@ console.log('Seeded promo code, safety incident, dispute and notifications');
 // Summary
 // ===========================================================================
 
-console.log('\n=== Demo login (OTP arrives in MailHog: http://localhost:18025) ===');
-console.log(`  ADMIN     ${adminPhone}`);
-console.log(`  CUSTOMER  ${CUSTOMERS[0].phone}  (${CUSTOMERS[0].fullName})`);
-console.log(`  CUSTOMER  ${CUSTOMERS[1].phone}  (${CUSTOMERS[1].fullName})`);
-console.log(`  CAREGIVER ${CAREGIVERS[0].phone}  (${CAREGIVERS[0].fullName}, NURSING, APPROVED)`);
-console.log(`  CAREGIVER ${CAREGIVERS[1].phone}  (${CAREGIVERS[1].fullName}, PHYSIOTHERAPY, APPROVED)`);
-console.log(`  CAREGIVER ${CAREGIVERS[2].phone}  (${CAREGIVERS[2].fullName}, ELDERLY_CARE, APPROVED)`);
-console.log(`  CAREGIVER ${CAREGIVERS[3].phone}  (${CAREGIVERS[3].fullName}, POST_SURGERY_CARE, PENDING)`);
-console.log(`  DOCTOR    ${CAREGIVERS[4].phone}  (${CAREGIVERS[4].fullName}, DOCTOR, APPROVED)`);
-console.log(`  DOCTOR    ${CAREGIVERS[5].phone}  (${CAREGIVERS[5].fullName}, DOCTOR, APPROVED)`);
-console.log('=====================================================================\n');
+printSummary();
 
 await prisma.$disconnect();
+
+function printSummary() {
+  const mail = (tag) => (demoEmail(tag) ? `  OTP also emailed to ${demoEmail(tag)}` : '');
+  console.log('\n=== Test logins (phone + OTP; OTP is in the API log, and emailed when SMTP is set) ===');
+  console.log(`  ADMIN     ${adminPhone}${adminEmail ? `  OTP also emailed to ${adminEmail}` : ''}`);
+  for (const c of CUSTOMERS) {
+    console.log(`  CUSTOMER  ${c.phone}  (${c.fullName})${mail(c.emailTag)}`);
+  }
+  for (const c of CAREGIVERS) {
+    const role = c.specialty === Specialty.DOCTOR ? 'DOCTOR   ' : 'CAREGIVER';
+    console.log(`  ${role} ${c.phone}  (${c.fullName}, ${c.specialty}, ${c.verificationStatus})${mail(caregiverTag(c))}`);
+  }
+  console.log('=====================================================================================\n');
+}

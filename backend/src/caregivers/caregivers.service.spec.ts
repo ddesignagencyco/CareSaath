@@ -180,7 +180,7 @@ describe('CaregiversService', () => {
     await expect(service.stopSharingLocation(user)).resolves.toEqual({ ok: true });
     expect(prisma.caregiverProfile.update).toHaveBeenCalledWith({
       where: { id: 'cg-1' },
-      data: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+      data: { currentLat: null, currentLng: null, locationUpdatedAt: null, acceptingImmediate: false },
     });
   });
 

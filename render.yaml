@@ -23,7 +23,10 @@ services:
     plan: starter # paid: free tier sleeps and breaks Socket.IO / background jobs
     rootDir: backend
     buildCommand: npm ci --include=dev && npx prisma generate --config prisma7.config.ts && npm run build
-    preDeployCommand: npm run prisma:migrate
+    # Migrate, then seed the test accounts (admin + every role) and demo data.
+    # The seed is idempotent: accounts are upserted on every deploy, the demo
+    # bookings graph is only created when missing (SEED_RESET=true rebuilds it).
+    preDeployCommand: npm run prisma:migrate && npm run seed
     startCommand: npm run start:prod
     healthCheckPath: /health
     autoDeploy: true
@@ -61,6 +64,41 @@ services:
         value: true
       - key: WHATSAPP_ENABLED
         value: false
+      # Test-data seeding on deploy (prisma/seed.mjs). Set SEED_ALLOW_PRODUCTION=false
+      # once this is a real production environment.
+      - key: SEED_ALLOW_PRODUCTION
+        value: true
+      - key: ADMIN_EMAIL
+        value: info@caresaath.com
+      - key: ADMIN_PHONE
+        value: '+923000000000'
+      # SMTP: login OTPs are also emailed to the account's email (seeded test
+      # accounts use info+<name>@caresaath.com aliases).
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: CareSaath
+      # Every OTP (login / signup / change-phone / visit check-in) is mirrored to
+      # the ops inbox with its purpose + phone/email context, so testers never have
+      # to dig through server logs. Turn off before real production.
+      - key: OTP_MIRROR_EMAIL
+        value: info@caresaath.com
+      # Web Push (browser notifications while the app is closed). Generate with
+      # `npx web-push generate-vapid-keys`; push stays off until both are set.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:info@caresaath.com
       # Supplied by the client; set in the dashboard.
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
