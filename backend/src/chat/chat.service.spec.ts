@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ChatService } from './chat.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { createAuditMock, createPrismaMock, wireTransaction } from '../../test/test-helpers.js';
@@ -91,11 +91,19 @@ describe('ChatService', () => {
     expect(realtime.entityUpdated).toHaveBeenCalledWith({ users: ['u-cust'] }, expect.anything());
   });
 
-  it('rejects sending once the booking is no longer CONFIRMED', async () => {
-    const { service, prisma } = makeService();
+  it('still lets both parties send after the booking is COMPLETED (chat stays open post-visit)', async () => {
+    const { service, prisma, realtime } = makeService();
     prisma.booking.findFirst.mockResolvedValue({ ...booking, status: 'COMPLETED' });
+    prisma.chatMessage.create.mockResolvedValue({ id: 'msg-3', bookingId: 'b-1', senderId: 'u-cust', body: 'hi', mediaKey: null });
+    await service.send(customer, 'b-1', { body: 'hi' });
+    expect(realtime.entityUpdated).toHaveBeenCalled();
+  });
+
+  it('rejects sending on a cancelled/declined booking (never opened)', async () => {
+    const { service, prisma } = makeService();
+    prisma.booking.findFirst.mockResolvedValue({ ...booking, status: 'CANCELLED' });
     await expect(service.send(customer, 'b-1', { body: 'hi' })).rejects.toBeInstanceOf(
-      BadRequestException,
+      ForbiddenException,
     );
   });
 
