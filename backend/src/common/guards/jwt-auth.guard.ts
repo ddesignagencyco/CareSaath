@@ -18,6 +18,12 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // WebSocket message handlers authenticate once on connection (RealtimeGateway.handleConnection);
+    // this HTTP bearer-token guard doesn't apply to them and would crash reading an HTTP request
+    // that doesn't exist on a socket context.
+    if (context.getType() !== 'http') {
+      return true;
+    }
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
