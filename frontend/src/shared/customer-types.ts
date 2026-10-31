@@ -39,6 +39,8 @@ export interface PublicCaregiver extends CaregiverSearchItem {
   licenseNumber: string;
   licenseBody: LicenseBody;
   createdAt: string;
+  /** True when the caregiver is opted in for immediate visits with a fresh live fix right now. */
+  availableNow?: boolean;
   availabilityRules: Pick<AvailabilityRule, "dayOfWeek" | "startTime" | "endTime">[];
   /** Sub-city coverage zones; an empty list means the caregiver covers their service cities in full. */
   serviceAreas?: { city: string; label: string | null; latitude: string; longitude: string; radiusMeters: number }[];

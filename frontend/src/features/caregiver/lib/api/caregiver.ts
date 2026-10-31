@@ -82,6 +82,9 @@ export const profileApi = {
 };
 
 export const availabilityApi = {
+  /** PUT /caregiver/available-now — opt in/out of immediate (ASAP/emergency) requests. */
+  setAvailableNow: (available: boolean) =>
+    http.put<{ acceptingImmediate: boolean; availableNow: boolean; locationUpdatedAt: string | null }>("/caregiver/available-now", { available }),
   /** GET /caregiver/availability */
   get: () => (http.get<Availability>("/caregiver/availability")),
   /** PUT /caregiver/availability — full replace. */

@@ -132,6 +132,7 @@
     "bookHint": "Choose the patient, address and time. {name} will confirm your request.",
     "bookVisit": "Book a visit",
     "bookMobile": "Book {name} · {price}/visit",
+    "availableNow": "Available now",
     "visitsTogether": "{count, plural, one {# visit together} other {# visits together}}",
     "recentVisitsTitle": "Recent visits with you",
     "recentVisitsHint": "Your most recent visits with this caregiver.",

@@ -1,4 +1,12 @@
 {
+  "availableNow": {
+    "title": "Available for emergency visits",
+    "hint": "Turn on to accept ASAP requests from nearby families.",
+    "live": "You're live — nearby families can book you for an immediate visit.",
+    "needLocation": "Turn on location sharing (More tab) so families can see you.",
+    "statusLive": "Live",
+    "statusPaused": "Not live"
+  },
   "login": {
     "product": "Caregiver",
     "headline": "Care for families. We handle the rest.",

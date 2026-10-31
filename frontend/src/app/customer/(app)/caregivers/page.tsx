@@ -12,7 +12,7 @@ import { useLabels } from "@shared/i18n/use-labels";
 import { CITY_OPTIONS } from "@shared/lib/options";
 import type { Specialty } from "@shared/types";
 import { CaregiverCard } from "@/features/customer/components/caregiver-bits";
-import { caregiversApi } from "@/features/customer/lib/api/customer";
+import { addressesApi, caregiversApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 
 const SPECIALTIES: (Specialty | "ALL")[] = ["ALL", "NURSING", "PHYSIOTHERAPY", "POST_SURGERY_CARE", "ELDERLY_CARE", "DOCTOR"];
@@ -39,9 +39,15 @@ export default function FindCarePage() {
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
 
+  // Narrow by the customer's saved address (sub-city coverage zones) when searching their
+  // own city or all cities; a different city picked in the dropdown drops the geo filter.
+  const addresses = useQuery({ queryKey: keys.addresses, queryFn: addressesApi.list });
+  const addr = addresses.data?.[0];
+  const geo = addr && (!city || city === addr.city) ? { lat: Number(addr.latitude), lng: Number(addr.longitude) } : {};
+
   const results = useQuery({
-    queryKey: [...keys.caregivers, "search", specialty, city, page],
-    queryFn: () => caregiversApi.search({ specialty: specialty === "ALL" ? undefined : specialty, city: city ?? undefined, page, limit: LIMIT }),
+    queryKey: [...keys.caregivers, "search", specialty, city, geo.lat ?? "", geo.lng ?? "", page],
+    queryFn: () => caregiversApi.search({ specialty: specialty === "ALL" ? undefined : specialty, city: city ?? undefined, ...geo, page, limit: LIMIT }),
   });
 
   return (

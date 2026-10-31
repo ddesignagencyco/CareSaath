@@ -102,7 +102,7 @@ export const addressesApi = {
 
 export const caregiversApi = {
   /** GET /caregivers?specialty=&city= (public, approved caregivers, best rated first) */
-  search: (q: PageQuery & { specialty?: Specialty; city?: string }) =>
+  search: (q: PageQuery & { specialty?: Specialty; city?: string; lat?: number; lng?: number }) =>
     http.get<Paginated<CaregiverSearchItem>>("/caregivers", q),
   /** GET /caregivers?immediate=true&lat&lng&specialty — nearby-now (emergency) search, nearest first. */
   nearbyNow: (lat: number, lng: number, specialty?: Specialty) =>

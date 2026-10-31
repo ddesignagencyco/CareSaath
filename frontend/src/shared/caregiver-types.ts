@@ -96,6 +96,10 @@ export interface MyCaregiverProfile extends CaregiverProfileRow {
   commissionRate: CommissionRate;
   /** Ranking tier, computed by the backend on every read. */
   badge?: CaregiverBadge;
+  /** Opted in to immediate (ASAP/emergency) requests. */
+  acceptingImmediate?: boolean;
+  /** Actually bookable right now: acceptingImmediate + a fresh live fix + not mid-visit/blacked out. */
+  availableNow?: boolean;
 }
 
 export interface RegisterCaregiverInput {

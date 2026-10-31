@@ -132,6 +132,7 @@
     "bookHint": "مریض، پتہ اور وقت منتخب کریں۔ {name} آپ کی درخواست کی تصدیق کریں گے۔",
     "bookVisit": "وزٹ بک کریں",
     "bookMobile": "{name} کو بک کریں · {price} فی وزٹ",
+    "availableNow": "ابھی دستیاب",
     "visitsTogether": "{count, plural, one {# مشترکہ وزٹ} other {# مشترکہ وزٹس}}",
     "recentVisitsTitle": "آپ کے ساتھ حالیہ وزٹس",
     "recentVisitsHint": "اس کیئرگیور کے ساتھ آپ کے حالیہ وزٹس۔",
