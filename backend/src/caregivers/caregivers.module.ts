@@ -16,6 +16,7 @@ import {
   Put,
   Query,
   Res,
+  SetMetadata,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -63,7 +64,7 @@ import {
 } from '../common/crypto/field-encryption.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
-import { Public } from '../common/decorators/public.decorator.js';
+import { IS_PUBLIC_KEY, Public } from '../common/decorators/public.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { AuthModule } from '../auth/auth.module.js';
@@ -1059,6 +1060,7 @@ export class CaregiversService {
         currentLng: true,
         locationUpdatedAt: true,
         user: { select: { fullName: true } },
+        serviceAreas: { select: { latitude: true, longitude: true, radiusMeters: true } },
       },
     });
     const metersPerMinute = (Math.max(speedKmh, 1) * 1000) / 60;
@@ -1067,11 +1069,18 @@ export class CaregiversService {
         const meters = Math.round(distanceMeters(lat, lng, Number(currentLat), Number(currentLng)));
         return { ...rest, distanceMeters: meters, etaMinutes: Math.max(1, Math.ceil(meters / metersPerMinute)) };
       })
-      .filter((c) => c.distanceMeters <= maxDistanceMeters)
+      // Within range AND the point falls in one of the caregiver's sub-city zones (no zones =
+      // whole service city) — mirrors the booking's coverage check so a listed caregiver is bookable.
+      .filter(
+        (c) =>
+          c.distanceMeters <= maxDistanceMeters &&
+          (!c.serviceAreas?.length ||
+            c.serviceAreas.some((z) => distanceMeters(lat, lng, Number(z.latitude), Number(z.longitude)) <= z.radiusMeters)),
+      )
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
     const page = nearby.slice((query.page - 1) * query.limit, query.page * query.limit);
     const items = await Promise.all(
-      page.map(async ({ photoKey, ...rest }) => ({
+      page.map(async ({ photoKey, serviceAreas: _serviceAreas, ...rest }) => ({
         ...rest,
         availableNow: true,
         photoUrl: await this.photoUrlFor(photoKey),
@@ -1386,13 +1395,24 @@ export class PublicCaregiverController {
       'Public search for verified, approved caregivers filtered by specialty and city. Cached in Redis for low-latency under 3G networks. The X-Cache header reports whether the page came from Redis (HIT) or PostgreSQL (MISS). With ?immediate=true&lat=&lng= it becomes the nearby-now (emergency) search: only caregivers available right now within booking.immediateMaxDistanceMeters, each with distanceMeters + etaMinutes, nearest first (X-Cache: BYPASS).',
   })
   async search(@Query() query: SearchQueryDto, @Res({ passthrough: true }) res: Response) {
-    if (query.immediate) {
-      res.setHeader('x-cache', 'BYPASS');
-      return this.caregivers.searchNearbyNow(query);
-    }
     const { result, cache } = await this.caregivers.search(query);
     res.setHeader('x-cache', cache);
     return result;
+  }
+
+  // Live-location (available-now) data is NOT exposed anonymously: unlike the public city
+  // search above, nearby-now requires a signed-in user. Method-level override of the
+  // controller's @Public() so the global JwtAuthGuard enforces a valid token here.
+  @Get('nearby')
+  @SetMetadata(IS_PUBLIC_KEY, false)
+  @ApiOperation({
+    summary: 'Nearby-now (emergency) search — authenticated',
+    description:
+      'Caregivers available right now within booking.immediateMaxDistanceMeters of lat/lng (both required), each with distanceMeters + etaMinutes, nearest first. Requires a signed-in user. Never cached.',
+  })
+  async nearby(@Query() query: SearchQueryDto, @Res({ passthrough: true }) res: Response) {
+    res.setHeader('x-cache', 'BYPASS');
+    return this.caregivers.searchNearbyNow({ ...query, immediate: true });
   }
 
   @Get(':id')

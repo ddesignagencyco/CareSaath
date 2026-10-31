@@ -24,7 +24,12 @@ function makeService() {
   return { service, prisma };
 }
 
-const candidate = (id: string, lat: number, lng: number) => ({
+const candidate = (
+  id: string,
+  lat: number,
+  lng: number,
+  serviceAreas: Array<{ latitude: number; longitude: number; radiusMeters: number }> = [],
+) => ({
   id,
   specialty: 'NURSING',
   ratePerVisit: 5000,
@@ -39,6 +44,7 @@ const candidate = (id: string, lat: number, lng: number) => ({
   currentLng: lng,
   locationUpdatedAt: new Date(),
   user: { fullName: id },
+  serviceAreas,
 });
 
 describe('CaregiversService — nearby-now search', () => {
@@ -71,6 +77,19 @@ describe('CaregiversService — nearby-now search', () => {
       acceptingImmediate: true,
       locationUpdatedAt: { gte: expect.any(Date) },
     });
+  });
+
+  it('excludes caregivers whose service zones do not cover the search point (matches the booking check)', async () => {
+    const { service, prisma } = makeService();
+    prisma.caregiverProfile.findMany.mockResolvedValue([
+      // within range, but its only zone (2 km radius) is centred ~4.4 km from the point → not covered
+      candidate('zoned-away', 31.52 + 0.009, 74.35, [{ latitude: 31.52 + 0.04, longitude: 74.35, radiusMeters: 2000 }]),
+      // within range and its zone (3 km radius, centred on the point) covers the point
+      candidate('zoned-ok', 31.52 + 0.01, 74.35, [{ latitude: 31.52, longitude: 74.35, radiusMeters: 3000 }]),
+    ]);
+    prisma.visit.count.mockResolvedValue(0);
+    const result = await service.searchNearbyNow({ immediate: true, lat: 31.52, lng: 74.35, page: 1, limit: 20 });
+    expect(result.items.map((c) => (c as { id: string }).id)).toEqual(['zoned-ok']);
   });
 });
 
