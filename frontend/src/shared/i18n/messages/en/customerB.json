@@ -354,6 +354,7 @@
     "noResults": "No payments match.",
     "cashDue": "Cash due",
     "all": "All",
+    "searchPlaceholder": "Search by name or amount",
     "awaitingGateway": "Awaiting confirmation",
     "receipt": {
       "title": "Payment receipt",

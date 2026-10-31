@@ -354,6 +354,7 @@
     "noResults": "کوئی ادائیگی نہیں ملی۔",
     "cashDue": "نقد واجب",
     "all": "سب",
+    "searchPlaceholder": "نام یا رقم سے تلاش کریں",
     "awaitingGateway": "تصدیق کا انتظار",
     "receipt": {
       "title": "ادائیگی کی رسید",

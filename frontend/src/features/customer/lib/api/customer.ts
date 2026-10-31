@@ -38,7 +38,7 @@ import type {
   ReviewInput,
   VisitLocation,
 } from "@shared/customer-types";
-import type { IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
+import type { DisputeStatus, IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
 import type { BackendChatMessage } from "@shared/chat/types";
 import { http } from "./http";
 
@@ -120,9 +120,9 @@ export const promosApi = {
 export const bookingsApi = {
   /** POST /customer/bookings */
   create: (dto: CreateBookingInput) => (http.post<BookingDetail>("/customer/bookings", dto)),
-  /** GET /customer/bookings?status= */
-  list: (q: PageQuery & { status?: CaregiverBookingStatus }) =>
-    http.get<Paginated<CustomerBookingListItem>>("/customer/bookings", q),
+  /** GET /customer/bookings?status=&group=&q=&page=&limit= (group tab: active|waiting|past|all; q: caregiver/patient name) */
+  list: (params: PageQuery & { status?: CaregiverBookingStatus; group?: "active" | "waiting" | "past" | "all"; q?: string }) =>
+    http.get<Paginated<CustomerBookingListItem>>("/customer/bookings", params),
   /** GET /customer/bookings/:id */
   get: (id: string) => (http.get<BookingDetail>(`/customer/bookings/${id}`)),
   /** PATCH /customer/bookings/:id/cancel */
@@ -204,9 +204,9 @@ export const paymentsApi = {
    */
   initiate: (dto: { visitId: string; method: PaymentMethod }): Promise<InitiatePaymentResult> =>
     http.post<InitiatePaymentResult>("/customer/payments", dto),
-  /** GET /customer/payments?status=&page=&limit= */
-  list: (q: PageQuery & { status?: PaymentStatus }) =>
-    http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", q),
+  /** GET /customer/payments?status=&q=&page=&limit= (q: patient/caregiver name or amount) */
+  list: (params: PageQuery & { status?: PaymentStatus; q?: string }) =>
+    http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", params),
   /** GET /customer/payments/:id (same include as the list) */
   get: (id: string) => (http.get<CustomerPaymentWithVisit>(`/customer/payments/${id}`)),
   /** PATCH /customer/payments/:id/cancel — abandon a PENDING payment so another method can be used. */
@@ -218,8 +218,11 @@ export const paymentsApi = {
 };
 
 export const disputesApi = {
-  /** GET /disputes: disputes raised by or against the current user, newest first (no pagination). */
+  /** GET /disputes: disputes raised by or against the current user, newest first (plain array; used by the visit panel). */
   list: () => (http.get<DisputeRow[]>("/disputes")),
+  /** GET /disputes?status=&q=&page=&limit= — paginated for the disputes table (q: patient/caregiver name). */
+  listPaged: (params: PageQuery & { status?: DisputeStatus; q?: string }) =>
+    http.get<Paginated<DisputeRow>>("/disputes", params),
   /** POST /disputes */
   raise: (dto: { visitId: string; description: string }) => (http.post<DisputeRow>("/disputes", dto)),
 };

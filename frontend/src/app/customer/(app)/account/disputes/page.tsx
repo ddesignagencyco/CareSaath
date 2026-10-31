@@ -1,30 +1,41 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowLeft, Scale } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { EmptyState, ErrorState } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
 import type { DisputeRow } from "@shared/caregiver-types";
-import { useMyDisputes } from "@/features/customer/components/visit-panels";
+import type { DisputeStatus } from "@shared/types";
+import { disputesApi } from "@/features/customer/lib/api/customer";
 
-/** GET /disputes: everything raised by or against this customer. */
+const DISPUTE_STATUSES: DisputeStatus[] = ["OPEN", "RESOLVED"];
+const LIMIT = 15;
+
+/** GET /disputes: everything raised by or against this customer (server-paginated). */
 export default function DisputesPage() {
   const t = useTranslations("customerB.disputes");
   const router = useRouter();
   const f = useFmt();
   const L = useLabels();
-  const disputes = useMyDisputes();
-  const data = disputes.data ?? [];
-  const statuses = [...new Set(data.map((d) => d.status))];
+  const [status, setStatus] = useState<DisputeStatus | "ALL">("ALL");
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
+  const disputes = useQuery({
+    queryKey: ["customer", "disputes", status, q, page],
+    queryFn: () => disputesApi.listPaged({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }), ...(q.trim() ? { q: q.trim() } : {}) }),
+  });
 
   const columns: ColumnDef<DisputeRow, unknown>[] = [
     {
@@ -43,7 +54,6 @@ export default function DisputesPage() {
       id: "status",
       header: t("columns.status"),
       accessorFn: (d) => d.status,
-      filterFn: "equalsString",
       cell: ({ row }) => (
         <Badge tone={row.original.resolvedAt ? "success" : "accent"} dot>
           {L.dispute(row.original.status)}
@@ -74,35 +84,43 @@ export default function DisputesPage() {
         <Card>
           <ErrorState error={disputes.error} onRetry={() => disputes.refetch()} />
         </Card>
-      ) : disputes.data && data.length === 0 ? (
+      ) : disputes.data && disputes.data.items.length === 0 && status === "ALL" && !q.trim() ? (
         <Card>
           <EmptyState icon={Scale} title={t("emptyTitle")} description={t("emptyHint")} />
         </Card>
       ) : (
         <DataTable
           columns={columns}
-          data={data}
+          data={disputes.data?.items ?? []}
           loading={!disputes.data}
-          searchPlaceholder={t("searchPlaceholder")}
           emptyText={t("noResults")}
           onRowClick={(d) => router.push(`/customer/visits/${d.visitId}`)}
-          toolbar={
-            statuses.length > 1
-              ? (table) => {
-                  const col = table.getColumn("status");
-                  const val = (col?.getFilterValue() as string) ?? "ALL";
-                  return (
-                    <Select<string>
-                      className="w-44"
-                      value={val}
-                      isSearchable={false}
-                      onChange={(v) => col?.setFilterValue(!v || v === "ALL" ? undefined : v)}
-                      options={[{ value: "ALL", label: t("allStatuses") }, ...statuses.map((s) => ({ value: s, label: L.dispute(s) }))]}
-                    />
-                  );
-                }
-              : undefined
-          }
+          serverPagination={disputes.data ? { page: disputes.data.page, limit: disputes.data.limit, total: disputes.data.total, onPageChange: setPage } : undefined}
+          toolbar={() => (
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Input
+                className="w-full sm:w-56"
+                placeholder={t("searchPlaceholder")}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
+              />
+              <Select<DisputeStatus | "ALL">
+                className="w-44"
+                value={status}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setStatus(v);
+                    setPage(1);
+                  }
+                }}
+                options={[{ value: "ALL", label: t("allStatuses") }, ...DISPUTE_STATUSES.map((s) => ({ value: s, label: L.dispute(s) }))]}
+              />
+            </div>
+          )}
         />
       )}
     </>

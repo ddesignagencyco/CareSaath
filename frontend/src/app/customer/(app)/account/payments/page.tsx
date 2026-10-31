@@ -13,6 +13,7 @@ import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DetailList, EmptyState, ErrorState, Skeleton } from "@shared/ui/misc";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { Select } from "@shared/ui/select";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Modal } from "@shared/ui/overlay";
@@ -137,10 +138,11 @@ export default function PaymentsPage() {
   const statusText = useStatusText();
   const [viewing, setViewing] = useState<string | null>(null);
   const [status, setStatus] = useState<PaymentStatus | "ALL">("ALL");
+  const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const list = useQuery({
-    queryKey: [...keys.payments, "all", status, page],
-    queryFn: () => paymentsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }) }),
+    queryKey: [...keys.payments, "all", status, q, page],
+    queryFn: () => paymentsApi.list({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }), ...(q.trim() ? { q: q.trim() } : {}) }),
   });
 
   const columns: ColumnDef<CustomerPaymentWithVisit, unknown>[] = [
@@ -219,18 +221,29 @@ export default function PaymentsPage() {
           onRowClick={(p) => setViewing(p.id)}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
           toolbar={() => (
-            <Select<PaymentStatus | "ALL">
-              className="w-40"
-              value={status}
-              isSearchable={false}
-              onChange={(v) => {
-                if (v) {
-                  setStatus(v);
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Input
+                className="w-full sm:w-56"
+                placeholder={t("searchPlaceholder")}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
                   setPage(1);
-                }
-              }}
-              options={[{ value: "ALL", label: t("all") }, ...PAYMENT_STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
-            />
+                }}
+              />
+              <Select<PaymentStatus | "ALL">
+                className="w-40"
+                value={status}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setStatus(v);
+                    setPage(1);
+                  }
+                }}
+                options={[{ value: "ALL", label: t("all") }, ...PAYMENT_STATUSES.map((s) => ({ value: s, label: L.paymentStatus(s) }))]}
+              />
+            </div>
           )}
         />
       )}
