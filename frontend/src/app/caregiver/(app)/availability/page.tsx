@@ -19,6 +19,8 @@ import { availabilityApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { localDayKey } from "@shared/lib/visit";
+import { AvailableNowCard } from "@/features/caregiver/components/available-now-card";
+import { useMe } from "@/features/caregiver/lib/auth";
 
 /** Display Monday-first; the API uses 0 = Sunday … 6 = Saturday. */
 const DAYS = [{ dow: 1 }, { dow: 2 }, { dow: 3 }, { dow: 4 }, { dow: 5 }, { dow: 6 }, { dow: 0 }];
@@ -231,6 +233,7 @@ function BlockedDates({ blocks }: { blocks: Availability["blocks"] }) {
 export default function AvailabilityPage() {
   const t = useTranslations("caregiverB.availability");
   const f = useFmt();
+  const me = useMe();
   const availability = useQuery({ queryKey: keys.availability, queryFn: availabilityApi.get });
   const a = availability.data;
   const summary = a
@@ -249,6 +252,11 @@ export default function AvailabilityPage() {
             : t("emptySummary")
         }
       />
+      {me.data?.caregiverProfile?.verificationStatus === "APPROVED" && (
+        <div className="mb-5">
+          <AvailableNowCard />
+        </div>
+      )}
       {availability.isError ? (
         <Card>
           <ErrorState error={availability.error} onRetry={() => availability.refetch()} />

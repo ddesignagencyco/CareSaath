@@ -1,6 +1,7 @@
 {
   "visit": {
     "back": "Visits",
+    "messageCustomer": "Message customer",
     "medicalOrders": {
       "title": "Medical orders",
       "addTitle": "Record an order",
@@ -73,7 +74,7 @@
     "locationPrompt": "Your browser will ask to share your location once.",
     "otpIntro": "We'll text a 6-digit code to the family. Ask them to read it to you.",
     "sendCode": "Send code to family",
-    "codeSent": "Code sent to <b>{phone}</b>. It's valid for 10 minutes.",
+    "codeSent": "Code sent to the family's phone. Ask them for it — it's valid for 10 minutes.",
     "newCode": "Send a new code",
     "checkIn": "Check in",
     "mockCode": "Mock mode: the family's code is {code}",

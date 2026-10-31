@@ -176,7 +176,8 @@ export const chatApi = {
     const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
       mimeType: file.type || "application/octet-stream",
       totalBytes: file.size,
-      ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+      // Backend expects `filename` (required, ≤200 chars) — not `fileName`.
+      filename: (opts?.fileName || "attachment").slice(0, 200),
     });
     const CHUNK = 2 * 1024 * 1024;
     const total = file.size || 1;

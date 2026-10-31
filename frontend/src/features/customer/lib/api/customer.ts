@@ -104,9 +104,9 @@ export const caregiversApi = {
   /** GET /caregivers?specialty=&city= (public, approved caregivers, best rated first) */
   search: (q: PageQuery & { specialty?: Specialty; city?: string; lat?: number; lng?: number }) =>
     http.get<Paginated<CaregiverSearchItem>>("/caregivers", q),
-  /** GET /caregivers?immediate=true&lat&lng&specialty — nearby-now (emergency) search, nearest first. */
+  /** GET /caregivers/nearby?lat&lng&specialty — nearby-now (emergency) search, nearest first (auth required). */
   nearbyNow: (lat: number, lng: number, specialty?: Specialty) =>
-    http.get<Paginated<NearbyCaregiver>>("/caregivers", { immediate: true, lat, lng, limit: 20, ...(specialty ? { specialty } : {}) }),
+    http.get<Paginated<NearbyCaregiver>>("/caregivers/nearby", { lat, lng, limit: 20, ...(specialty ? { specialty } : {}) }),
   /** GET /caregivers/:id (public profile) */
   get: (id: string) => (http.get<PublicCaregiver>(`/caregivers/${id}`)),
 };
@@ -185,7 +185,8 @@ export const chatApi = {
     const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
       mimeType: file.type || "application/octet-stream",
       totalBytes: file.size,
-      ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+      // Backend expects `filename` (required, ≤200 chars) — not `fileName`.
+      filename: (opts?.fileName || "attachment").slice(0, 200),
     });
     const CHUNK = 2 * 1024 * 1024;
     const total = file.size || 1;
@@ -217,6 +218,8 @@ export const paymentsApi = {
     http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", params),
   /** GET /customer/payments/:id (same include as the list) */
   get: (id: string) => (http.get<CustomerPaymentWithVisit>(`/customer/payments/${id}`)),
+  /** POST /customer/payments/:id/confirm-stripe — webhook fallback: settle from Stripe on return. */
+  confirmStripe: (id: string) => http.post<CustomerPaymentWithVisit>(`/customer/payments/${id}/confirm-stripe`),
   /** PATCH /customer/payments/:id/cancel — abandon a PENDING payment so another method can be used. */
   cancel: (id: string) => (http.patch<CustomerPayment>(`/customer/payments/${id}/cancel`, {})),
   /** POST /customer/payments/:id/confirm-cash — customer confirms they handed the cash over (Phase 15, two-sided). */

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarClock, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
+import { CalendarClock, LogOut, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
@@ -70,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.caregiver.sidebarCollapsed");
   const t = useTranslations("caregiverA");
   const tNav = useTranslations("common.nav");
+  const ta = useTranslations("common.actions");
   const describe = useDescribe();
 
   // Session no longer valid (expired or unknown user): start again at login.
@@ -159,6 +160,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           ))}
         </nav>
+        <div className="shrink-0 border-t border-ink-100 p-3">
+          <button
+            onClick={signOut}
+            aria-label={ta("signOut")}
+            title={collapsed ? ta("signOut") : undefined}
+            className={clsx(
+              "flex items-center rounded-lg text-sm font-semibold text-ink-600 transition-colors hover:bg-danger-50 hover:text-danger-600",
+              collapsed ? "mx-auto size-11 justify-center" : "w-full gap-3 px-3 py-2",
+            )}
+          >
+            <LogOut className="size-[18px] shrink-0" />
+            {!collapsed && <span>{ta("signOut")}</span>}
+          </button>
+        </div>
       </aside>
 
       {/* Top bar */}

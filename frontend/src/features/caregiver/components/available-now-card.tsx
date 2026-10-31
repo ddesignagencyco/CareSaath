@@ -19,7 +19,7 @@ import { useLocationSharing } from "@/features/caregiver/lib/use-live-location";
  */
 export function AvailableNowCard() {
   const t = useTranslations("caregiverA.availableNow");
-  const [sharing, setSharing] = useLocationSharing();
+  const [, setSharing] = useLocationSharing();
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get });
   const on = profile.data?.acceptingImmediate ?? false;
   const live = profile.data?.availableNow ?? false;
@@ -28,7 +28,9 @@ export function AvailableNowCard() {
     invalidate: [keys.profile],
     success: null,
     onSuccess: (_result, available) => {
-      if (available && !sharing) setSharing(true);
+      // On → start live-location sharing (the backend only lists a caregiver with a fresh fix).
+      // Off → stop it too, so the caregiver isn't tracked once they're no longer available.
+      setSharing(available);
     },
   });
 
@@ -43,13 +45,14 @@ export function AvailableNowCard() {
         <p className="flex items-center gap-2 font-bold text-ink-900">
           {t("title")}
           {on && (
-            <span className={clsx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold", live ? "bg-success-50 text-success-700 ring-1 ring-success-200" : "bg-accent-50 text-accent-700 ring-1 ring-accent-300")}>
+            <span className={clsx("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold", live ? "bg-success-50 text-success-700" : "bg-accent-50 text-accent-700")}>
               <span className={clsx("size-1.5 rounded-full", live ? "bg-success-500" : "bg-accent-500")} />
               {live ? t("statusLive") : t("statusPaused")}
             </span>
           )}
         </p>
         <p className="text-sm text-ink-500">{subtitle}</p>
+        {on && <p className="mt-0.5 text-xs text-ink-400">{t("foregroundHint")}</p>}
       </div>
       <Switch checked={on} onCheckedChange={(v) => toggle.mutate(v)} aria-label={t("title")} disabled={toggle.isPending || !profile.data} />
     </Card>

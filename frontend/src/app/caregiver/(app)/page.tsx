@@ -12,7 +12,6 @@ import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { RespondCountdown } from "@shared/ui/respond-countdown";
 import { VisitRow } from "@/features/caregiver/components/visit-row";
-import { AvailableNowCard } from "@/features/caregiver/components/available-now-card";
 import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, moneyApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
@@ -44,7 +43,9 @@ export default function TodayPage() {
     .sort((a, b) => visitStart(a.scheduledDate, a.timeWindowStart) - visitStart(b.scheduledDate, b.timeWindowStart))[0];
   const pending = requests.data?.items ?? [];
   const soonest = [...pending].sort((a, b) => a.respondBy.localeCompare(b.respondBy))[0];
-  const firstName = me.data?.fullName.split(" ")[0];
+  // Gate the name on `now` (0 during SSR + the first hydration render) so server and first
+  // client render match — the name appears once mounted, avoiding a hydration mismatch.
+  const firstName = now ? me.data?.fullName.split(" ")[0] : undefined;
 
   return (
     <div className="space-y-6">
@@ -76,8 +77,6 @@ export default function TodayPage() {
           </span>
         </Link>
       )}
-
-      {me.data?.caregiverProfile?.verificationStatus === "APPROVED" && <AvailableNowCard />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.4fr_1fr]">
         {/* Next visit */}

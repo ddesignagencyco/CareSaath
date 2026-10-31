@@ -123,7 +123,7 @@
     "arrivingNow": "Arriving now"
   },
   "arrivalCode": {
-    "notice": "When your caregiver arrives, they may ask for a <b>6-digit code</b> we text to <num>{phone}</num>. Only share it once they're at your door."
+    "notice": "When your caregiver arrives, they may ask for a <b>6-digit code</b> we texted you. Only share it once they're at your door."
   },
   "payment": {
     "title": "Payment",

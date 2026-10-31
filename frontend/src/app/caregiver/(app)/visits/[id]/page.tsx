@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, FileText, FileWarning, HeartPulse, ImageIcon, MapPin, Navigation, Repeat, Scale, Siren } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileText, FileWarning, HeartPulse, ImageIcon, MapPin, MessagesSquare, Navigation, Repeat, Scale, Siren } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -119,6 +119,15 @@ export default function VisitDetailPage() {
               {L.visitCaregiver(v.status)}
             </Badge>
           </header>
+
+          {booking && !["DECLINED", "CANCELLED"].includes(v.status) && (
+            <Link
+              href={`/caregiver/messages/${booking.id}`}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50 sm:w-auto sm:px-5"
+            >
+              <MessagesSquare className="size-4" /> {t("messageCustomer")}
+            </Link>
+          )}
 
           {active && (
             <button

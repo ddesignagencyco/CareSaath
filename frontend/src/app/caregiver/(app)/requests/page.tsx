@@ -125,20 +125,22 @@ function RequestCard({ booking, commissionPct, priorVisits }: { booking: Caregiv
             <p className="text-sm text-ink-500">
               {L.specialty(booking.serviceType)} · {booking.patient.relationship === "SELF" ? t("bookedByPatient") : t("bookedByFamily")}
             </p>
-            {priorVisits > 0 ? (
-              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 ring-1 ring-brand-200">
-                <Repeat className="size-3.5" /> {t("returning", { count: priorVisits })}
-              </span>
-            ) : (
-              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-ink-50 px-2 py-0.5 text-xs font-bold text-ink-600 ring-1 ring-ink-200">
-                {t("newCustomer")}
-              </span>
-            )}
-            {booking.isImmediate && (
-              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-700 ring-1 ring-danger-200">
-                <Zap className="size-3.5" /> {t("asap")}
-              </span>
-            )}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {priorVisits > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                  <Repeat className="size-3.5" /> {t("returning", { count: priorVisits })}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-600">
+                  {t("newCustomer")}
+                </span>
+              )}
+              {booking.isImmediate && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger-50 px-2.5 py-1 text-xs font-semibold text-danger-700">
+                  <Zap className="size-3.5" /> {t("asap")}
+                </span>
+              )}
+            </div>
           </div>
           <div className="shrink-0 text-end">
             <p className="tabular text-lg font-extrabold text-ink-900">{f.money(perVisit)}</p>

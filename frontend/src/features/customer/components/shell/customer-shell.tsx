@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, CalendarCheck2, CircleUserRound, Home, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Users, Wallet } from "lucide-react";
+import { Bell, CalendarCheck2, CircleUserRound, Home, LogOut, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Siren, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -28,6 +28,7 @@ import { NotificationBell } from "@shared/ui/notification-bell";
 /** Message key under customerA.shell. */
 type NavLabel =
   | "nav.home"
+  | "nav.emergency"
   | "nav.findCare"
   | "nav.bookings"
   | "nav.account"
@@ -51,12 +52,13 @@ const NAV: NavItem[] = [
   { href: "/customer/caregivers", label: "nav.findCare", icon: Search },
   { href: "/customer/bookings", label: "nav.bookings", icon: CalendarCheck2 },
   { href: "/customer/account", label: "nav.account", icon: CircleUserRound },
+  { href: "/customer/emergency", label: "nav.emergency", icon: Siren },
 ];
 
 /** Desktop sidebar sections; on phones the family/account pages live under the Account tab. */
 const SIDEBAR_GROUPS: { label?: "groups.care" | "groups.family" | "groups.account"; items: NavItem[] }[] = [
   { items: [NAV[0], { href: "/customer/messages", label: "items.messages", icon: MessagesSquare }] },
-  { label: "groups.care", items: [NAV[1], NAV[2]] },
+  { label: "groups.care", items: [NAV[4], NAV[1], NAV[2]] },
   {
     label: "groups.family",
     items: [
@@ -110,6 +112,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   const t = useTranslations("customerA.shell");
   const tn = useTranslations("common.nav");
   const cn = useTranslations("customerA.notifications");
+  const ta = useTranslations("common.actions");
   const describe = useDescribe();
   const { raw, hydrated } = useSessionRaw();
   const me = useMe();
@@ -198,6 +201,20 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
             </div>
           ))}
         </nav>
+        <div className="shrink-0 border-t border-ink-100 p-3">
+          <button
+            onClick={signOut}
+            aria-label={ta("signOut")}
+            title={collapsed ? ta("signOut") : undefined}
+            className={clsx(
+              "flex items-center rounded-lg text-sm font-semibold text-ink-600 transition-colors hover:bg-danger-50 hover:text-danger-600",
+              collapsed ? "mx-auto size-11 justify-center" : "w-full gap-3 px-3 py-2",
+            )}
+          >
+            <LogOut className="size-[18px] shrink-0" />
+            {!collapsed && <span>{ta("signOut")}</span>}
+          </button>
+        </div>
       </aside>
 
       <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-ink-100 bg-white/90 px-4 backdrop-blur sm:px-6 lg:h-16">
@@ -251,7 +268,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
       <main className="mx-auto w-full max-w-[1680px] px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">{children}</main>
 
       <nav aria-label={tn("main")} className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-100 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        <ul className="mx-auto grid max-w-md grid-cols-4">
+        <ul className="mx-auto grid max-w-md grid-cols-5">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href) || (item.href === "/customer/bookings" && pathname.startsWith("/customer/visits"));
             const Icon = item.icon;
