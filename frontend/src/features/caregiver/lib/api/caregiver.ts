@@ -238,4 +238,9 @@ export const notificationsApi = {
   /** PATCH /notifications/preferences — opt one channel in/out (SOS always delivered). */
   setPref: (channel: NotificationChannel, enabled: boolean) =>
     http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
+  /** GET /notifications/push/public-key — VAPID key for Web Push (enabled=false until the server has keys). */
+  pushPublicKey: () => http.get<{ enabled: boolean; vapidPublicKey: string | null }>("/notifications/push/public-key"),
+  /** POST /notifications/push/subscribe — store this browser's push subscription. */
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    http.post<unknown>("/notifications/push/subscribe", sub).then(() => undefined),
 };

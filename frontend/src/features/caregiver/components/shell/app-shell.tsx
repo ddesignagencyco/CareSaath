@@ -13,6 +13,7 @@ import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
 import { usePermissionPrime } from "@shared/hooks/use-permission-prime";
+import { usePushNotifications } from "@shared/hooks/use-push-notifications";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
 import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
@@ -60,6 +61,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useLiveLocation(approved);
   // Ask for notification + location permission up front (on first tap) so visits + alerts work live.
   usePermissionPrime({ warmLocation: approved });
+  // Subscribe this browser to Web Push so request/visit alerts arrive while the app is closed.
+  usePushNotifications(notificationsApi.pushPublicKey, notificationsApi.pushSubscribe, !!me.data);
   // Only for the avatar photo; pages share this cache entry.
   const profile = useQuery({ queryKey: keys.profile, queryFn: profileApi.get, enabled: approved });
   const requests = useRequestCount(approved);

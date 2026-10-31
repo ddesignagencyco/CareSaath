@@ -20,6 +20,7 @@ import { CallProvider } from "@shared/chat/call-context";
 import { keys } from "@/features/customer/lib/api/keys";
 import { useRealtime } from "@shared/api/realtime";
 import { usePermissionPrime } from "@shared/hooks/use-permission-prime";
+import { usePushNotifications } from "@shared/hooks/use-push-notifications";
 import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
 import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/customer/lib/labels";
 import { NotificationBell } from "@shared/ui/notification-bell";
@@ -118,6 +119,8 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   useRealtime({ session, queryClient: qc, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !!me.data });
   // Ask for notification permission up front (on first tap) so visit + chat alerts can surface.
   usePermissionPrime();
+  // Subscribe this browser to Web Push so visit/chat alerts arrive while the app is closed.
+  usePushNotifications(notificationsApi.pushPublicKey, notificationsApi.pushSubscribe, !!me.data);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed("caresaath.customer.sidebarCollapsed");
 
   // GET /customer/me has no role guard, so a non-customer session (e.g. a stale
