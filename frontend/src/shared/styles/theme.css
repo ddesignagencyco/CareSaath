@@ -72,17 +72,21 @@ body {
 
 /*
  * Urdu. The language provider sets <html lang="ur" dir="rtl">.
- * All Urdu text uses Nastaliq (the script Pakistani readers know best).
+ * All Urdu text uses Gulzar (a modern, web-optimised Nastaliq).
  * Jakarta comes first in each stack: it has no Arabic glyphs, so Latin
- * letters and digits stay in Jakarta and Urdu falls through to Nastaliq.
- * Nastaliq is tall, so lines get extra height; Arabic script must never be
- * letter-spaced (it breaks the joins).
+ * letters and digits stay in Jakarta and Urdu falls through to Gulzar.
+ * Nastaliq is tall, so lines get extra height. Gulzar ships one weight, so
+ * font-synthesis-weight is disabled below to stop faux-bold mangling it (Latin
+ * in Jakarta still bolds). Arabic script must never be letter-spaced (breaks joins).
  */
-/* Jakarta by name (Latin + digits), then Nastaliq. Not var(--font-jakarta):
+/* Jakarta by name (Latin + digits), then Gulzar. Not var(--font-jakarta):
    that includes Next's Arial-based fallback, and Arial's own Arabic glyphs
-   would draw the Urdu before Nastaliq is ever reached. */
+   would draw the Urdu before Gulzar is ever reached. */
 html[lang="ur"] {
   --font-urdu-stack: "Plus Jakarta Sans", var(--font-urdu), sans-serif;
+  /* Gulzar ships a single weight; stop the browser faking bold on Nastaliq (it
+     mangles the joins). Latin/digits in Jakarta still bold from their real weights. */
+  font-synthesis-weight: none;
 }
 
 html[lang="ur"] body {
@@ -93,7 +97,7 @@ html[lang="ur"] body {
 html[lang="ur"] h1,
 html[lang="ur"] h2,
 html[lang="ur"] h3 {
-  line-height: 2.1;
+  line-height: 2.05;
   font-weight: 700;
 }
 

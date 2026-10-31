@@ -21,12 +21,13 @@ function ReturnInner() {
   const cancelled = params.get("status") === "cancelled";
   const paymentId = params.get("paymentId");
 
-  // Settlement is async (Stripe webhook → backend), so poll while it's PENDING.
+  // Settle straight from Stripe on return (fallback to the webhook: covers a delayed or lost
+  // `checkout.session.completed`). Idempotent; poll a few times for async methods, then stop.
   const payment = useQuery({
     queryKey: [...keys.payments, "return", paymentId],
-    queryFn: () => paymentsApi.get(paymentId!),
+    queryFn: () => paymentsApi.confirmStripe(paymentId!),
     enabled: !!paymentId && !cancelled,
-    refetchInterval: (q) => (q.state.data?.status === "PENDING" ? 1500 : false),
+    refetchInterval: (q) => (q.state.data?.status === "PENDING" && q.state.dataUpdateCount < 12 ? 1500 : false),
   });
 
   // Once settled, refresh the shared payments caches so bookings/visits drop the "payment due" state.

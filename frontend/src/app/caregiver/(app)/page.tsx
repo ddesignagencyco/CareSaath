@@ -43,7 +43,9 @@ export default function TodayPage() {
     .sort((a, b) => visitStart(a.scheduledDate, a.timeWindowStart) - visitStart(b.scheduledDate, b.timeWindowStart))[0];
   const pending = requests.data?.items ?? [];
   const soonest = [...pending].sort((a, b) => a.respondBy.localeCompare(b.respondBy))[0];
-  const firstName = me.data?.fullName.split(" ")[0];
+  // Gate the name on `now` (0 during SSR + the first hydration render) so server and first
+  // client render match — the name appears once mounted, avoiding a hydration mismatch.
+  const firstName = now ? me.data?.fullName.split(" ")[0] : undefined;
 
   return (
     <div className="space-y-6">

@@ -65,6 +65,11 @@ export default function CaregiverProfilePage() {
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{p.user.fullName}</h1>
                   <p className="text-ink-500">{L.specialty(p.specialty)}</p>
+                  {p.availableNow && (
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-success-50 px-2.5 py-0.5 text-xs font-bold text-success-700 ring-1 ring-success-200">
+                      <span className="size-1.5 rounded-full bg-success-500" /> {t("availableNow")}
+                    </span>
+                  )}
                   {p.badge && (
                     <div className="mt-1.5">
                       <TierBadge badge={p.badge} />

@@ -57,19 +57,19 @@ export const CAN_DEACTIVATE_CAREGIVER = true;
  * admin payload (spec in docs/requirement.md). Until then the drawer shows the
  * tier read-only and hides the override control.
  */
-export const CAN_OVERRIDE_BADGE = false;
+export const CAN_OVERRIDE_BADGE = true;
 
 /** Admin payments ledger — live: backend ships `GET /admin/payments` (?status=, ?visitId=, page, limit). */
 export const CAN_ADMIN_PAYMENTS = true;
 
-/** Admin audit-log viewer. Flip to `true` once the backend ships `GET /admin/audit-logs` (spec in docs/requirement.md). */
-export const CAN_AUDIT_LOG = false;
+/** Admin audit-log viewer — live: backend ships `GET /admin/audit-logs` (?entityType=, ?actorId=, page, limit). */
+export const CAN_AUDIT_LOG = true;
 
 /** Admin in-app call history — live: backend ships `GET /admin/call-logs` (?visitId=, page, limit; filter for investigation). */
 export const CAN_CALL_LOGS = true;
 
-/** Manual caregiver strike reset/add. Flip to `true` once the backend ships `POST /admin/caregivers/:id/strikes` (spec in docs/requirement.md). */
-export const CAN_MANAGE_STRIKES = false;
+/** Manual caregiver strike reset/add — live: backend ships `POST /admin/caregivers/:id/strikes`. */
+export const CAN_MANAGE_STRIKES = true;
 
 export const healthApi = {
   /** GET /health (public) — the mock is always healthy. */

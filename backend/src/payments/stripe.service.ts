@@ -69,6 +69,12 @@ export class StripeService {
     return { id: session.id, url: session.url };
   }
 
+  /** Pull a checkout session straight from Stripe — the fallback used to settle a payment
+   *  when its `checkout.session.*` webhook was delayed or never delivered. */
+  async retrieveSession(sessionId: string): Promise<Stripe.Checkout.Session> {
+    return this.stripe().checkout.sessions.retrieve(sessionId);
+  }
+
   /** Best-effort: stop a session the customer abandoned so it can no longer be paid. */
   async expireSession(sessionId: string): Promise<void> {
     try {

@@ -10,6 +10,8 @@ import {
   Logger,
   Module,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
   Optional,
   Param,
   ParseUUIDPipe,
@@ -637,22 +639,8 @@ export class PaymentsService {
   async handleStripeEvent(event: Stripe.Event) {
     switch (event.type) {
       case 'checkout.session.completed':
-      case 'checkout.session.async_payment_succeeded': {
-        const session = event.data.object;
-        if (session.payment_status !== 'paid') {
-          return { received: true, settled: false };
-        }
-        const payment = await this.findStripePayment(session);
-        if (!payment) return { received: true, settled: false };
-        if (session.currency !== 'pkr' || session.amount_total !== payment.amount) {
-          this.logger.error(
-            `Stripe session ${session.id} does not match payment ${payment.id} (${session.amount_total} ${session.currency} vs ${payment.amount} pkr); not settling`,
-          );
-          return { received: true, settled: false };
-        }
-        await this.markPaid(payment.id, 'stripe');
-        return { received: true, settled: true };
-      }
+      case 'checkout.session.async_payment_succeeded':
+        return { received: true, settled: await this.settleStripeSession(event.data.object, 'stripe') };
       case 'checkout.session.expired':
       case 'checkout.session.async_payment_failed': {
         const payment = await this.findStripePayment(event.data.object);
@@ -691,6 +679,87 @@ export class PaymentsService {
       this.logger.warn(`Stripe event for unknown session ${session.id}`);
     }
     return payment;
+  }
+
+  /** Settle a card payment from its Stripe checkout session — shared by the webhook, the
+   *  customer return-page fallback and the reconcile sweep. Returns whether it settled. */
+  private async settleStripeSession(session: Stripe.Checkout.Session, source: string): Promise<boolean> {
+    if (session.payment_status !== 'paid') return false;
+    const payment = await this.findStripePayment(session);
+    if (!payment) return false;
+    if (payment.status === PaymentStatus.PAID) return true;
+    if (payment.status !== PaymentStatus.PENDING) return false;
+    if (session.currency !== 'pkr' || session.amount_total !== payment.amount) {
+      this.logger.error(
+        `Stripe session ${session.id} does not match payment ${payment.id} (${session.amount_total} ${session.currency} vs ${payment.amount} pkr); not settling`,
+      );
+      return false;
+    }
+    await this.markPaid(payment.id, source);
+    return true;
+  }
+
+  /**
+   * Fallback to the webhook: when the customer lands back on the return page after Stripe
+   * Checkout, pull the session straight from Stripe and settle it if it is paid. Covers a
+   * `checkout.session.completed` webhook that was delayed or never delivered.
+   */
+  async confirmStripe(user: AuthUser, paymentId: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, visit: { booking: { customerId: user.sub } } },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (
+      payment.status === PaymentStatus.PENDING &&
+      payment.method === PaymentMethod.CARD &&
+      payment.gatewayRef?.startsWith('cs_') &&
+      this.stripe?.enabled
+    ) {
+      try {
+        const session = await this.stripe.retrieveSession(payment.gatewayRef);
+        await this.settleStripeSession(session, 'stripe-return');
+      } catch (err) {
+        this.logger.warn(`Stripe confirm failed for payment ${payment.id}: ${(err as Error).message}`);
+      }
+    }
+    // Return the full customer shape (with visit.bookingId) so the return page can render + link.
+    return this.getForCustomer(user, paymentId);
+  }
+
+  /**
+   * Operator rescue: an admin verifies a stuck payment the gateway actually settled but whose
+   * webhook never arrived (and the return-page fallback never ran, e.g. the customer closed the tab).
+   */
+  async adminMarkPaid(user: AuthUser, paymentId: string) {
+    return this.markPaid(paymentId, `admin:${user.sub}`);
+  }
+
+  /**
+   * Safety net for lost webhooks: settle any PENDING card payment whose Stripe session is
+   * already paid. Runs on a timer (PaymentReconcileService) and is callable by an admin.
+   */
+  async reconcilePendingStripe(): Promise<{ checked: number; settled: number }> {
+    if (!this.stripe?.enabled) return { checked: 0, settled: 0 };
+    const pending = await this.prisma.payment.findMany({
+      where: { status: PaymentStatus.PENDING, method: PaymentMethod.CARD, gatewayRef: { startsWith: 'cs_' } },
+      select: { id: true, gatewayRef: true },
+      take: 100,
+    });
+    let settled = 0;
+    for (const p of pending) {
+      try {
+        const session = await this.stripe.retrieveSession(p.gatewayRef!);
+        if (await this.settleStripeSession(session, 'stripe-reconcile')) settled += 1;
+      } catch (err) {
+        this.logger.warn(`Stripe reconcile failed for payment ${p.id}: ${(err as Error).message}`);
+      }
+    }
+    if (settled > 0) {
+      this.logger.log(`Stripe reconcile: settled ${settled} of ${pending.length} pending card payment(s)`);
+    }
+    return { checked: pending.length, settled };
   }
 
   /**
@@ -888,6 +957,16 @@ export class CustomerPaymentsController {
     return this.payments.cancel(user, id);
   }
 
+  @Post(':id/confirm-stripe')
+  @ApiOperation({
+    summary: 'Confirm a card payment on return from Stripe',
+    description:
+      'Fallback to the webhook: when the customer returns from Stripe Checkout, this pulls the session straight from Stripe and settles the payment if it is paid. Safe to call repeatedly; returns the current payment.',
+  })
+  confirmStripe(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payments.confirmStripe(user, id);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get payment receipt details',
@@ -963,6 +1042,26 @@ export class AdminPaymentsController {
   ) {
     sendPdf(res, await this.payments.receipt(user, id), inline === 'true');
   }
+
+  @Post('reconcile')
+  @ApiOperation({
+    summary: 'Reconcile pending card payments with Stripe',
+    description:
+      'Pulls every PENDING card payment from Stripe and settles those already paid — a manual trigger of the periodic lost-webhook safety net.',
+  })
+  reconcile() {
+    return this.payments.reconcilePendingStripe();
+  }
+
+  @Post(':id/mark-paid')
+  @ApiOperation({
+    summary: 'Manually verify a stuck payment',
+    description:
+      'Operator rescue for a payment the gateway actually settled but whose webhook never arrived: marks it PAID (idempotent) so the visit can be completed. Audited with the admin id.',
+  })
+  markPaid(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payments.adminMarkPaid(user, id);
+  }
 }
 
 @ApiTags('System & Webhooks')
@@ -1026,6 +1125,36 @@ export class PaymentWebhookController {
   }
 }
 
+/**
+ * Lost-webhook safety net: periodically settle PENDING card payments whose Stripe session is
+ * already paid, so a dropped `checkout.session.completed` webhook never leaves a visit unable to
+ * complete. Mirrors BookingExpiryService (timer via OnModuleInit, not @nestjs/schedule).
+ */
+@Injectable()
+export class PaymentReconcileService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PaymentReconcileService.name);
+  private timer?: NodeJS.Timeout;
+
+  constructor(private readonly payments: PaymentsService) {}
+
+  onModuleInit(): void {
+    const minutes = Number(process.env['PAYMENT_RECONCILE_INTERVAL_MINUTES'] ?? 10);
+    const intervalMs = Math.max(1, minutes) * 60 * 1000;
+    this.timer = setInterval(() => {
+      void this.payments.reconcilePendingStripe().catch((err) => this.logger.warn(`Reconcile sweep failed: ${(err as Error).message}`));
+    }, intervalMs);
+    this.timer.unref?.();
+    this.logger.log(`Stripe payment reconcile scheduled every ${minutes} minute(s)`);
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
+  }
+}
+
 @Module({
   imports: [NotificationsModule],
   controllers: [
@@ -1034,7 +1163,7 @@ export class PaymentWebhookController {
     AdminPaymentsController,
     PaymentWebhookController,
   ],
-  providers: [PaymentsService, StripeService],
+  providers: [PaymentsService, StripeService, PaymentReconcileService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

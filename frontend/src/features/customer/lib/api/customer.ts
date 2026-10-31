@@ -23,6 +23,7 @@ import type {
 import type {
   AddressInput,
   CaregiverSearchItem,
+  NearbyCaregiver,
   CreateBookingInput,
   CustomerBookingListItem,
   CustomerPayment,
@@ -37,8 +38,8 @@ import type {
   ReviewInput,
   VisitLocation,
 } from "@shared/customer-types";
-import type { IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
-import type { BackendChatMessage } from "@shared/chat/types";
+import type { DisputeStatus, IncidentPriority, PageQuery, Paginated, Specialty, TokenPair } from "@shared/types";
+import type { BackendChatMessage, ChatConversationSummary } from "@shared/chat/types";
 import { http } from "./http";
 
 export const authApi = {
@@ -101,8 +102,11 @@ export const addressesApi = {
 
 export const caregiversApi = {
   /** GET /caregivers?specialty=&city= (public, approved caregivers, best rated first) */
-  search: (q: PageQuery & { specialty?: Specialty; city?: string }) =>
+  search: (q: PageQuery & { specialty?: Specialty; city?: string; lat?: number; lng?: number }) =>
     http.get<Paginated<CaregiverSearchItem>>("/caregivers", q),
+  /** GET /caregivers/nearby?lat&lng&specialty — nearby-now (emergency) search, nearest first (auth required). */
+  nearbyNow: (lat: number, lng: number, specialty?: Specialty) =>
+    http.get<Paginated<NearbyCaregiver>>("/caregivers/nearby", { lat, lng, limit: 20, ...(specialty ? { specialty } : {}) }),
   /** GET /caregivers/:id (public profile) */
   get: (id: string) => (http.get<PublicCaregiver>(`/caregivers/${id}`)),
 };
@@ -116,9 +120,9 @@ export const promosApi = {
 export const bookingsApi = {
   /** POST /customer/bookings */
   create: (dto: CreateBookingInput) => (http.post<BookingDetail>("/customer/bookings", dto)),
-  /** GET /customer/bookings?status= */
-  list: (q: PageQuery & { status?: CaregiverBookingStatus }) =>
-    http.get<Paginated<CustomerBookingListItem>>("/customer/bookings", q),
+  /** GET /customer/bookings?status=&group=&q=&page=&limit= (group tab: active|waiting|past|all; q: caregiver/patient name) */
+  list: (params: PageQuery & { status?: CaregiverBookingStatus; group?: "active" | "waiting" | "past" | "all"; q?: string }) =>
+    http.get<Paginated<CustomerBookingListItem>>("/customer/bookings", params),
   /** GET /customer/bookings/:id */
   get: (id: string) => (http.get<BookingDetail>(`/customer/bookings/${id}`)),
   /** PATCH /customer/bookings/:id/cancel */
@@ -150,6 +154,14 @@ export const visitsApi = {
 };
 
 export const chatApi = {
+  /** GET /chat/conversations — one thread per counterpart, spanning all their bookings. */
+  listConversations: () => http.get<ChatConversationSummary[]>("/chat/conversations"),
+  /** GET /chat/conversations/:counterpartUserId/messages — full cross-booking history, newest first. */
+  conversationMessages: (counterpartUserId: string) =>
+    http.get<Paginated<BackendChatMessage>>(`/chat/conversations/${counterpartUserId}/messages`, { limit: 100 }),
+  /** PATCH /chat/conversations/:counterpartUserId/read — mark the whole conversation read. */
+  markConversationRead: (counterpartUserId: string) =>
+    http.patch<{ updated: number }>(`/chat/conversations/${counterpartUserId}/read`).then(() => undefined),
   /** GET /bookings/:bookingId/messages — newest first. */
   list: (bookingId: string) =>
     http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
@@ -161,6 +173,9 @@ export const chatApi = {
   /** POST /bookings/:bookingId/messages/:id/reactions — toggle a reaction emoji. */
   react: (bookingId: string, messageId: string, emoji: string) =>
     http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
+  /** DELETE /bookings/:bookingId/messages/:id — soft-delete your own message. */
+  deleteMessage: (bookingId: string, messageId: string) =>
+    http.delete<unknown>(`/bookings/${bookingId}/messages/${messageId}`).then(() => undefined),
   /** Resumable media upload: init → 2 MB chunks → complete (creates the media message). */
   uploadMedia: async (
     bookingId: string,
@@ -170,7 +185,8 @@ export const chatApi = {
     const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
       mimeType: file.type || "application/octet-stream",
       totalBytes: file.size,
-      ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+      // Backend expects `filename` (required, ≤200 chars) — not `fileName`.
+      filename: (opts?.fileName || "attachment").slice(0, 200),
     });
     const CHUNK = 2 * 1024 * 1024;
     const total = file.size || 1;
@@ -197,11 +213,13 @@ export const paymentsApi = {
    */
   initiate: (dto: { visitId: string; method: PaymentMethod }): Promise<InitiatePaymentResult> =>
     http.post<InitiatePaymentResult>("/customer/payments", dto),
-  /** GET /customer/payments?status=&page=&limit= */
-  list: (q: PageQuery & { status?: PaymentStatus }) =>
-    http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", q),
+  /** GET /customer/payments?status=&q=&page=&limit= (q: patient/caregiver name or amount) */
+  list: (params: PageQuery & { status?: PaymentStatus; q?: string }) =>
+    http.get<Paginated<CustomerPaymentWithVisit>>("/customer/payments", params),
   /** GET /customer/payments/:id (same include as the list) */
   get: (id: string) => (http.get<CustomerPaymentWithVisit>(`/customer/payments/${id}`)),
+  /** POST /customer/payments/:id/confirm-stripe — webhook fallback: settle from Stripe on return. */
+  confirmStripe: (id: string) => http.post<CustomerPaymentWithVisit>(`/customer/payments/${id}/confirm-stripe`),
   /** PATCH /customer/payments/:id/cancel — abandon a PENDING payment so another method can be used. */
   cancel: (id: string) => (http.patch<CustomerPayment>(`/customer/payments/${id}/cancel`, {})),
   /** POST /customer/payments/:id/confirm-cash — customer confirms they handed the cash over (Phase 15, two-sided). */
@@ -211,8 +229,11 @@ export const paymentsApi = {
 };
 
 export const disputesApi = {
-  /** GET /disputes: disputes raised by or against the current user, newest first (no pagination). */
+  /** GET /disputes: disputes raised by or against the current user, newest first (plain array; used by the visit panel). */
   list: () => (http.get<DisputeRow[]>("/disputes")),
+  /** GET /disputes?status=&q=&page=&limit= — paginated for the disputes table (q: patient/caregiver name). */
+  listPaged: (params: PageQuery & { status?: DisputeStatus; q?: string }) =>
+    http.get<Paginated<DisputeRow>>("/disputes", params),
   /** POST /disputes */
   raise: (dto: { visitId: string; description: string }) => (http.post<DisputeRow>("/disputes", dto)),
 };
@@ -231,4 +252,9 @@ export const notificationsApi = {
   /** PATCH /notifications/preferences — opt one channel in/out (SOS always delivered). */
   setPref: (channel: NotificationChannel, enabled: boolean) =>
     http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
+  /** GET /notifications/push/public-key — VAPID key for Web Push (enabled=false until the server has keys). */
+  pushPublicKey: () => http.get<{ enabled: boolean; vapidPublicKey: string | null }>("/notifications/push/public-key"),
+  /** POST /notifications/push/subscribe — store this browser's push subscription. */
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    http.post<unknown>("/notifications/push/subscribe", sub).then(() => undefined),
 };

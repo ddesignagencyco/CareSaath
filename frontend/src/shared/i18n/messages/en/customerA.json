@@ -1,4 +1,24 @@
 {
+  "emergency": {
+    "cta": "Need care now",
+    "ctaHint": "Nearest caregiver available right now",
+    "title": "Need care now",
+    "description": "Verified caregivers available right now, nearest to the address you choose.",
+    "disclaimer": "This is for urgent home care — not a medical emergency. If someone's life is at risk, call 1122 or go to the nearest hospital.",
+    "whereLabel": "Where do you need care?",
+    "near": "Near {place}",
+    "searching": "Finding nearby caregivers…",
+    "allSpecialties": "Any",
+    "count": "{count} available near you",
+    "emptyTitle": "No one available right now",
+    "emptyText": "No verified caregivers are available near this address this moment. You can still book a scheduled visit.",
+    "browseAll": "Browse all caregivers",
+    "noAddressTitle": "Add an address first",
+    "noAddressText": "Emergency care finds caregivers near one of your saved addresses (home, office…).",
+    "addAddress": "Add an address",
+    "distanceEta": "{km} km · ~{min} min away",
+    "bookNow": "Book now"
+  },
   "login": {
     "product": "Home care",
     "headline": "Trusted nurses and physiotherapists, at home.",
@@ -45,6 +65,7 @@
     "nav": {
       "home": "Home",
       "findCare": "Find care",
+      "emergency": "Emergency",
       "bookings": "Bookings",
       "account": "Account"
     },
@@ -115,6 +136,7 @@
     "bookHint": "Choose the patient, address and time. {name} will confirm your request.",
     "bookVisit": "Book a visit",
     "bookMobile": "Book {name} · {price}/visit",
+    "availableNow": "Available now",
     "visitsTogether": "{count, plural, one {# visit together} other {# visits together}}",
     "recentVisitsTitle": "Recent visits with you",
     "recentVisitsHint": "Your most recent visits with this caregiver.",

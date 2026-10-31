@@ -8,7 +8,10 @@ export interface ChatReaction {
 
 export interface ChatMessage {
   id: string;
+  /** The thread this belongs to (the counterpart's user id in the relationship model). */
   conversationId: string;
+  /** The booking this message was actually sent on — reactions/delete target this booking. */
+  bookingId?: string;
   /** "me" = the signed-in user; "them" = the other party. */
   sender: "me" | "them";
   type: ChatMessageType;
@@ -38,6 +41,8 @@ export interface ChatConversation {
   role: string;
   online?: boolean;
   messages: ChatMessage[];
+  /** Every booking in this thread — lets a bookingId deep-link (e.g. "Message" from a booking) resolve here. */
+  bookingIds?: string[];
   /** For real WebRTC calls: an active visit shared with the other party. */
   visitId?: string;
   /** For real WebRTC calls: the other party's user id (the call callee). */
@@ -76,15 +81,31 @@ export interface BackendChatMessage {
 
 /** One chat thread = one booking. The app resolves the other party's name/role. */
 export interface ChatThreadMeta {
-  /** bookingId */
+  /** The counterpart's user id — one thread per person (spans all their bookings). */
   id: string;
   name: string;
   role: string;
   online?: boolean;
+  /** Where new messages go (newest CONFIRMED booking); null = read-only (all completed). */
+  activeBookingId: string | null;
+  /** Every booking in this thread, so a bookingId deep-link resolves to this thread. */
+  bookingIds?: string[];
   /** An active visit shared with the other party (enables WebRTC calls). */
   visitId?: string;
-  /** The other party's user id, the call callee (available to the caregiver, not the customer). */
+  /** The other party's user id, the call callee. */
   peerUserId?: string;
+}
+
+/** GET /chat/conversations — one per counterpart, spanning all their bookings. */
+export interface ChatConversationSummary {
+  counterpartUserId: string;
+  counterpartName: string;
+  caregiverId: string;
+  bookingIds: string[];
+  activeBookingId: string | null;
+  lastMessage: BackendChatMessage | null;
+  unreadCount: number;
+  lastActivityAt: string;
 }
 
 /**
@@ -96,14 +117,18 @@ export interface ChatTransport {
   myUserId: string | undefined;
   threads: ChatThreadMeta[];
   threadsLoaded: boolean;
-  /** Chronological (oldest first). */
-  listMessages: (bookingId: string) => Promise<BackendChatMessage[]>;
+  /** Full conversation history with a counterpart (by counterpart user id), oldest first. */
+  listMessages: (counterpartUserId: string) => Promise<BackendChatMessage[]>;
+  /** Send on a specific booking (the thread's activeBookingId). */
   send: (bookingId: string, body: string, replyToId?: string) => Promise<BackendChatMessage>;
-  markRead: (bookingId: string) => Promise<void>;
+  /** Mark the whole conversation (every booking with the counterpart) read. */
+  markRead: (counterpartUserId: string) => Promise<void>;
   /** Resumable chunked upload (init → chunks → complete); resolves to the created media message. */
   uploadMedia: (bookingId: string, file: Blob, opts?: { fileName?: string; caption?: string; replyToId?: string; onProgress?: (fraction: number) => void }) => Promise<BackendChatMessage>;
   /** Toggle a reaction emoji on a message. */
   react: (bookingId: string, messageId: string, emoji: string) => Promise<void>;
+  /** Soft-delete one of your own messages (shows as a "deleted" tombstone for everyone). */
+  deleteMessage: (bookingId: string, messageId: string) => Promise<void>;
 }
 
 /** Which role's chat this is (customer ↔ caregiver). */

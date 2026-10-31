@@ -27,7 +27,8 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableCors({
-    origin: ['https://caresaath-ui.vercel.app'],
+    // Production Vercel origin + any localhost port for local dev (frontend runs on :3001).
+    origin: ['https://caresaath-ui.vercel.app', /^http:\/\/localhost:\d+$/],
     exposedHeaders: ['Content-Disposition', 'X-Cache'],
   });
 

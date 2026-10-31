@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowRight, Bandage, HeartHandshake, Navigation, Stethoscope, UserPlus } from "lucide-react";
+import { Activity, ArrowRight, Bandage, HeartHandshake, Navigation, Siren, Stethoscope, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useNow } from "@shared/hooks/use-now";
@@ -35,6 +35,7 @@ function period(now: number) {
 export default function CustomerHome() {
   const now = useNow(60_000);
   const t = useTranslations("customerA.home");
+  const tEmer = useTranslations("customerA.emergency");
   const f = useFmt();
   const L = useLabels();
   const me = useMe();
@@ -53,7 +54,9 @@ export default function CustomerHome() {
     .filter(({ v }) => (v.status === "CONFIRMED" || v.status === "REQUESTED") && now && dayKey(v.scheduledDate) >= today && visitStart(v.scheduledDate, v.timeWindowEnd) > now)
     .sort((a, b) => visitStart(a.v.scheduledDate, a.v.timeWindowStart) - visitStart(b.v.scheduledDate, b.v.timeWindowStart))
     .slice(0, 4);
-  const firstName = me.data?.fullName.split(" ")[0];
+  // Gate the name on `now` (0 during SSR + the first hydration render, like useNow) so the
+  // server and first client render both show the neutral greeting — the name appears once mounted.
+  const firstName = now ? me.data?.fullName.split(" ")[0] : undefined;
   const noPatients = patients.data && patients.data.length === 0;
 
   return (
@@ -81,6 +84,20 @@ export default function CustomerHome() {
           </span>
         </Link>
       )}
+
+      <Link
+        href="/customer/emergency"
+        className="flex items-center gap-4 rounded-2xl border border-ink-200 bg-white p-4 shadow-card transition-colors hover:border-danger-300 active:scale-[0.99]"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-danger-600 text-white">
+          <Siren className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-ink-900">{tEmer("cta")}</span>
+          <span className="block text-sm text-ink-500">{tEmer("ctaHint")}</span>
+        </span>
+        <ArrowRight className="rtl:-scale-x-100 size-5 shrink-0 text-danger-600" />
+      </Link>
 
       {noPatients && (
         <Card className="flex flex-col gap-4 border-brand-200 bg-brand-50/50 p-5 sm:flex-row sm:items-center">

@@ -14,6 +14,7 @@ import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { Avatar, EmptyState, ErrorState } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
 import type { CustomerBookingListItem } from "@shared/customer-types";
@@ -23,6 +24,7 @@ import { keys } from "@/features/customer/lib/api/keys";
 import { BOOKING_TONE, bookingDisplayStatus } from "@/features/customer/lib/labels";
 
 type Group = "active" | "waiting" | "past" | "all";
+const LIMIT = 15;
 
 export default function BookingsPage() {
   const t = useTranslations("customerB.bookings");
@@ -32,22 +34,23 @@ export default function BookingsPage() {
   const L = useLabels();
   const now = useNow(60_000);
   const [group, setGroup] = useState<Group>("all");
-  const [specialty, setSpecialty] = useState<string>("ALL");
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1);
 
-  const list = useQuery({ queryKey: [...keys.bookings, "all"], queryFn: () => bookingsApi.list({ limit: 100 }), refetchInterval: 30_000 });
+  // Grouping (active/waiting/past) and search are server-side now — the API filters by the
+  // group's visit-completion rule and returns `derivedStatus` per item.
+  const list = useQuery({
+    queryKey: [...keys.bookings, "list", group, q, page],
+    queryFn: () => bookingsApi.list({ page, limit: LIMIT, ...(group === "all" ? {} : { group }), ...(q.trim() ? { q: q.trim() } : {}) }),
+    refetchInterval: 30_000,
+  });
   const patients = useQuery({ queryKey: keys.patients, queryFn: patientsApi.list });
   const payments = useQuery({ queryKey: [...keys.payments, "list"], queryFn: () => paymentsApi.list({ limit: 100 }) });
-  const all = list.data?.items ?? [];
-  const caregivers = useCaregiverMap(all.map((b) => b.caregiverId));
+  const data = list.data?.items ?? [];
+  const caregivers = useCaregiverMap(data.map((b) => b.caregiverId));
 
   const paidVisitIds = new Set((payments.data?.items ?? []).filter((p) => p.status === "PAID").map((p) => p.visitId));
   const hasPaymentDue = (b: CustomerBookingListItem) => b.visits.some((v) => (v.status === "COMPLETED" || v.status === "CHECKED_OUT") && !paidVisitIds.has(v.id));
-  const finished = (b: CustomerBookingListItem) => b.visits.length > 0 && b.visits.every((v) => ["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status));
-  const groupOf = (b: CustomerBookingListItem): Exclude<Group, "all"> =>
-    b.status === "REQUESTED" ? "waiting" : b.status === "CONFIRMED" && !finished(b) ? "active" : "past";
-
-  const specialties = [...new Set(all.map((b) => b.serviceType))];
-  const data = all.filter((b) => (group === "all" || groupOf(b) === group) && (specialty === "ALL" || b.serviceType === specialty));
 
   const columns: ColumnDef<CustomerBookingListItem, unknown>[] = [
     {
@@ -120,7 +123,7 @@ export default function BookingsPage() {
         <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
         </Card>
-      ) : list.data && all.length === 0 ? (
+      ) : list.data && data.length === 0 && group === "all" && !q.trim() ? (
         <Card>
           <EmptyState icon={CalendarCheck2} title={t("emptyActive")} description={t("emptyHint")} />
           <div className="-mt-8 pb-8 text-center">
@@ -134,15 +137,29 @@ export default function BookingsPage() {
           columns={columns}
           data={data}
           loading={!list.data || !now}
-          searchPlaceholder={t("searchPlaceholder")}
           emptyText={t("noResults")}
           onRowClick={(b) => router.push(`/customer/bookings/${b.id}`)}
+          serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
           toolbar={() => (
-            <>
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Input
+                className="w-full sm:w-56"
+                placeholder={t("searchPlaceholder")}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
+              />
               <Select<Group>
                 className="w-40"
                 value={group}
-                onChange={(v) => v && setGroup(v)}
+                onChange={(v) => {
+                  if (v) {
+                    setGroup(v);
+                    setPage(1);
+                  }
+                }}
                 isSearchable={false}
                 options={[
                   { value: "all", label: t("allGroups") },
@@ -151,16 +168,7 @@ export default function BookingsPage() {
                   { value: "past", label: t("tabPast") },
                 ]}
               />
-              {specialties.length > 1 && (
-                <Select<string>
-                  className="w-48"
-                  value={specialty}
-                  onChange={(v) => setSpecialty(v ?? "ALL")}
-                  isSearchable={false}
-                  options={[{ value: "ALL", label: t("allCategories") }, ...specialties.map((s) => ({ value: s, label: L.specialty(s) }))]}
-                />
-              )}
-            </>
+            </div>
           )}
         />
       )}

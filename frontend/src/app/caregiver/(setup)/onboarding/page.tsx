@@ -24,19 +24,31 @@ import { CITY_OPTIONS, CNIC_PATTERN, formatCnic, LICENSE_BODY_OPTIONS, SPECIALTY
 
 const STEPS = ["about", "credentials", "services", "documents"] as const;
 
-function Progress({ step }: { step: number }) {
+function Progress({ step, onStep }: { step: number; onStep: (i: number) => void }) {
   const t = useTranslations("caregiverB.onboarding");
   return (
     <ol className="mb-8 grid grid-cols-4 gap-2" aria-label={t("progress")}>
-      {STEPS.map((key, i) => (
-        <li key={key} aria-current={i === step ? "step" : undefined}>
-          <span className={clsx("block h-1.5 rounded-full transition-colors", i <= step ? "bg-brand-600" : "bg-ink-200")} />
-          <span className={clsx("mt-2 hidden text-xs font-semibold sm:block", i <= step ? "text-ink-900" : "text-ink-400")}>
-            {i < step && <Check className="me-1 inline size-3 text-brand-600" />}
-            {t(`steps.${key}`)}
-          </span>
-        </li>
-      ))}
+      {STEPS.map((key, i) => {
+        // The first three steps are editable and freely navigable; the documents step
+        // (3) is only reached once the profile is created, so it isn't clickable.
+        const clickable = step < 3 && i <= 2;
+        return (
+          <li key={key} aria-current={i === step ? "step" : undefined}>
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => onStep(i)}
+              className={clsx("block w-full text-start", clickable && "cursor-pointer")}
+            >
+              <span className={clsx("block h-1.5 rounded-full transition-colors", i <= step ? "bg-brand-600" : "bg-ink-200")} />
+              <span className={clsx("mt-2 hidden text-xs font-semibold sm:block", i <= step ? "text-ink-900" : "text-ink-400")}>
+                {i < step && <Check className="me-1 inline size-3 text-brand-600" />}
+                {t(`steps.${key}`)}
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -146,11 +158,30 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
     else setStep(step + 1);
   }
 
+  /** Jump to a step from the progress bar. Back is free; forward validates each step on the way. */
+  function goTo(target: number) {
+    if (target === step || register.isPending || step >= 3 || target > 2) return;
+    if (target < step) {
+      setTouched(false);
+      setStep(target);
+      return;
+    }
+    setTouched(true);
+    for (let s = step; s < target; s++) {
+      if (!stepValid(s)) {
+        setStep(s);
+        return;
+      }
+    }
+    setTouched(false);
+    setStep(target);
+  }
+
   const docs = profile.data?.documents ?? [];
 
   return (
     <>
-      <Progress step={step} />
+      <Progress step={step} onStep={goTo} />
       <div className="mb-6">
         <p className="text-sm font-semibold text-brand-700">
           {t("stepOf", { step: step + 1, total: STEPS.length })}

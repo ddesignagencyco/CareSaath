@@ -2,11 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, FileText, MapPin, Plus, UploadCloud, UserRound, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, FileText, MapPin, Plus, UploadCloud, UserRound, X, Zap } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAction, useApiErrorText } from "@shared/api/use-action";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -84,6 +84,7 @@ function Choice({ selected, onClick, children }: { selected: boolean; onClick: (
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>();
+  const search = useSearchParams();
   const router = useRouter();
   const toast = useToast();
   const now = useNow(60_000);
@@ -101,6 +102,19 @@ export default function BookPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [type, setType] = useState<"SINGLE" | "RECURRING">("SINGLE");
   const [immediate, setImmediate] = useState(false);
+  // The emergency flow links here with ?immediate=1 — default to ASAP once the param resolves.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default synced from the URL
+    if (search.get("immediate") === "1") setImmediate(true);
+    const presetAddress = search.get("addressId");
+    if (presetAddress) setAddressId(presetAddress);
+  }, [search]);
+  // On the emergency path, if the family has exactly one patient, pre-select them so the ASAP
+  // flow is effectively one confirm — multi-patient still has to choose who needs care.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default once patients load
+    if (immediate && !patientId && patients.data?.length === 1) setPatientId(patients.data[0].id);
+  }, [immediate, patientId, patients.data]);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -389,9 +403,14 @@ export default function BookPage() {
               })}
             </div>
             {immediate && (
-              <div className="rounded-xl bg-accent-50 p-4 text-sm ring-1 ring-accent-400/30">
-                <p className="font-bold text-accent-700">{t("when.asapTitle")}</p>
-                <p dir="auto" className="mt-1 text-ink-600">{t("when.asapBody")}</p>
+              <div className="flex items-start gap-3 rounded-xl border border-ink-200 bg-white p-4">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <Zap className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-bold text-ink-900">{t("when.asapTitle")}</p>
+                  <p dir="auto" className="mt-0.5 text-sm text-ink-500">{t("when.asapBody")}</p>
+                </div>
               </div>
             )}
             {!immediate && (
@@ -450,23 +469,22 @@ export default function BookPage() {
                 </Field>
               </div>
             )}
-            {whenError ? (
-              start && <p className="text-sm font-medium text-danger-600">{whenError}</p>
-            ) : immediate ? (
-              <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800">{t("when.asapSummary")}</p>
-            ) : (
-              <div className="space-y-2">
-                <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
-                  {t.rich("when.summary", { count: dates.length, days: daysText, window: windowText, b: (chunks) => <b>{chunks}</b> })}
-                </p>
-                {offDays.length > 0 && (
-                  <p className="flex items-start gap-2 rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-700">
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                    {t("when.offHours", { name: c?.user.fullName.split(" ")[0] ?? "", days: f.list(offDays.map((d) => f.dayOfWeek(d))) })}
+            {!immediate &&
+              (whenError ? (
+                start && <p className="text-sm font-medium text-danger-600">{whenError}</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+                    {t.rich("when.summary", { count: dates.length, days: daysText, window: windowText, b: (chunks) => <b>{chunks}</b> })}
                   </p>
-                )}
-              </div>
-            )}
+                  {offDays.length > 0 && (
+                    <p className="flex items-start gap-2 rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-700">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                      {t("when.offHours", { name: c?.user.fullName.split(" ")[0] ?? "", days: f.list(offDays.map((d) => f.dayOfWeek(d))) })}
+                    </p>
+                  )}
+                </div>
+              ))}
           </div>
         )}
 

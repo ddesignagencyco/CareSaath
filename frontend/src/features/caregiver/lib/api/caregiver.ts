@@ -36,7 +36,7 @@ import type {
   Visit,
 } from "@shared/caregiver-types";
 import type { CaregiverDocument, DocType, IncidentPriority, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "@shared/types";
-import type { BackendChatMessage } from "@shared/chat/types";
+import type { BackendChatMessage, ChatConversationSummary } from "@shared/chat/types";
 import { http } from "./http";
 
 export const authApi = {
@@ -82,6 +82,9 @@ export const profileApi = {
 };
 
 export const availabilityApi = {
+  /** PUT /caregiver/available-now — opt in/out of immediate (ASAP/emergency) requests. */
+  setAvailableNow: (available: boolean) =>
+    http.put<{ acceptingImmediate: boolean; availableNow: boolean; locationUpdatedAt: string | null }>("/caregiver/available-now", { available }),
   /** GET /caregiver/availability */
   get: () => (http.get<Availability>("/caregiver/availability")),
   /** PUT /caregiver/availability — full replace. */
@@ -142,6 +145,14 @@ export const paymentsApi = {
 };
 
 export const chatApi = {
+  /** GET /chat/conversations — one thread per counterpart, spanning all their bookings. */
+  listConversations: () => http.get<ChatConversationSummary[]>("/chat/conversations"),
+  /** GET /chat/conversations/:counterpartUserId/messages — full cross-booking history, newest first. */
+  conversationMessages: (counterpartUserId: string) =>
+    http.get<Paginated<BackendChatMessage>>(`/chat/conversations/${counterpartUserId}/messages`, { limit: 100 }),
+  /** PATCH /chat/conversations/:counterpartUserId/read — mark the whole conversation read. */
+  markConversationRead: (counterpartUserId: string) =>
+    http.patch<{ updated: number }>(`/chat/conversations/${counterpartUserId}/read`).then(() => undefined),
   /** GET /bookings/:bookingId/messages — newest first. */
   list: (bookingId: string) =>
     http.get<Paginated<BackendChatMessage>>(`/bookings/${bookingId}/messages`, { limit: 100 }),
@@ -153,6 +164,9 @@ export const chatApi = {
   /** POST /bookings/:bookingId/messages/:id/reactions — toggle a reaction emoji. */
   react: (bookingId: string, messageId: string, emoji: string) =>
     http.post<unknown>(`/bookings/${bookingId}/messages/${messageId}/reactions`, { emoji }).then(() => undefined),
+  /** DELETE /bookings/:bookingId/messages/:id — soft-delete your own message. */
+  deleteMessage: (bookingId: string, messageId: string) =>
+    http.delete<unknown>(`/bookings/${bookingId}/messages/${messageId}`).then(() => undefined),
   /** Resumable media upload: init → 2 MB chunks → complete (creates the media message). */
   uploadMedia: async (
     bookingId: string,
@@ -162,7 +176,8 @@ export const chatApi = {
     const init = await http.post<{ uploadId: string; totalBytes: number }>(`/bookings/${bookingId}/media/uploads`, {
       mimeType: file.type || "application/octet-stream",
       totalBytes: file.size,
-      ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+      // Backend expects `filename` (required, ≤200 chars) — not `fileName`.
+      filename: (opts?.fileName || "attachment").slice(0, 200),
     });
     const CHUNK = 2 * 1024 * 1024;
     const total = file.size || 1;
@@ -235,4 +250,9 @@ export const notificationsApi = {
   /** PATCH /notifications/preferences — opt one channel in/out (SOS always delivered). */
   setPref: (channel: NotificationChannel, enabled: boolean) =>
     http.patch<NotificationPref[]>("/notifications/preferences", { channel, enabled }),
+  /** GET /notifications/push/public-key — VAPID key for Web Push (enabled=false until the server has keys). */
+  pushPublicKey: () => http.get<{ enabled: boolean; vapidPublicKey: string | null }>("/notifications/push/public-key"),
+  /** POST /notifications/push/subscribe — store this browser's push subscription. */
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    http.post<unknown>("/notifications/push/subscribe", sub).then(() => undefined),
 };

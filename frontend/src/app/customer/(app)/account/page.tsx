@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, MapPin, MessagesSquare, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -18,7 +18,7 @@ import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { useMe, useSignOut } from "@/features/customer/lib/auth";
+import { useMe } from "@/features/customer/lib/auth";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
@@ -47,7 +47,7 @@ function ProfileForm({ me }: { me: Me }) {
 
   return (
     <form
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+      className="grid grid-cols-1 gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (dirty && name.trim() && emailValid) save.mutate(undefined);
@@ -72,7 +72,7 @@ function ProfileForm({ me }: { me: Me }) {
           />
         )}
       </Field>
-      <div className="flex justify-end sm:col-span-2">
+      <div className="flex justify-end">
         <Button type="submit" disabled={!dirty || !name.trim() || !emailValid} loading={save.isPending}>
           {tc("actions.saveChanges")}
         </Button>
@@ -86,27 +86,30 @@ export default function AccountPage() {
   const tc = useTranslations("common");
   const f = useFmt();
   const me = useMe();
-  const signOut = useSignOut();
 
   return (
     <>
       <PageHeader title={t("title")} description={t("description")} />
       <div className="space-y-5">
-        <Card>
-          <div className="flex flex-col gap-6 p-5 sm:p-6 lg:flex-row lg:items-start">
-            <div className="flex items-center gap-4 lg:w-72 lg:shrink-0 lg:flex-col lg:items-center lg:border-e lg:border-ink-100 lg:pe-6 lg:text-center">
-              <Avatar name={me.data?.fullName || t("you")} size="lg" />
-              <div className="min-w-0">
-                <p className="truncate text-lg font-extrabold text-ink-900">{me.data?.fullName || t("addName")}</p>
-                <p className="tabular text-sm text-ink-500">{me.data ? formatPkMobile(me.data.phone) : " "}</p>
-                {me.data && <p className="mt-1 text-xs text-ink-400">{t("memberSince", { date: f.date(me.data.createdAt) })}</p>}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+          <Card>
+            <div className="p-5 sm:p-6">
+              <div className="flex items-center gap-4 border-b border-ink-100 pb-5">
+                <Avatar name={me.data?.fullName || t("you")} size="lg" />
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-extrabold text-ink-900">{me.data?.fullName || t("addName")}</p>
+                  <p className="tabular text-sm text-ink-500">{me.data ? formatPkMobile(me.data.phone) : " "}</p>
+                  {me.data && <p className="mt-0.5 text-xs text-ink-400">{t("memberSince", { date: f.date(me.data.createdAt) })}</p>}
+                </div>
+              </div>
+              <div className="pt-5">
+                {me.data ? <ProfileForm key={`${me.data.fullName}-${me.data.preferredLanguage}`} me={me.data} /> : <Skeleton className="h-48" />}
               </div>
             </div>
-            <div className="min-w-0 flex-1">
-              {me.data ? <ProfileForm key={`${me.data.fullName}-${me.data.preferredLanguage}`} me={me.data} /> : <Skeleton className="h-32" />}
-            </div>
-          </div>
-        </Card>
+          </Card>
+
+          <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
+        </div>
 
         <Card className="divide-y divide-ink-100 overflow-hidden lg:hidden">
           {MOBILE_LINKS.map(({ href, key, icon: Icon }) => (
@@ -116,14 +119,6 @@ export default function AccountPage() {
               <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
             </Link>
           ))}
-        </Card>
-
-        <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
-
-        <Card className="divide-y divide-ink-100 overflow-hidden">
-          <button onClick={signOut} className="flex w-full items-center gap-3 px-5 py-4 text-start text-sm font-semibold text-danger-600 hover:bg-danger-50">
-            <LogOut className="size-5" /> {tc("actions.signOut")}
-          </button>
         </Card>
       </div>
     </>

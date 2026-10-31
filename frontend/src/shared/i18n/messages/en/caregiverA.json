@@ -1,4 +1,13 @@
 {
+  "availableNow": {
+    "title": "Available for emergency visits",
+    "hint": "Turn on to accept ASAP requests from nearby families.",
+    "live": "You're live — nearby families can book you for an immediate visit.",
+    "needLocation": "Turn on location sharing (More tab) so families can see you.",
+    "statusLive": "Live",
+    "statusPaused": "Not live",
+    "foregroundHint": "Keep this app open and on-screen to stay available — you go offline if it's closed or in the background."
+  },
   "login": {
     "product": "Caregiver",
     "headline": "Care for families. We handle the rest.",

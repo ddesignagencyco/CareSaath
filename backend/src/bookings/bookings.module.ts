@@ -501,7 +501,11 @@ export class BookingsService {
     if (occurrences.length === 0) {
       throw new BadRequestException('The recurrence rule produces no visits');
     }
-    await this.assertCaregiverAvailable(caregiver.id, occurrences, dto.timeWindowStart, dto.timeWindowEnd);
+    // Immediate (available-now) bookings bypass the weekly-schedule/hours check — the caregiver
+    // opted in to ASAP work right now, and the nearby-now search already excludes anyone mid-visit.
+    if (!dto.isImmediate) {
+      await this.assertCaregiverAvailable(caregiver.id, occurrences, dto.timeWindowStart, dto.timeWindowEnd);
+    }
     await this.assertCaregiverCoversAddress(caregiver.id, address);
 
     const now = new Date();

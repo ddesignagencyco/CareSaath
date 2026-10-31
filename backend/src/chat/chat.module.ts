@@ -494,6 +494,14 @@ export class ChatService {
       where: { bookingId: { in: bookings.map((b) => b.id) }, senderId: { not: user.sub }, readAt: null },
       data: { readAt: new Date() },
     });
+    // Tell the sender (the counterpart) their messages were just read, so their open thread's
+    // read ticks turn live instead of only updating on the next refetch/reload.
+    if (result.count > 0) {
+      this.realtime?.entityUpdated(
+        { users: [counterpartUserId] },
+        { type: 'chat_message', id: counterpartUserId, action: 'read', data: { readerUserId: user.sub } },
+      );
+    }
     return { updated: result.count };
   }
 

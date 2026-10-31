@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# Committed: the production API URL is public (NEXT_PUBLIC_*) and must be baked into
+# the Vercel build, which can't see .env.local. No secrets live here.
+!.env.production
 
 # vercel
 .vercel
