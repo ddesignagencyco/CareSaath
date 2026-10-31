@@ -72,40 +72,44 @@ body {
 
 /*
  * Urdu. The language provider sets <html lang="ur" dir="rtl">.
- * All Urdu text uses Noto Naskh Arabic (a clear, horizontal naskh script).
+ * All Urdu text uses Gulzar (a modern, web-optimised Nastaliq).
  * Jakarta comes first in each stack: it has no Arabic glyphs, so Latin
- * letters and digits stay in Jakarta and Urdu falls through to Naskh.
- * Naskh is less tall than Nastaliq, so lines still get some extra height but
- * less than before; Arabic script must never be letter-spaced (it breaks the joins).
+ * letters and digits stay in Jakarta and Urdu falls through to Gulzar.
+ * Nastaliq is tall, so lines get extra height. Gulzar ships one weight, so
+ * font-synthesis-weight is disabled below to stop faux-bold mangling it (Latin
+ * in Jakarta still bolds). Arabic script must never be letter-spaced (breaks joins).
  */
-/* Jakarta by name (Latin + digits), then Naskh. Not var(--font-jakarta):
+/* Jakarta by name (Latin + digits), then Gulzar. Not var(--font-jakarta):
    that includes Next's Arial-based fallback, and Arial's own Arabic glyphs
-   would draw the Urdu before Naskh is ever reached. */
+   would draw the Urdu before Gulzar is ever reached. */
 html[lang="ur"] {
   --font-urdu-stack: "Plus Jakarta Sans", var(--font-urdu), sans-serif;
+  /* Gulzar ships a single weight; stop the browser faking bold on Nastaliq (it
+     mangles the joins). Latin/digits in Jakarta still bold from their real weights. */
+  font-synthesis-weight: none;
 }
 
 html[lang="ur"] body {
   font-family: var(--font-urdu-stack);
-  line-height: 1.85;
+  line-height: 2;
 }
 
 html[lang="ur"] h1,
 html[lang="ur"] h2,
 html[lang="ur"] h3 {
-  line-height: 1.9;
+  line-height: 2.05;
   font-weight: 700;
 }
 
-/* Tailwind's leading-* utilities are tuned for Latin; give Urdu a little room. */
+/* Tailwind's leading-* utilities are tuned for Latin; give Nastaliq room. */
 html[lang="ur"] [class*="leading-"] {
-  line-height: 1.75;
+  line-height: 1.9;
 }
 
-/* Urdu stays a touch larger and taller than Latin at small sizes to stay legible. */
+/* Nastaliq needs more size and height than Latin at small sizes to stay legible. */
 html[lang="ur"] .text-xs {
   font-size: 0.8125rem;
-  line-height: 1.75;
+  line-height: 1.9;
 }
 html[lang="ur"] [class*="text-[10px]"],
 html[lang="ur"] [class*="text-[11px]"] {
