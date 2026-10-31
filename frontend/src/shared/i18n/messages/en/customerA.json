@@ -1,4 +1,21 @@
 {
+  "emergency": {
+    "cta": "Need care now",
+    "ctaHint": "Nearest caregiver available right now",
+    "title": "Need care now",
+    "description": "We'll find verified caregivers available right now, nearest to you.",
+    "locating": "Finding your location…",
+    "searching": "Finding nearby caregivers…",
+    "locationError": "We couldn't get your location. Please allow location access and try again.",
+    "retry": "Try again",
+    "allSpecialties": "Any",
+    "count": "{count} available near you",
+    "emptyTitle": "No one available right now",
+    "emptyText": "No verified caregivers are available near you this moment. You can still book a scheduled visit.",
+    "browseAll": "Browse all caregivers",
+    "distanceEta": "{km} km · ~{min} min away",
+    "bookNow": "Book now"
+  },
   "login": {
     "product": "Home care",
     "headline": "Trusted nurses and physiotherapists, at home.",

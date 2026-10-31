@@ -26,6 +26,15 @@ export interface CaregiverSearchItem {
 }
 
 /** GET /caregivers/:id */
+/** A caregiver from the nearby-now (emergency) search: base fields + live distance/ETA. */
+export interface NearbyCaregiver extends CaregiverSearchItem {
+  /** Great-circle metres from the customer's point. */
+  distanceMeters: number;
+  /** Rough minutes to reach the customer at an average speed. */
+  etaMinutes: number;
+  availableNow: boolean;
+}
+
 export interface PublicCaregiver extends CaregiverSearchItem {
   licenseNumber: string;
   licenseBody: LicenseBody;

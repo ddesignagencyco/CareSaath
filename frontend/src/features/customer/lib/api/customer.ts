@@ -23,6 +23,7 @@ import type {
 import type {
   AddressInput,
   CaregiverSearchItem,
+  NearbyCaregiver,
   CreateBookingInput,
   CustomerBookingListItem,
   CustomerPayment,
@@ -103,6 +104,9 @@ export const caregiversApi = {
   /** GET /caregivers?specialty=&city= (public, approved caregivers, best rated first) */
   search: (q: PageQuery & { specialty?: Specialty; city?: string }) =>
     http.get<Paginated<CaregiverSearchItem>>("/caregivers", q),
+  /** GET /caregivers?immediate=true&lat&lng&specialty — nearby-now (emergency) search, nearest first. */
+  nearbyNow: (lat: number, lng: number, specialty?: Specialty) =>
+    http.get<Paginated<NearbyCaregiver>>("/caregivers", { immediate: true, lat, lng, limit: 20, ...(specialty ? { specialty } : {}) }),
   /** GET /caregivers/:id (public profile) */
   get: (id: string) => (http.get<PublicCaregiver>(`/caregivers/${id}`)),
 };

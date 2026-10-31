@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowRight, Bandage, HeartHandshake, Navigation, Stethoscope, UserPlus } from "lucide-react";
+import { Activity, ArrowRight, Bandage, HeartHandshake, Navigation, Siren, Stethoscope, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useNow } from "@shared/hooks/use-now";
@@ -35,6 +35,7 @@ function period(now: number) {
 export default function CustomerHome() {
   const now = useNow(60_000);
   const t = useTranslations("customerA.home");
+  const tEmer = useTranslations("customerA.emergency");
   const f = useFmt();
   const L = useLabels();
   const me = useMe();
@@ -81,6 +82,20 @@ export default function CustomerHome() {
           </span>
         </Link>
       )}
+
+      <Link
+        href="/customer/emergency"
+        className="flex items-center gap-4 rounded-2xl border-2 border-danger-200 bg-danger-50 p-4 transition-colors hover:border-danger-300 active:scale-[0.99]"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-danger-600 text-white">
+          <Siren className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold text-danger-800">{tEmer("cta")}</span>
+          <span className="block text-sm text-danger-700">{tEmer("ctaHint")}</span>
+        </span>
+        <ArrowRight className="rtl:-scale-x-100 size-5 shrink-0 text-danger-600" />
+      </Link>
 
       {noPatients && (
         <Card className="flex flex-col gap-4 border-brand-200 bg-brand-50/50 p-5 sm:flex-row sm:items-center">

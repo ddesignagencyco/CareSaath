@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, FileText, MapPin, Plus, UploadCloud, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAction, useApiErrorText } from "@shared/api/use-action";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -84,6 +84,7 @@ function Choice({ selected, onClick, children }: { selected: boolean; onClick: (
 
 export default function BookPage() {
   const { id } = useParams<{ id: string }>();
+  const search = useSearchParams();
   const router = useRouter();
   const toast = useToast();
   const now = useNow(60_000);
@@ -101,6 +102,11 @@ export default function BookPage() {
   const [addressId, setAddressId] = useState<string | null>(null);
   const [type, setType] = useState<"SINGLE" | "RECURRING">("SINGLE");
   const [immediate, setImmediate] = useState(false);
+  // The emergency flow links here with ?immediate=1 — default to ASAP once the param resolves.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default synced from the URL
+    if (search.get("immediate") === "1") setImmediate(true);
+  }, [search]);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
