@@ -41,6 +41,7 @@ import { PlatformConfigModule } from './config/platform-config.module.js';
 import { RetentionModule } from './common/retention/retention.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
 import { EmailModule } from './email/email.module.js';
+import { FirebaseModule } from './firebase/firebase.module.js';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { EmailModule } from './email/email.module.js';
     PlatformConfigModule,
     RetentionModule,
     EmailModule,
+    FirebaseModule,
   ],
   controllers: [AppController],
   providers: [
