@@ -12,6 +12,12 @@ export interface OtpMirrorContext {
   userId?: string | null;
   visitId?: string | null;
   phone?: string | null;
+  /**
+   * Set by flows that already send the account holder a branded OTP email
+   * (login, sign-up). The mirror then goes only to the ops inbox, so the user
+   * does not receive the same code twice from two different templates.
+   */
+  alreadyEmailed?: boolean;
 }
 
 /**
@@ -29,13 +35,22 @@ export class SmsService {
     // In production this calls the SMS gateway (TBD vendor).
     this.logger.log(`[DEV-SMS] OTP for ${phone}: ${code}`);
 
-    const mirrorTo = process.env['OTP_MIRROR_EMAIL'];
-    const to = context?.email ?? mirrorTo;
-    if (!to) return;
+    if (!this.email?.isConfigured) return;
+
+    // The ops inbox gets a copy of EVERY OTP, whatever its purpose — that is the
+    // point of OTP_MIRROR_EMAIL, and routing it to the account holder instead
+    // (the old `context.email ?? mirrorTo`) silently hid change-phone and
+    // visit-check-in codes from it. Flows that already sent the holder a branded
+    // code (login, sign-up) need only the ops copy; the rest also get their own.
+    const recipients = new Set<string>();
+    const mirrorTo = (process.env['OTP_MIRROR_EMAIL'] ?? '').trim();
+    if (mirrorTo) recipients.add(mirrorTo);
+    if (!context?.alreadyEmailed && context?.email) recipients.add(context.email);
+    if (recipients.size === 0) return;
 
     const subject = `[CareSaath] OTP ${code} — ${context?.purpose ?? 'LOGIN'}`;
     const html = `
-      <p>Your CareSaath login code is <strong>${code}</strong>.</p>
+      <p>Your CareSaath verification code is <strong>${code}</strong>.</p>
       <p>Purpose: ${context?.purpose ?? 'LOGIN'}<br />
          Phone: ${phone}<br />
          ${context?.visitId ? `Visit: ${context.visitId}<br />` : ''}
@@ -43,9 +58,13 @@ export class SmsService {
          ${context?.role ? `Role: ${context.role}<br />` : ''}
          This code expires in 5 minutes. If you did not request it, ignore this email.</p>
     `;
-    await this.email?.sendEmail(to, subject, html).catch((err: Error) => {
-      this.logger.warn(`OTP mirror email failed: ${err.message}`);
-    });
+    // Sent one at a time so a failure for one recipient cannot suppress the
+    // other, and so neither address is disclosed to the other in a To: header.
+    for (const to of recipients) {
+      await this.email.sendEmail(to, subject, html).catch((err: Error) => {
+        this.logger.warn(`OTP mirror email to ${to} failed: ${err.message}`);
+      });
+    }
   }
 
   async sendVisitAlert(phone: string, message: string): Promise<void> {

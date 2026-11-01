@@ -55,18 +55,26 @@ export class AuthService {
   ) {}
 
   /**
-   * Until a real SMS gateway is wired, an account with an email on file also
-   * gets its login code by email (when SMTP is configured). Best-effort: a mail
+   * Until a real SMS gateway is wired, a request that carries an email address
+   * also gets its code by email (when SMTP is configured). Best-effort: a mail
    * failure never fails the OTP request, and the code is never logged here.
    */
-  private emailOtp(to: string, code: string, ttlSeconds: number): void {
-    if (!this.email || !process.env['SMTP_HOST']) return;
+  private emailOtp(
+    to: string,
+    code: string,
+    ttlSeconds: number,
+    purpose: OtpPurpose = OtpPurpose.LOGIN,
+  ): void {
+    if (!this.email?.isConfigured) return;
+    const label = purpose === OtpPurpose.SIGNUP ? 'sign-up' : 'login';
+    const minutes = Math.max(1, Math.round(ttlSeconds / 60));
     const html = renderNotificationEmail({
-      title: 'Your CareSaath login code',
-      message: `Your login code is ${code}. It expires in ${Math.max(1, Math.round(ttlSeconds / 60))} minutes. If you did not request it, ignore this email.`,
+      title: `Your CareSaath ${label} code`,
+      message: `Your ${label} code is ${code}. It expires in ${minutes} minutes. If you did not request it, ignore this email.`,
     });
-    this.email.sendEmail(to, `CareSaath login code: ${code}`, html).catch((err: Error) => {
-      this.logger.warn(`Login OTP email failed: ${err.message}`);
+    this.email.sendEmail(to, `CareSaath ${label} code: ${code}`, html).catch((err: Error) => {
+      // The transport already logged the SMTP-level cause at error level.
+      this.logger.warn(`${purpose} OTP email to ${to} failed: ${err.message}`);
     });
   }
 
@@ -141,6 +149,7 @@ export class AuthService {
       fullName: existing?.fullName ?? null,
       role: existing?.role,
       userId: existing?.id ?? null,
+      alreadyEmailed: !!existing?.email,
     });
     if (existing?.email) {
       this.emailOtp(existing.email, code, ttlSeconds);
@@ -242,7 +251,11 @@ export class AuthService {
       email: dto.email ?? null,
       fullName: dto.fullName,
       role: dto.role,
+      alreadyEmailed: !!dto.email,
     });
+    if (dto.email) {
+      this.emailOtp(dto.email, code, ttlSeconds, OtpPurpose.SIGNUP);
+    }
     return { ttlSeconds };
   }
 

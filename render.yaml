@@ -72,18 +72,23 @@ services:
         value: info@caresaath.com
       - key: ADMIN_PHONE
         value: '+923000000000'
-      # SMTP: login OTPs are also emailed to the account's email (seeded test
-      # accounts use info+<name>@caresaath.com aliases).
+      # SMTP: signup/login OTPs are emailed to the account's email (seeded test
+      # accounts use info+<name>@caresaath.com aliases). Only the password is a
+      # secret — pinning the rest here stops a dashboard typo from silently
+      # disabling all OTP email. Port 465 is implicit TLS; switch both SMTP_PORT
+      # to 587 and SMTP_SECURE to false if egress blocks 465.
       - key: SMTP_HOST
-        sync: false
+        value: smtpout.secureserver.net
       - key: SMTP_PORT
-        sync: false
+        value: 465
+      - key: SMTP_SECURE
+        value: true
       - key: SMTP_USERNAME
-        sync: false
+        value: info@caresaath.com
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM_EMAIL
-        sync: false
+        value: info@caresaath.com
       - key: SMTP_FROM_NAME
         value: CareSaath
       # Every OTP (login / signup / change-phone / visit check-in) is mirrored to
