@@ -81,6 +81,7 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
   const [specialty, setSpecialty] = useState<Specialty | null>(null);
   const [body, setBody] = useState<LicenseBody | null>(null);
   const [license, setLicense] = useState("");
+  const [licenseExpiry, setLicenseExpiry] = useState("");
   const [years, setYears] = useState("");
   const [cities, setCities] = useState<string[]>([]);
   const [rate, setRate] = useState("");
@@ -125,6 +126,8 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
           cnic,
           licenseNumber: license.trim(),
           licenseBody: body!,
+          ...(licenseExpiry && body === "PMDC" ? { pmdcExpiryDate: licenseExpiry } : {}),
+          ...(licenseExpiry && body === "PNC" ? { pncExpiryDate: licenseExpiry } : {}),
           specialty: specialty!,
           ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
           ...(bio.trim() ? { bio: bio.trim() } : {}),
@@ -248,6 +251,11 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
                 <Input id={id} dir="ltr" value={license} maxLength={40} className="tabular uppercase" placeholder={t("licensePlaceholder")} onChange={(e) => setLicense(e.target.value)} />
               )}
             </Field>
+            {(body === "PMDC" || body === "PNC") && (
+              <Field label={body === "PMDC" ? t("pmdcExpiry") : t("pncExpiry")} hint={t("licenseExpiryHint")}>
+                {(id) => <Input id={id} type="date" dir="ltr" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="tabular" />}
+              </Field>
+            )}
             <Field label={t("years")} error={err(1, "years")}>
               {(id) => <Input id={id} type="number" inputMode="numeric" min={0} max={60} dir="ltr" value={years} onChange={(e) => setYears(e.target.value)} className="tabular" />}
             </Field>

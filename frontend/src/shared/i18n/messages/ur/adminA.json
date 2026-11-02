@@ -201,6 +201,8 @@
     "fields": {
       "licenseNumber": "لائسنس نمبر",
       "licensingBody": "لائسنس جاری کرنے والا ادارہ",
+      "pmdcExpiry": "PMDC میعاد ختم ہونے کی تاریخ",
+      "pncExpiry": "PNC میعاد ختم ہونے کی تاریخ",
       "cnic": "شناختی کارڈ",
       "specialty": "شعبہ",
       "experience": "تجربہ",

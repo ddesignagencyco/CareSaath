@@ -201,6 +201,8 @@
     "fields": {
       "licenseNumber": "License number",
       "licensingBody": "Licensing body",
+      "pmdcExpiry": "PMDC expiry",
+      "pncExpiry": "PNC expiry",
       "cnic": "CNIC",
       "specialty": "Specialty",
       "experience": "Experience",

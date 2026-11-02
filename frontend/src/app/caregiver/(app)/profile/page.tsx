@@ -255,6 +255,8 @@ export default function ProfilePage() {
                   items={[
                     { label: t("credentials.license"), value: <span dir="ltr" className="tabular font-semibold">{p.licenseNumber}</span> },
                     { label: t("credentials.body"), value: L.licenseBody(p.licenseBody) },
+                    ...(p.licenseBody === "PMDC" ? [{ label: t("credentials.pmdcExpiry"), value: f.date(p.pmdcExpiryDate ?? null) }] : []),
+                    ...(p.licenseBody === "PNC" ? [{ label: t("credentials.pncExpiry"), value: f.date(p.pncExpiryDate ?? null) }] : []),
                     { label: t("credentials.cnic"), value: <span dir="ltr" className="tabular">{displayCnic(p.cnic)}</span> },
                     { label: t("credentials.commission"), value: p.commissionRate ? t("credentials.commissionValue", { pct: Number(p.commissionRate.percentage) }) : "—" },
                     { label: t("credentials.approved"), value: f.date(p.approvedAt) },

@@ -321,6 +321,10 @@ model CaregiverProfile {
   cnic               String // sensitive: encrypted
   licenseNumber      String
   licenseBody        LicenseBody
+  /// Expiry of the PMDC (Pakistan Medical & Dental Council) registration, when licenseBody = PMDC.
+  pmdcExpiryDate     DateTime?          @db.Date
+  /// Expiry of the PNC (Pakistan Nursing Council) registration, when licenseBody = PNC.
+  pncExpiryDate      DateTime?          @db.Date
   specialty          Specialty
   experienceYears    Int?
   bio                String?

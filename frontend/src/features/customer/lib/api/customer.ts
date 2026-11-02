@@ -149,6 +149,8 @@ export const visitsApi = {
   sos: (dto: { visitId: string; note?: string }) => (http.post<SosResult>("/sos", dto)),
   /** GET /customer/visits/:id/medical-orders — the doctor's diagnosis/prescription/lab-test records. */
   medicalOrders: (id: string) => (http.get<MedicalOrder[]>(`/customer/visits/${id}/medical-orders`)),
+  /** GET /customer/visits/:id/medical-orders/:orderId/pdf — branded prescription PDF. */
+  medicalOrderPdf: (id: string, orderId: string) => http.download(`/customer/visits/${id}/medical-orders/${orderId}/pdf`),
   /** GET /customer/visits/:id/location — last-known caregiver fix while EN_ROUTE (null once checked in / no fix yet). */
   location: (id: string) => (http.get<VisitLocation | null>(`/customer/visits/${id}/location`)),
 };

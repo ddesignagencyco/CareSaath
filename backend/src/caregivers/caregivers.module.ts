@@ -36,6 +36,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
@@ -117,6 +118,22 @@ export class RegisterCaregiverDto {
   })
   @IsEnum(LicenseBody)
   licenseBody!: LicenseBody;
+
+  @ApiPropertyOptional({
+    example: '2027-06-30',
+    description: 'PMDC registration expiry date (when licenseBody is PMDC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pmdcExpiryDate?: string;
+
+  @ApiPropertyOptional({
+    example: '2027-06-30',
+    description: 'PNC registration expiry date (when licenseBody is PNC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pncExpiryDate?: string;
 
   @ApiProperty({
     enum: Specialty,
@@ -416,6 +433,8 @@ export class CaregiversService {
           cnic: encryptField(dto.cnic, CNIC_KEY),
           licenseNumber: dto.licenseNumber,
           licenseBody: dto.licenseBody,
+          pmdcExpiryDate: dto.pmdcExpiryDate ? new Date(dto.pmdcExpiryDate) : null,
+          pncExpiryDate: dto.pncExpiryDate ? new Date(dto.pncExpiryDate) : null,
           specialty: dto.specialty,
           experienceYears: dto.experienceYears ?? null,
           bio: dto.bio ?? null,
