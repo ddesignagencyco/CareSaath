@@ -10,7 +10,6 @@ import { BookScreen } from '../screens/customer/BookScreen';
 import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CaregiverProfileScreen } from '../screens/customer/CaregiverProfileScreen';
-import { ContactsScreen } from '../screens/customer/ContactsScreen';
 import { EmergencyScreen } from '../screens/customer/EmergencyScreen';
 import { EditProfileScreen } from '../screens/customer/EditProfileScreen';
 import { DisputesScreen } from '../screens/customer/DisputesScreen';
@@ -74,7 +73,6 @@ export function CustomerNavigator() {
       <Stack.Screen name="PatientForm" component={PatientFormScreen} />
       <Stack.Screen name="Addresses" component={AddressesScreen} />
       <Stack.Screen name="AddressForm" component={AddressFormScreen} />
-      <Stack.Screen name="Contacts" component={ContactsScreen} />
       <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="Disputes" component={DisputesScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />

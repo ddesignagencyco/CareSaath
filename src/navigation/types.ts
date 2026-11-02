@@ -43,7 +43,6 @@ export type CustomerStack = ChatRoutes & {
   PatientForm: { id?: string } | undefined;
   Addresses: undefined;
   AddressForm: { id?: string } | undefined;
-  Contacts: undefined;
   Payments: undefined;
   Disputes: undefined;
   Notifications: undefined;

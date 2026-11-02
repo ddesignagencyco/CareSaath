@@ -54,6 +54,10 @@ export interface CaregiverProfileRow {
   cnic: string | null;
   licenseNumber: string;
   licenseBody: LicenseBody;
+  /** PMDC registration expiry (set when licenseBody is PMDC); ISO date. */
+  pmdcExpiryDate: string | null;
+  /** PNC registration expiry (set when licenseBody is PNC); ISO date. */
+  pncExpiryDate: string | null;
   specialty: Specialty;
   experienceYears: number | null;
   bio: string | null;
@@ -103,6 +107,9 @@ export interface RegisterCaregiverInput {
   serviceCities: string[];
   /** Paisa, min 1000 (Rs 10). */
   ratePerVisit: number;
+  /** ISO date; set when licenseBody is PMDC / PNC respectively. */
+  pmdcExpiryDate?: string;
+  pncExpiryDate?: string;
 }
 
 export interface UpdateCaregiverProfileInput {
@@ -111,6 +118,42 @@ export interface UpdateCaregiverProfileInput {
   serviceCities?: string[];
   bio?: string;
   experienceYears?: number;
+  pmdcExpiryDate?: string;
+  pncExpiryDate?: string;
+}
+
+/* ---- Medical orders (doctor visits: diagnosis / prescription / lab tests) ---- */
+
+export interface Medicine {
+  name: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  instructions?: string;
+}
+
+export interface LabTest {
+  name: string;
+  instructions?: string;
+}
+
+/** A doctor's structured record for a visit. */
+export interface MedicalOrder {
+  id: string;
+  visitId: string;
+  doctorId: string;
+  patientId: string;
+  diagnosis: string | null;
+  medicines: Medicine[];
+  labTests: LabTest[];
+  createdAt: string;
+}
+
+/** POST /caregiver/visits/:visitId/medical-orders — at least one field should be present. */
+export interface CreateMedicalOrderInput {
+  diagnosis?: string;
+  medicines?: Medicine[];
+  labTests?: LabTest[];
 }
 
 /* ---- Availability -------------------------------------------------------- */

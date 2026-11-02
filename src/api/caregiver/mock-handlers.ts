@@ -150,6 +150,8 @@ export async function register(dto: RegisterCaregiverInput): Promise<CaregiverPr
     cnic: `${"*".repeat(11)}${dto.cnic.slice(-4)}`,
     licenseNumber: dto.licenseNumber,
     licenseBody: dto.licenseBody,
+    pmdcExpiryDate: dto.licenseBody === "PMDC" ? (dto.pmdcExpiryDate ?? null) : null,
+    pncExpiryDate: dto.licenseBody === "PNC" ? (dto.pncExpiryDate ?? null) : null,
     specialty: dto.specialty,
     experienceYears: dto.experienceYears ?? null,
     bio: dto.bio ?? null,

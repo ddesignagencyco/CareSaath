@@ -49,7 +49,7 @@ export const VISIT_TONE: Record<VisitStatus, Tone> = {
 /** Statuses where the caregiver is actively handling the visit. */
 export const ACTIVE_STATUSES: VisitStatus[] = ['EN_ROUTE', 'CHECKED_IN', 'IN_PROGRESS', 'CHECKED_OUT'];
 
-export const SPECIALTIES: Specialty[] = ['NURSING', 'PHYSIOTHERAPY', 'POST_SURGERY_CARE', 'ELDERLY_CARE'];
+export const SPECIALTIES: Specialty[] = ['NURSING', 'PHYSIOTHERAPY', 'POST_SURGERY_CARE', 'ELDERLY_CARE', 'DOCTOR'];
 export const LICENSE_BODIES: LicenseBody[] = ['PNC', 'PMDC', 'OTHER'];
 export const DOC_TYPES: DocType[] = ['LICENSE', 'CERTIFICATE', 'CNIC_COPY', 'OTHER'];
 

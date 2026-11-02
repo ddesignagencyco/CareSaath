@@ -21,8 +21,8 @@ import { HeartHandshake, SearchX } from './components/icons';
 
 type Props = CompositeScreenProps<BottomTabScreenProps<CustomerTabs, 'FindCare'>, NativeStackScreenProps<CustomerStack>>;
 
-const SPECIALTIES: (Specialty | 'ALL')[] = ['ALL', 'NURSING', 'PHYSIOTHERAPY', 'POST_SURGERY_CARE', 'ELDERLY_CARE'];
-const CHIP_ICON: Record<Specialty, IconType> = { NURSING: Stethoscope, PHYSIOTHERAPY: Activity, POST_SURGERY_CARE: Bandage, ELDERLY_CARE: HeartHandshake };
+const SPECIALTIES: (Specialty | 'ALL')[] = ['ALL', 'NURSING', 'PHYSIOTHERAPY', 'POST_SURGERY_CARE', 'ELDERLY_CARE', 'DOCTOR'];
+const CHIP_ICON: Record<Specialty, IconType> = { NURSING: Stethoscope, PHYSIOTHERAPY: Activity, POST_SURGERY_CARE: Bandage, ELDERLY_CARE: HeartHandshake, DOCTOR: Stethoscope };
 const PAGE = 20;
 const ALL_CITIES = '__all';
 

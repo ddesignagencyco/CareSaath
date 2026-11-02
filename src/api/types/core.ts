@@ -6,7 +6,7 @@
 
 export type UserRole = "CUSTOMER" | "CAREGIVER" | "ADMIN";
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
-export type Specialty = "NURSING" | "PHYSIOTHERAPY" | "POST_SURGERY_CARE" | "ELDERLY_CARE";
+export type Specialty = "NURSING" | "PHYSIOTHERAPY" | "POST_SURGERY_CARE" | "ELDERLY_CARE" | "DOCTOR";
 export type LicenseBody = "PNC" | "PMDC" | "OTHER";
 export type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 export type DocType = "LICENSE" | "CERTIFICATE" | "CNIC_COPY" | "OTHER";

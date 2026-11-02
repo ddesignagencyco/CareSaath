@@ -30,7 +30,7 @@ import type {
   UpdateCaregiverProfileInput,
   Visit,
 } from "../types";
-import type { CaregiverDocument, DocType, IncidentPriority, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "../types";
+import type { CaregiverDocument, CreateMedicalOrderInput, DocType, IncidentPriority, MedicalOrder, PageQuery, Paginated, PayoutAccount, PayoutStatus, TokenPair, VisitStatus } from "../types";
 import * as mock from "./mock-handlers";
 import { http, USE_MOCKS } from "./http";
 
@@ -115,6 +115,15 @@ export const visitsApi = {
   checkOut: (id: string, dto: CheckInInput) => (M ? mock.checkOut(id, dto) : http.post<Visit>(`/caregiver/visits/${id}/check-out`, dto)),
   /** POST /caregiver/visits/:id/note — completes the visit. */
   note: (id: string, summary: string) => (M ? mock.submitNote(id, summary) : http.post<CaregiverVisitDetail>(`/caregiver/visits/${id}/note`, { summary })),
+};
+
+export const medicalOrdersApi = {
+  /** GET /caregiver/visits/:visitId/medical-orders — diagnosis / prescription / lab records (newest first). */
+  list: (visitId: string) => http.get<MedicalOrder[]>(`/caregiver/visits/${visitId}/medical-orders`),
+  /** POST /caregiver/visits/:visitId/medical-orders — doctor-only; the customer is notified. */
+  create: (visitId: string, dto: CreateMedicalOrderInput) => http.post<MedicalOrder>(`/caregiver/visits/${visitId}/medical-orders`, dto),
+  /** GET /caregiver/visits/:visitId/medical-orders/:id/pdf — branded prescription PDF (downloads + opens). */
+  openPdf: (visitId: string, id: string) => http.openFile(`/caregiver/visits/${visitId}/medical-orders/${id}/pdf`, `care-sath-prescription-${id.slice(0, 8)}.pdf`),
 };
 
 export const paymentsApi = {

@@ -6,6 +6,7 @@ import type { UploadFile } from '../../api/http';
 import type { Me, MyCaregiverProfile, Specialty } from '../../api/types';
 import { useAuth } from '../../auth/AuthContext';
 import { Select, TextField } from '../../components/form';
+import { DateField } from './components/Pickers';
 import { BadgeCheck, Camera, Check, FileText, Pencil, ShieldCheck, Star, Stethoscope } from '../../components/icons';
 import { Sheet } from '../../components/overlay';
 import { ErrorState, Screen, SkeletonList } from '../../components/screen';
@@ -131,6 +132,17 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
       <Panel icon={ShieldCheck} tone="mint" title={t('credentials.title')} description={t('credentials.description')}>
         <DetailRow label={t('credentials.license')} value={p.licenseNumber} ltr />
         <DetailRow label={t('credentials.body')} value={L.licenseBody(p.licenseBody)} />
+        {(p.licenseBody === 'PMDC' || p.licenseBody === 'PNC') && (
+          <DetailRow
+            label={t(p.licenseBody === 'PMDC' ? 'credentials.pmdcExpiry' : 'credentials.pncExpiry')}
+            value={
+              (p.licenseBody === 'PMDC' ? p.pmdcExpiryDate : p.pncExpiryDate)
+                ? f.date((p.licenseBody === 'PMDC' ? p.pmdcExpiryDate : p.pncExpiryDate) as string)
+                : tm('notAdded')
+            }
+            ltr
+          />
+        )}
         <DetailRow label={t('credentials.cnic')} value={displayCnic(p.cnic)} ltr />
         <DetailRow label={t('credentials.commission')} value={p.commissionRate ? t('credentials.commissionValue', { pct: Number(p.commissionRate.percentage) }) : '—'} />
         <DetailRow label={t('credentials.approved')} value={f.date(p.approvedAt)} />
@@ -179,6 +191,9 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
   const [years, setYears] = useState(p.experienceYears === null ? '' : String(p.experienceYears));
   const [cities, setCities] = useState<string[]>(p.serviceArea.cities);
   const [bio, setBio] = useState(p.bio ?? '');
+  const [licenseExpiry, setLicenseExpiry] = useState(
+    (p.licenseBody === 'PMDC' ? p.pmdcExpiryDate : p.licenseBody === 'PNC' ? p.pncExpiryDate : null)?.slice(0, 10) ?? '',
+  );
   const [touched, setTouched] = useState(false);
 
   const rateNum = Number(rate);
@@ -204,6 +219,8 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
         serviceCities: cities,
         bio: bio.trim(),
         ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
+        ...(licenseExpiry && p.licenseBody === 'PMDC' ? { pmdcExpiryDate: licenseExpiry } : {}),
+        ...(licenseExpiry && p.licenseBody === 'PNC' ? { pncExpiryDate: licenseExpiry } : {}),
       });
     },
     {
@@ -250,6 +267,15 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
           <TextField label={tf('years')} value={years} onChangeText={v => setYears(digits(v, 2))} keyboardType="number-pad" ltr error={err('years')} />
         </View>
       </View>
+      {(p.licenseBody === 'PMDC' || p.licenseBody === 'PNC') && (
+        <DateField
+          label={tf(p.licenseBody === 'PMDC' ? 'pmdcExpiry' : 'pncExpiry')}
+          hint={tf('licenseExpiryHint')}
+          value={licenseExpiry}
+          onChange={setLicenseExpiry}
+          min={new Date().toISOString().slice(0, 10)}
+        />
+      )}
       <View style={styles.gapSm}>
         <Text variant="small" weight="semibold" color={ink[700]}>
           {tf('cities')}

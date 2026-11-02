@@ -10,6 +10,7 @@ import type {
   CaregiverBookingStatus,
   DisputeRow,
   Me,
+  MedicalOrder,
   PatientProfile,
   PaymentMethod,
   PaymentStatus,
@@ -147,6 +148,11 @@ export const visitsApi = {
     M ? mock.reportIncident(id, dto) : http.post<SafetyIncidentRow>(`/customer/visits/${id}/safety-reports`, dto),
   /** POST /sos */
   sos: (dto: { visitId: string; note?: string }) => (M ? mock.sos(dto) : http.post<SosResult>("/sos", dto)),
+  /** GET /customer/visits/:id/medical-orders — the doctor's diagnosis / prescription / lab records. */
+  medicalOrders: (id: string) => http.get<MedicalOrder[]>(`/customer/visits/${id}/medical-orders`),
+  /** GET /customer/visits/:id/medical-orders/:orderId/pdf — branded prescription PDF (downloads + opens). */
+  openMedicalOrderPdf: (id: string, orderId: string) =>
+    http.openFile(`/customer/visits/${id}/medical-orders/${orderId}/pdf`, `care-sath-prescription-${orderId.slice(0, 8)}.pdf`),
 };
 
 export const paymentsApi = {

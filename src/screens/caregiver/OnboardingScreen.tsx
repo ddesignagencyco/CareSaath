@@ -19,6 +19,7 @@ import type { CaregiverSetupScreen } from '../../navigation/types';
 import { brand, colors, feedback, ink, space, themed } from '../../theme';
 import { Panel } from './components/Bits';
 import { DocumentList, DocumentUploader } from './components/Documents';
+import { DateField } from './components/Pickers';
 import { CITIES, CNIC_PATTERN, digits, formatCnic, LICENSE_BODIES, SPECIALTIES } from './components/helpers';
 
 const STEPS = ['about', 'credentials', 'services', 'documents'] as const;
@@ -28,6 +29,7 @@ const DEFAULT_BODY: Record<Specialty, LicenseBody> = {
   POST_SURGERY_CARE: 'PNC',
   ELDERLY_CARE: 'OTHER',
   PHYSIOTHERAPY: 'OTHER',
+  DOCTOR: 'PMDC',
 };
 
 /** FR-CG1: register with name, CNIC, license and certificates for verification. */
@@ -58,6 +60,7 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
   const [body, setBody] = useState<LicenseBody | null>(null);
   const [license, setLicense] = useState('');
   const [years, setYears] = useState('');
+  const [licenseExpiry, setLicenseExpiry] = useState('');
   const [cities, setCities] = useState<string[]>(CITIES.length === 1 ? [...CITIES] : []);
   const [rate, setRate] = useState('');
   const [bio, setBio] = useState('');
@@ -75,6 +78,7 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
       body: !body ? t('errors.body') : null,
       license: license.trim().length < 3 || license.trim().length > 40 ? t('errors.license') : null,
       years: yearsNum !== undefined && (yearsNum < 0 || yearsNum > 60) ? t('errors.years') : null,
+      expiry: (body === 'PMDC' || body === 'PNC') && !licenseExpiry ? t('errors.expiry') : null,
     },
     2: {
       cities: cities.length === 0 ? t('errors.cities') : null,
@@ -98,6 +102,8 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
           specialty: specialty!,
           ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
           ...(bio.trim() ? { bio: bio.trim() } : {}),
+          ...(licenseExpiry && body === 'PMDC' ? { pmdcExpiryDate: licenseExpiry } : {}),
+          ...(licenseExpiry && body === 'PNC' ? { pncExpiryDate: licenseExpiry } : {}),
           serviceCities: cities,
           ratePerVisit: Math.round(rateNum * 100),
         });
@@ -211,6 +217,16 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
             error={err(1, 'license')}
           />
           <TextField label={t('years')} value={years} onChangeText={v => setYears(digits(v, 2))} keyboardType="number-pad" ltr optional error={err(1, 'years')} />
+          {(body === 'PMDC' || body === 'PNC') && (
+            <DateField
+              label={body === 'PMDC' ? t('pmdcExpiry') : t('pncExpiry')}
+              hint={t('licenseExpiryHint')}
+              value={licenseExpiry}
+              onChange={setLicenseExpiry}
+              min={new Date().toISOString().slice(0, 10)}
+              error={err(1, 'expiry')}
+            />
+          )}
         </Card>
       )}
 

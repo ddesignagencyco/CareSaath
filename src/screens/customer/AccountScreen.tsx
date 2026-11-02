@@ -5,7 +5,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { meApi } from '../../api/customer/api';
 import { keys } from '../../api/customer/keys';
-import { Bell, MapPin, Pencil, Phone, Users, Wallet, type IconType } from '../../components/icons';
+import { Bell, MapPin, Pencil, Users, Wallet, type IconType } from '../../components/icons';
 import { ErrorState, Screen, Section, Skeleton } from '../../components/screen';
 import { Text } from '../../components/Text';
 import { Avatar, Button, Card, CountBadge, Divider, ListRow, type TileTone } from '../../components/ui';
@@ -43,7 +43,6 @@ export function AccountScreen({ navigation }: Props) {
   const care: Link[] = [
     { key: 'patients', title: t('links.patients'), icon: Users, tone: 'teal', go: () => navigation.navigate('Patients') },
     { key: 'addresses', title: t('links.addresses'), icon: MapPin, tone: 'mint', go: () => navigation.navigate('Addresses') },
-    { key: 'contacts', title: t('links.contacts'), icon: Phone, tone: 'danger', go: () => navigation.navigate('Contacts') },
   ];
   const account: Link[] = [
     { key: 'payments', title: t('links.payments'), icon: Wallet, tone: 'marigold', go: () => navigation.navigate('Payments') },
