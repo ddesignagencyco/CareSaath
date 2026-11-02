@@ -133,6 +133,10 @@ export interface UpdateCaregiverProfileInput {
   serviceCities?: string[];
   bio?: string;
   experienceYears?: number;
+  /** Renewed PMDC registration expiry, e.g. "2028-06-30" (relevant only when licenseBody is PMDC). */
+  pmdcExpiryDate?: string;
+  /** Renewed PNC registration expiry, e.g. "2028-06-30" (relevant only when licenseBody is PNC). */
+  pncExpiryDate?: string;
 }
 
 /* ---- Availability -------------------------------------------------------- */

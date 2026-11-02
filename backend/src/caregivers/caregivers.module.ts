@@ -236,6 +236,22 @@ export class UpdateCaregiverProfileDto {
   @Min(0)
   @Max(60)
   experienceYears?: number;
+
+  @ApiPropertyOptional({
+    example: '2028-06-30',
+    description: 'Renewed PMDC registration expiry date (self-reported; relevant only when licenseBody is PMDC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pmdcExpiryDate?: string;
+
+  @ApiPropertyOptional({
+    example: '2028-06-30',
+    description: 'Renewed PNC registration expiry date (self-reported; relevant only when licenseBody is PNC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pncExpiryDate?: string;
 }
 
 export class UpdateLocationDto {
@@ -549,6 +565,8 @@ export class CaregiversService {
         ...(dto.experienceYears !== undefined
           ? { experienceYears: dto.experienceYears }
           : {}),
+        ...(dto.pmdcExpiryDate !== undefined ? { pmdcExpiryDate: new Date(dto.pmdcExpiryDate) } : {}),
+        ...(dto.pncExpiryDate !== undefined ? { pncExpiryDate: new Date(dto.pncExpiryDate) } : {}),
         commissionRateId,
       },
     });
