@@ -299,8 +299,13 @@
         "name": "Enter your full name",
         "rate": "Minimum rate is Rs 10",
         "years": "0 to 60 years",
-        "cities": "Choose at least one city"
-      }
+        "cities": "Choose at least one city",
+        "bracket": "Min must be at least Rs 10 and not above max",
+        "rateInBracket": "Your rate must be within your min–max bracket"
+      },
+      "minRate": "Minimum rate (Rs)",
+      "maxRate": "Maximum rate (Rs)",
+      "rateRange": "Rate range"
     }
   },
   "documents": {

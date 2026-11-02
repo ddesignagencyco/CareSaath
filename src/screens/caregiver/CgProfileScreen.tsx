@@ -115,6 +115,9 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
         <DetailRow label={tf('fullName')} value={name} />
         <DetailRow label={tf('specialty')} value={L.specialty(p.specialty)} />
         <DetailRow label={tf('rate')} value={tm('perVisit', { amount: f.money(p.ratePerVisit) })} />
+        {p.minRatePerVisit != null && p.maxRatePerVisit != null && p.minRatePerVisit !== p.maxRatePerVisit && (
+          <DetailRow label={tf('rateRange')} value={`${f.money(p.minRatePerVisit)} – ${f.money(p.maxRatePerVisit)}`} ltr />
+        )}
         <DetailRow label={tf('years')} value={p.experienceYears === null ? tm('notAdded') : tm('yearsValue', { n: p.experienceYears })} />
         <DetailRow label={tf('cities')} value={p.serviceArea.cities.length ? f.list(p.serviceArea.cities) : tm('notAdded')} />
         <View style={styles.about}>
@@ -191,16 +194,26 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
   const [years, setYears] = useState(p.experienceYears === null ? '' : String(p.experienceYears));
   const [cities, setCities] = useState<string[]>(p.serviceArea.cities);
   const [bio, setBio] = useState(p.bio ?? '');
+  const [minRate, setMinRate] = useState(String((p.minRatePerVisit ?? p.ratePerVisit) / 100));
+  const [maxRate, setMaxRate] = useState(String((p.maxRatePerVisit ?? p.ratePerVisit) / 100));
   const [licenseExpiry, setLicenseExpiry] = useState(
     (p.licenseBody === 'PMDC' ? p.pmdcExpiryDate : p.licenseBody === 'PNC' ? p.pncExpiryDate : null)?.slice(0, 10) ?? '',
   );
   const [touched, setTouched] = useState(false);
 
   const rateNum = Number(rate);
+  const minNum = Number(minRate);
+  const maxNum = Number(maxRate);
   const yearsNum = years === '' ? undefined : Number(years);
   const errors = {
     name: fullName.trim().length < 2 ? tf('errors.name') : null,
     rate: !rate || rateNum < 10 ? tf('errors.rate') : null,
+    bracket:
+      !Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum
+        ? tf('errors.bracket')
+        : rateNum < minNum || rateNum > maxNum
+          ? tf('errors.rateInBracket')
+          : null,
     years: yearsNum !== undefined && (yearsNum < 0 || yearsNum > 60) ? tf('errors.years') : null,
     cities: cities.length === 0 ? tf('errors.cities') : null,
   };
@@ -216,6 +229,8 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
       await profileApi.update({
         specialty,
         ratePerVisit: Math.round(rateNum * 100),
+        minRatePerVisit: Math.round(minNum * 100),
+        maxRatePerVisit: Math.round(maxNum * 100),
         serviceCities: cities,
         bio: bio.trim(),
         ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
@@ -265,6 +280,14 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
         </View>
         <View style={styles.flex}>
           <TextField label={tf('years')} value={years} onChangeText={v => setYears(digits(v, 2))} keyboardType="number-pad" ltr error={err('years')} />
+        </View>
+      </View>
+      <View style={styles.twoCol}>
+        <View style={styles.flex}>
+          <TextField label={tf('minRate')} prefix="Rs" value={minRate} onChangeText={v => setMinRate(digits(v, 6))} keyboardType="number-pad" ltr error={err('bracket')} />
+        </View>
+        <View style={styles.flex}>
+          <TextField label={tf('maxRate')} prefix="Rs" value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} keyboardType="number-pad" ltr />
         </View>
       </View>
       {(p.licenseBody === 'PMDC' || p.licenseBody === 'PNC') && (

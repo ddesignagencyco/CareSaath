@@ -64,6 +64,9 @@ export interface CaregiverProfileRow {
   photoKey: string | null;
   serviceArea: { cities: string[] };
   ratePerVisit: number;
+  /** Self-set pricing bracket; ratePerVisit must stay within [min, max]. Null = single point at ratePerVisit. */
+  minRatePerVisit: number | null;
+  maxRatePerVisit: number | null;
   commissionRateId: string;
   verificationStatus: VerificationStatus;
   approvedAt: string | null;
@@ -107,6 +110,8 @@ export interface RegisterCaregiverInput {
   serviceCities: string[];
   /** Paisa, min 1000 (Rs 10). */
   ratePerVisit: number;
+  minRatePerVisit?: number;
+  maxRatePerVisit?: number;
   /** ISO date; set when licenseBody is PMDC / PNC respectively. */
   pmdcExpiryDate?: string;
   pncExpiryDate?: string;
@@ -115,6 +120,8 @@ export interface RegisterCaregiverInput {
 export interface UpdateCaregiverProfileInput {
   specialty?: Specialty;
   ratePerVisit?: number;
+  minRatePerVisit?: number;
+  maxRatePerVisit?: number;
   serviceCities?: string[];
   bio?: string;
   experienceYears?: number;

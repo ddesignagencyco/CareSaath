@@ -152,6 +152,8 @@ export async function register(dto: RegisterCaregiverInput): Promise<CaregiverPr
     licenseBody: dto.licenseBody,
     pmdcExpiryDate: dto.licenseBody === "PMDC" ? (dto.pmdcExpiryDate ?? null) : null,
     pncExpiryDate: dto.licenseBody === "PNC" ? (dto.pncExpiryDate ?? null) : null,
+    minRatePerVisit: null,
+    maxRatePerVisit: null,
     specialty: dto.specialty,
     experienceYears: dto.experienceYears ?? null,
     bio: dto.bio ?? null,
