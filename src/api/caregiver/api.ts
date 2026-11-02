@@ -14,6 +14,7 @@ import type {
   CaregiverPaymentRow,
   CaregiverPayoutRequest,
   CaregiverProfileRow,
+  CaregiverServiceArea,
   CaregiverVisitDetail,
   CaregiverVisitListItem,
   CheckInInput,
@@ -25,6 +26,7 @@ import type {
   PayoutRequestRow,
   RegisterCaregiverInput,
   SafetyIncidentRow,
+  ServiceAreaInput,
   SosInput,
   SosResult,
   UpdateCaregiverProfileInput,
@@ -69,6 +71,10 @@ export const profileApi = {
   uploadPhoto: (file: UploadFile) => (M ? mock.uploadPhoto(file) : http.upload<{ photoKey: string }>("/caregiver/photo", file)),
   /** GET /caregiver/photo/url — 404 "No photo uploaded" when photoKey is null. */
   photoUrl: () => (M ? mock.photoUrl() : http.get<{ url: string }>("/caregiver/photo/url")),
+  /** GET /caregiver/service-areas — sub-city coverage zones (empty = whole city). */
+  serviceAreas: () => http.get<CaregiverServiceArea[]>("/caregiver/service-areas"),
+  /** PUT /caregiver/service-areas — full replace (empty list = whole-city coverage). */
+  setServiceAreas: (areas: ServiceAreaInput[]) => http.put<CaregiverServiceArea[]>("/caregiver/service-areas", { areas }),
 };
 
 export const availabilityApi = {

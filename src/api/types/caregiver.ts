@@ -163,6 +163,29 @@ export interface CreateMedicalOrderInput {
   labTests?: LabTest[];
 }
 
+/* ---- Service areas (sub-city coverage zones) ----------------------------- */
+
+/** GET /caregiver/service-areas item — a named zone as a radius around a point. */
+export interface CaregiverServiceArea {
+  id: string;
+  caregiverId: string;
+  city: string;
+  label: string | null;
+  /** Decimal strings. */
+  latitude: string;
+  longitude: string;
+  radiusMeters: number;
+}
+
+/** PUT /caregiver/service-areas item. */
+export interface ServiceAreaInput {
+  city: string;
+  label?: string;
+  lat: number;
+  lng: number;
+  radiusMeters?: number;
+}
+
 /* ---- Availability -------------------------------------------------------- */
 
 export interface AvailabilityRule {

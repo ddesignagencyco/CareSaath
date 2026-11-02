@@ -19,6 +19,7 @@ import { useAction, useQuery } from '../../lib/query';
 import { accent, brand, colors, feedback, ink, radius, shadow, space, themed } from '../../theme';
 import { DetailRow, Panel } from './components/Bits';
 import { DocumentList, DocumentUploader } from './components/Documents';
+import { ServiceAreasCard } from './components/ServiceAreas';
 import { FilePickerSheet, PhotoAvatar, SAMPLE_PHOTO } from './components/Files';
 import { CITIES, digits, SPECIALTIES } from './components/helpers';
 
@@ -151,6 +152,8 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
         <DetailRow label={t('credentials.approved')} value={f.date(p.approvedAt)} />
         <DetailRow label={t('credentials.reverify')} value={f.date(p.reverifyDueAt)} />
       </Panel>
+
+      <ServiceAreasCard />
 
       <Panel icon={FileText} tone="marigold" title={t('documents')}>
         <DocumentList documents={p.documents} />

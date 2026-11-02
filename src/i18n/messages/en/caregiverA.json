@@ -216,5 +216,17 @@
     "noDisputes": "No disputes",
     "raisedByYou": "Raised by you",
     "raisedByFamily": "Raised by the family"
+  },
+  "serviceAreas": {
+    "title": "Coverage areas",
+    "description": "Pick the parts of Lahore you cover so families in those areas find you. Leave empty to cover the whole city.",
+    "areasLabel": "Areas you cover",
+    "areasHint": "Choose one or more neighbourhoods.",
+    "radiusLabel": "Coverage radius",
+    "radiusHint": "How far around each area you'll travel.",
+    "wholeCity": "No areas selected — you'll appear for the whole city.",
+    "summary": "Families within {radius} of {areas} will see you.",
+    "save": "Save coverage",
+    "saved": "Coverage areas updated"
   }
 }
