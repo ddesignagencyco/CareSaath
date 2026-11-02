@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useToast } from '../../../components/overlay';
 import { useAuth } from '../../../auth/AuthContext';
 import { chatApi } from '../../../api/chat/api';
 import { chatKeys } from '../../../api/chat/keys';
@@ -31,12 +32,19 @@ export function usePeerRole() {
 export function useOpenChat() {
   const scope = useChatScope();
   const nav = useChatNav();
+  const toast = useToast();
+  const t = useT('mobile.chat');
   return useCallback(
     async (peer: ChatPeer) => {
       const c = await chatApi(scope).open(peer);
+      // No thread until the pair has a confirmed booking — say so instead of opening a chat that can't load.
+      if (!c) {
+        toast.info(t('noConversation'));
+        return;
+      }
       nav.navigate('Chat', { id: c.id, name: c.peer.name });
     },
-    [scope, nav],
+    [scope, nav, toast, t],
   );
 }
 

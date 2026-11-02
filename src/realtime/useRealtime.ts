@@ -1,20 +1,25 @@
 /**
- * Realtime chat delivery over Socket.IO (replaces polling).
+ * Realtime over Socket.IO (replaces polling), one connection per signed-in side.
  *
- * One connection per signed-in side. The server scopes events to `user:<id>` /
- * `role:<ROLE>` and emits `entity.updated` with `{ type: 'chat_message' }` when
- * a message is sent, read, reacted to or deleted — we refetch the side's chat
- * queries so the thread and the conversation list update live. The token is
- * re-read on every (re)connect so a refreshed token is used, and an expired
- * token triggers a refresh before the auto-reconnect.
+ * The server scopes events to `user:<id>` / `role:<ROLE>` and pushes:
+ *   - `entity.updated` `{ type }` — a record changed. `chat_message` refreshes
+ *     the chat queries; anything else refreshes the side's live data (bookings,
+ *     visits, payments/earnings, notifications) so visit status, a booking being
+ *     accepted, a payment settling, etc. show without a manual refresh.
+ *   - `notification.created` / `notification.read` — refresh the in-app feed and
+ *     the unread badge live.
+ * The token is re-read on every (re)connect so a refreshed token is used.
  */
 import { useEffect } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../api/config";
 import { session as customerSession } from "../api/customer/session";
 import { session as caregiverSession } from "../api/caregiver/session";
+import { keys as customerKeys } from "../api/customer/keys";
+import { keys as caregiverKeys } from "../api/caregiver/keys";
 import { chatKeys } from "../api/chat/keys";
 import { invalidate } from "../lib/query";
+import type { QueryKey } from "../lib/query";
 import type { ChatScope } from "../api/chat/types";
 
 /** Socket.IO connects to the API origin, not the `/api/v1` REST base. */
@@ -25,6 +30,13 @@ export function useRealtime(scope: ChatScope): void {
     const session = scope === "customer" ? customerSession : caregiverSession;
     if (!session.get()?.accessToken) return;
 
+    const notifKey = scope === "customer" ? customerKeys.notifications : caregiverKeys.notifications;
+    // Resources that change server-side and should refresh on a generic entity update.
+    const liveKeys: QueryKey[] =
+      scope === "customer"
+        ? [customerKeys.bookings, customerKeys.visit, customerKeys.payments, customerKeys.notifications]
+        : [caregiverKeys.bookings, caregiverKeys.visits, caregiverKeys.earnings, caregiverKeys.notifications];
+
     const socket = io(ORIGIN, {
       transports: ["websocket"],
       // ngrok's free tunnel needs this to skip its browser-warning interstitial.
@@ -34,17 +46,23 @@ export function useRealtime(scope: ChatScope): void {
     });
 
     const refreshChat = () => invalidate(chatKeys.root(scope));
-    const onEntityUpdated = (payload?: { type?: string }) => {
-      if (payload?.type === "chat_message") refreshChat();
-    };
+    const refreshNotifs = () => invalidate(notifKey);
+    const refreshLive = () => liveKeys.forEach((k) => invalidate(k));
 
-    socket.on("entity.updated", onEntityUpdated);
+    socket.on("entity.updated", (payload?: { type?: string }) => {
+      if (payload?.type === "chat_message") refreshChat();
+      else refreshLive();
+    });
+    socket.on("notification.created", refreshNotifs);
+    socket.on("notification.read", refreshNotifs);
     // Bad/inactive token: stop, don't loop.
     socket.on("auth.error", () => socket.close());
-    // Expired token: the REST client refreshes the session on its next call (the
-    // chat screen also polls every 5s as a fallback); the socket's auth callback
-    // then picks up the fresh token on auto-reconnect.
-    socket.io.on("reconnect", refreshChat);
+    // Expired token: the REST client refreshes the session on its next call; the
+    // socket's auth callback then picks up the fresh token on auto-reconnect.
+    socket.io.on("reconnect", () => {
+      refreshChat();
+      refreshLive();
+    });
 
     return () => {
       socket.removeAllListeners();

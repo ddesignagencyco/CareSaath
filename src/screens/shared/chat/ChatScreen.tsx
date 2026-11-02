@@ -8,7 +8,7 @@ import { chatApi } from '../../../api/chat/api';
 import { chatKeys } from '../../../api/chat/keys';
 import type { ChatMessage } from '../../../api/chat/types';
 import { HeroBand } from '../../../components/brand';
-import { ArrowUp, Copy, CornerUpLeft, MessagesSquare, Pause, Phone, Trash, Video, X } from '../../../components/icons';
+import { ArrowUp, Copy, CornerUpLeft, MessagesSquare, Pause, Phone, Trash, X } from '../../../components/icons';
 import { ConfirmSheet, Sheet, useToast } from '../../../components/overlay';
 import { EmptyState, ErrorState, Screen, SkeletonList } from '../../../components/screen';
 import { Text } from '../../../components/Text';
@@ -17,12 +17,12 @@ import { localDayKey, useFmt } from '../../../i18n/format';
 import { useT } from '../../../i18n';
 import { invalidate, useApiErrorText, useQuery } from '../../../lib/query';
 import { uploads, useConversationUploads, type ChatUpload } from '../../../lib/uploads';
-import { formatDuration, player } from '../../../lib/voice';
+import { player } from '../../../lib/voice';
 import type { ChatRoutes } from '../../../navigation/types';
 import { brandFixed, colors, radius, space, themed } from '../../../theme';
 import { DayDivider, MessageBubble, UploadBubble } from './Bubble';
-import { CallScreen } from './CallScreen';
 import { useChatNav, useChatScope, usePeerRole } from './common';
+import { useCall } from '../../../realtime/CallProvider';
 import { Composer, type Outgoing } from './Composer';
 import { DocumentSheet, MediaViewer, toViewerMedia, type ViewerMedia } from './MediaViewer';
 
@@ -55,8 +55,8 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
   const [confirmCancel, setConfirmCancel] = useState<ChatUpload | null>(null);
   const [viewer, setViewer] = useState<{ items: ViewerMedia[]; index: number } | null>(null);
   const [doc, setDoc] = useState<ChatMessage | null>(null);
-  const [call, setCall] = useState<{ video: boolean } | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
+  const callCtx = useCall();
 
   const peer = conv.data?.peer;
   const peerName = peer?.name ?? name;
@@ -210,6 +210,17 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
     [byId, peerName, toggleUpload, openMedia, openUploadMedia, playError, jump, flashId],
   );
 
+  // Real WebRTC audio call (video is disabled product-wide): calls go over a shared active visit.
+  const startCall = useCallback(async () => {
+    if (!callCtx) return;
+    const { peerUserId, visitId } = await api.callTargetFor(id);
+    if (!visitId) {
+      toast.info(t('noVisitForCall'));
+      return;
+    }
+    callCtx.startCall({ visitId, calleeId: peerUserId, peerName });
+  }, [callCtx, api, id, peerName, toast, t]);
+
   const subtitle = conv.data ? (conv.data.online ? t('online') : role(conv.data.peer.role)) : undefined;
   const empty = !msgs.isLoading && !msgs.error && items.length === 0;
 
@@ -221,7 +232,7 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
           subtitle={subtitle}
           photoUrl={peer?.photoUrl}
           onInfo={() => nav.navigate('ChatMedia', { id, name: peerName })}
-          onCall={video => setCall({ video })}
+          onCall={startCall}
         />
       }
       scroll={false}
@@ -359,15 +370,6 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
 
       <MediaViewer items={viewer?.items ?? null} index={viewer?.index ?? 0} onClose={() => setViewer(null)} />
       <DocumentSheet message={doc} onClose={() => setDoc(null)} />
-      <CallScreen
-        call={call}
-        name={peerName}
-        photoUrl={peer?.photoUrl}
-        onEnd={secs => {
-          setCall(null);
-          if (secs > 0) toast.info(t('callEnded', { time: formatDuration(secs * 1000) }));
-        }}
-      />
     </Screen>
   );
 }
@@ -376,7 +378,7 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
  * WhatsApp-style chat bar on the brand teal: back, the other person's photo
  * and name (tap for shared media and documents), video and voice call.
  */
-function ChatHeader({ name, subtitle, photoUrl, onInfo, onCall }: { name: string; subtitle?: string; photoUrl?: string | null; onInfo: () => void; onCall: (video: boolean) => void }) {
+function ChatHeader({ name, subtitle, photoUrl, onInfo, onCall }: { name: string; subtitle?: string; photoUrl?: string | null; onInfo: () => void; onCall: () => void }) {
   const navigation = useNavigation();
   const t = useT('mobile.chat');
   const tc = useT('common.actions');
@@ -400,8 +402,7 @@ function ChatHeader({ name, subtitle, photoUrl, onInfo, onCall }: { name: string
               )}
             </View>
           </Touchable>
-          <IconButton icon={Video} label={t('videoCall')} onPress={() => onCall(true)} />
-          <IconButton icon={Phone} label={t('voiceCall')} onPress={() => onCall(false)} />
+          <IconButton icon={Phone} label={t('voiceCall')} onPress={onCall} />
         </View>
       </HeroBand>
     </OnDark.Provider>

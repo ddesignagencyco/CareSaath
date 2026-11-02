@@ -164,6 +164,8 @@ async function fetchConversations(scope: ChatScope): Promise<ChatConversation[]>
       online: false,
       lastMessage: s.lastMessage ? mapMessage(s.lastMessage, myId, s.counterpartUserId) : null,
       unread: s.unreadCount,
+      peerUserId: s.counterpartUserId,
+      activeBookingId: s.activeBookingId,
     };
   });
 }
@@ -188,19 +190,20 @@ export function chatApi(scope: ChatScope) {
     conversations: () => fetchConversations(scope),
 
     /**
-     * Opens the thread with a booking's other party. There is no "create"
-     * endpoint — the thread already exists for any CONFIRMED/COMPLETED booking,
-     * so we find it among the conversations (by counterpart user id, or by the
-     * caregiver profile id the customer side passes).
+     * Finds the thread with a booking's other party. There is no "create"
+     * endpoint — a thread exists only once the pair has a CONFIRMED/COMPLETED
+     * booking, so we match it among the conversations (by counterpart user id,
+     * or by the caregiver profile id the customer side passes). Returns null
+     * when there is no thread yet (e.g. a request the caregiver hasn't accepted),
+     * so the caller can say so instead of opening a chat that can't load.
      */
-    open: async (peer: ChatPeer): Promise<ChatConversation> => {
+    open: async (peer: ChatPeer): Promise<ChatConversation | null> => {
       const list = await fetchConversations(scope);
-      const found =
+      return (
         list.find((c) => c.id === peer.id) ??
-        list.find((c) => convCache.get(metaKey(scope, c.id))?.caregiverId === peer.id);
-      if (found) return found;
-      // Fall back to a minimal thread so the screen still opens (first message will resolve the booking).
-      return { id: peer.id, peer, online: false, lastMessage: null, unread: 0 };
+        list.find((c) => convCache.get(metaKey(scope, c.id))?.caregiverId === peer.id) ??
+        null
+      );
     },
 
     /** The thread's metadata (peer name/role), resolved from the conversation list. */
@@ -227,6 +230,36 @@ export function chatApi(scope: ChatScope) {
 
     /** PATCH /chat/conversations/:id/read */
     markRead: (id: string) => http.patch<{ updated: number }>(`/chat/conversations/${id}/read`).then(() => ({ ok: true as const })),
+
+    /**
+     * Resolves a call target for a thread: the counterpart's user id plus an
+     * active visit id (calls go over a shared visit; null means there isn't one
+     * right now). The customer may omit the callee — the backend derives it.
+     */
+    callTargetFor: async (convId: string): Promise<{ peerUserId: string; visitId: string | null }> => {
+      let meta = convCache.get(metaKey(scope, convId));
+      if (!meta) {
+        await fetchConversations(scope);
+        meta = convCache.get(metaKey(scope, convId));
+      }
+      const bookingId = meta?.activeBookingId;
+      if (!bookingId) return { peerUserId: convId, visitId: null };
+      const ACTIVE = ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT", "CONFIRMED"];
+      try {
+        let visits: { id: string; status: string }[] = [];
+        if (scope === "customer") {
+          const b = await http.get<{ visits: { id: string; status: string }[] }>(`/customer/bookings/${bookingId}`);
+          visits = b.visits ?? [];
+        } else {
+          const page = await http.get<{ items: { id: string; status: string; bookingId: string }[] }>("/caregiver/visits", { limit: 50 });
+          visits = (page.items ?? []).filter((v) => v.bookingId === bookingId);
+        }
+        const pick = visits.find((v) => ACTIVE.includes(v.status)) ?? visits[0];
+        return { peerUserId: convId, visitId: pick?.id ?? null };
+      } catch {
+        return { peerUserId: convId, visitId: null };
+      }
+    },
 
     /**
      * Send on the thread's active booking. A text message posts directly; a

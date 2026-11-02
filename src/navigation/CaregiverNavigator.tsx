@@ -23,6 +23,7 @@ import { useChatUnread } from '../screens/shared/chat/common';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { useUploadsBoot } from '../lib/uploads';
 import { useRealtime } from '../realtime/useRealtime';
+import { CallProvider } from '../realtime/CallProvider';
 import { stackOptions } from './options';
 import { TabBar } from './TabBar';
 import type { CaregiverSetupStack, CaregiverStack, CaregiverTabs } from './types';
@@ -68,6 +69,7 @@ export function CaregiverNavigator() {
     );
   }
   return (
+    <CallProvider scope="caregiver">
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="CaregiverTabs" component={Tabs} />
       <Stack.Screen name="CgVisitDetail" component={CgVisitDetailScreen} />
@@ -80,5 +82,6 @@ export function CaregiverNavigator() {
       <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
+    </CallProvider>
   );
 }

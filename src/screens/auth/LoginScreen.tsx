@@ -229,25 +229,11 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
           <Text variant="small" color={ink[400]}>
             {tc('footerNote')}
           </Text>
-          {/* Only matters for a new number: existing accounts open their own app. */}
-          <Touchable
-            onPress={() => navigation.setParams({ intent: joining ? 'customer' : 'caregiver' })}
-            accessibilityRole="button"
-            style={styles.switch}
-          >
-            <Text
-              variant="small"
-              weight="bold"
-              color={brand[700]}
-              align="center"
-            >
-              {joining ? tm('switchCaregiver') : tm('joinCaregiver')}
-            </Text>
-          </Touchable>
+          {/* New users create an account (name + role chosen there); existing numbers just sign in. */}
           <Touchable
             onPress={() => navigation.navigate('Signup', { role: joining ? 'caregiver' : 'customer' })}
             accessibilityRole="button"
-            style={styles.resendBtn}
+            style={styles.switch}
           >
             <Text variant="small" weight="bold" color={brand[700]} align="center">
               {tm('newAccount')}

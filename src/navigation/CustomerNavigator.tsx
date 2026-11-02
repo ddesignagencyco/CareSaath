@@ -28,6 +28,7 @@ import { useChatUnread } from '../screens/shared/chat/common';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { useUploadsBoot } from '../lib/uploads';
 import { useRealtime } from '../realtime/useRealtime';
+import { CallProvider } from '../realtime/CallProvider';
 import { stackOptions } from './options';
 import { TabBar } from './TabBar';
 import type { CustomerStack, CustomerTabs } from './types';
@@ -61,6 +62,7 @@ export function CustomerNavigator() {
   useUploadsBoot('customer');
   useRealtime('customer');
   return (
+    <CallProvider scope="customer">
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="CustomerTabs" component={Tabs} />
       <Stack.Screen name="CaregiverProfile" component={CaregiverProfileScreen} />
@@ -81,5 +83,6 @@ export function CustomerNavigator() {
       <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
+    </CallProvider>
   );
 }

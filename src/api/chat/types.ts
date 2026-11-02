@@ -58,6 +58,10 @@ export interface ChatConversation {
   online: boolean;
   lastMessage: ChatMessage | null;
   unread: number;
+  /** The counterpart's user id (= id in the relationship model) — the call callee. */
+  peerUserId?: string;
+  /** The thread's active booking, used to resolve a visit for a call. */
+  activeBookingId?: string | null;
 }
 
 /** POST …/chat/conversations/:id/messages */
