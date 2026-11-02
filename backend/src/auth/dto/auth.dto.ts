@@ -121,3 +121,43 @@ export class RefreshTokenDto {
   @IsString()
   refreshToken!: string;
 }
+
+export class FirebaseVerifyDto {
+  @ApiProperty({
+    description:
+      'Firebase ID token obtained client-side after Firebase confirms the phone OTP (firebase.auth().signInWithPhoneNumber(...).confirm(code)).',
+  })
+  @IsString()
+  idToken!: string;
+
+  @ApiPropertyOptional({
+    example: 'Ayesha Khan',
+    description: 'Full name for a NEW account. Required only the first time this phone number signs in; ignored for an existing account.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Optional email on file. Only used when creating a new account.' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional({
+    enum: SIGNUP_ROLES,
+    description: 'Account type for a NEW account. Required the first time this phone number signs in.',
+  })
+  @IsOptional()
+  @IsIn(SIGNUP_ROLES)
+  role?: SignupRole;
+
+  @ApiPropertyOptional({
+    enum: LOGIN_AUDIENCES,
+    description: 'App the user is signing in to, checked the same way as POST /auth/otp/verify.',
+  })
+  @IsOptional()
+  @IsIn(LOGIN_AUDIENCES)
+  audience?: LoginAudience;
+}

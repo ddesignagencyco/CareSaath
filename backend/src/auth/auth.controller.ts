@@ -3,6 +3,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator.js';
 import { AuthService } from './auth.service.js';
 import {
+  FirebaseVerifyDto,
   RefreshTokenDto,
   RequestOtpDto,
   SignupDto,
@@ -87,6 +88,24 @@ export class AuthController {
   })
   signupVerify(@Body() dto: SignupVerifyDto) {
     return this.auth.signupVerify(dto.phone, dto.code);
+  }
+
+  @Public()
+  @Post('firebase/verify')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Sign in or sign up with a Firebase phone-auth ID token',
+    description:
+      'The client sends its own OTP via the Firebase SDK and confirms it there; this only verifies the resulting ID token. ' +
+      'First time this phone number is seen, fullName + role create the account (like POST /auth/signup/verify); ' +
+      'after that they are ignored and this behaves like POST /auth/otp/verify.',
+  })
+  firebaseVerify(@Body() dto: FirebaseVerifyDto) {
+    return this.auth.firebaseAuth(
+      dto.idToken,
+      { fullName: dto.fullName, email: dto.email, role: dto.role },
+      dto.audience,
+    );
   }
 
   @Public()

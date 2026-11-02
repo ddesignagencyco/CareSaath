@@ -30,13 +30,14 @@ export class FirebaseService implements OnModuleInit {
 
     try {
       const serviceAccount = JSON.parse(keyJson) as Record<string, unknown>;
+      const projectId = String(serviceAccount.project_id);
       this.app = initializeApp({
         credential: cert(serviceAccount),
-        projectId: String(serviceAccount.project_id),
+        projectId,
       });
       this.authInstance = getAuth(this.app);
       this.logger.log(
-        `Firebase Admin SDK initialized for project ${serviceAccount.project_id}. ` +
+        `Firebase Admin SDK initialized for project ${projectId}. ` +
           'Credentials verified at startup are NOT a guarantee Phone Authentication is ' +
           'enabled in the console — that is a separate manual step.',
       );
