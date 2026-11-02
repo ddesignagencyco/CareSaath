@@ -348,7 +348,8 @@
       "years": "0 to 60 years",
       "cities": "Choose at least one city",
       "rate": "Enter your fee per visit (at least Rs 10)",
-      "expiry": "Add your registration expiry date"
+      "expiry": "Add your registration expiry date",
+      "bracket": "Min must be at least Rs 10, max not below min, and your fee within the range"
     },
     "created": "Profile created. Now upload your documents.",
     "fullName": "Full name",
@@ -378,7 +379,9 @@
       "CERTIFICATE": "Degree or diploma"
     },
     "createProfile": "Create profile",
-    "submit": "Submit for verification"
+    "submit": "Submit for verification",
+    "minRate": "Minimum fee (Rs)",
+    "maxRate": "Maximum fee (Rs)"
   },
   "status": {
     "timeline": {

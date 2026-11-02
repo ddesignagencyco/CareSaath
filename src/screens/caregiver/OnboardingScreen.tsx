@@ -63,11 +63,16 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
   const [licenseExpiry, setLicenseExpiry] = useState('');
   const [cities, setCities] = useState<string[]>(CITIES.length === 1 ? [...CITIES] : []);
   const [rate, setRate] = useState('');
+  const [minRate, setMinRate] = useState('');
+  const [maxRate, setMaxRate] = useState('');
   const [bio, setBio] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const yearsNum = years === '' ? undefined : Number(years);
   const rateNum = Number(rate);
+  // Optional pricing bracket; defaults to the single rate when left blank (web parity).
+  const minNum = minRate ? Number(minRate) : rateNum;
+  const maxNum = maxRate ? Number(maxRate) : rateNum;
   const errors: Record<number, Record<string, string | null>> = {
     0: {
       name: name.trim().length < 2 ? t('errors.name') : null,
@@ -83,6 +88,10 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
     2: {
       cities: cities.length === 0 ? t('errors.cities') : null,
       rate: !rate || rateNum < 10 ? t('errors.rate') : null,
+      bracket:
+        (minRate || maxRate) && (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum || rateNum < minNum || rateNum > maxNum)
+          ? t('errors.bracket')
+          : null,
     },
   };
   const err = (s: number, k: string) => (touched ? errors[s][k] : null);
@@ -106,6 +115,8 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
           ...(licenseExpiry && body === 'PNC' ? { pncExpiryDate: licenseExpiry } : {}),
           serviceCities: cities,
           ratePerVisit: Math.round(rateNum * 100),
+          minRatePerVisit: Math.round(minNum * 100),
+          maxRatePerVisit: Math.round(maxNum * 100),
         });
       } catch (e) {
         // A retry after a network blip: the profile already exists, carry on.
@@ -258,6 +269,14 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
             error={err(2, 'rate')}
             hint={rateNum >= 10 ? t('rateHintAmount', { amount: formatMoney(Math.round(rateNum * 100)) }) : t('rateHint')}
           />
+          <View style={styles.rateRow}>
+            <View style={styles.flex}>
+              <TextField label={t('minRate')} value={minRate} onChangeText={v => setMinRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional error={err(2, 'bracket')} />
+            </View>
+            <View style={styles.flex}>
+              <TextField label={t('maxRate')} value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional />
+            </View>
+          </View>
           <TextField label={t('about')} value={bio} onChangeText={setBio} multiline maxLength={2000} hint={t('aboutHint', { count: bio.length })} />
         </Card>
       )}
@@ -327,6 +346,7 @@ const styles = themed(() => StyleSheet.create({
   gapSm: { gap: space.sm },
   gap: { gap: space.lg },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  rateRow: { flexDirection: 'row', gap: space.sm },
   progress: { flexDirection: 'row', paddingVertical: space.xs },
   stepCol: { flex: 1, alignItems: 'center', gap: 6 },
   stepTrack: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
