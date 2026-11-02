@@ -308,35 +308,45 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
   );
 }
 
-/** Real sequence, so numbered: circles joined by a line, done steps ticked. */
+/** Numbered stepper: one continuous line behind equal-centred circles, filled up to the current step. */
 function Progress({ step }: { step: number }) {
   const t = useT('caregiverB.onboarding');
+  const n = STEPS.length;
+  const edge = 100 / (2 * n); // first/last circle centre (half a column in from the edge)
+  const span = (100 * (n - 1)) / n; // distance between the first and last circle centres
+  const fill = n > 1 ? (step / (n - 1)) * span : 0; // teal line up to the current circle
   return (
     <View style={styles.progress} accessibilityLabel={t('progress')}>
-      {STEPS.map((key, i) => {
-        const done = i < step;
-        const now = i === step;
-        return (
-          <View key={key} style={styles.stepCol}>
-            <View style={styles.stepTrack}>
-              <View style={[styles.stepLine, i === 0 && styles.hidden, i <= step && styles.stepLineOn]} />
-              <View style={[styles.stepDot, done && styles.stepDone, now && styles.stepNow]}>
-                {done ? (
-                  <Check size={14} color="#fff" strokeWidth={3} />
-                ) : (
-                  <Text variant="caption" weight="bold" color={now ? '#fff' : ink[500]} align="center" numeric>
-                    {String(i + 1)}
-                  </Text>
-                )}
+      <View style={styles.progressTrack}>
+        <View style={[styles.line, { left: `${edge}%`, right: `${edge}%` }]} />
+        <View style={[styles.line, styles.lineOn, { left: `${edge}%`, width: `${fill}%` }]} />
+        <View style={styles.dotsRow}>
+          {STEPS.map((key, i) => {
+            const done = i < step;
+            const now = i === step;
+            return (
+              <View key={key} style={styles.dotWrap}>
+                <View style={[styles.stepDot, done && styles.stepDone, now && styles.stepNow]}>
+                  {done ? (
+                    <Check size={14} color="#fff" strokeWidth={3} />
+                  ) : (
+                    <Text variant="caption" weight="bold" color={now ? '#fff' : ink[500]} align="center" numeric>
+                      {String(i + 1)}
+                    </Text>
+                  )}
+                </View>
               </View>
-              <View style={[styles.stepLine, i === STEPS.length - 1 && styles.hidden, i < step && styles.stepLineOn]} />
-            </View>
-            <Text variant="caption" weight={now ? 'bold' : 'semibold'} color={i <= step ? brand[800] : ink[400]} align="center" numberOfLines={2}>
-              {t(`steps.${key}`)}
-            </Text>
-          </View>
-        );
-      })}
+            );
+          })}
+        </View>
+      </View>
+      <View style={styles.dotsRow}>
+        {STEPS.map((key, i) => (
+          <Text key={key} variant="caption" weight={i === step ? 'bold' : 'semibold'} color={i <= step ? brand[800] : ink[400]} align="center" numberOfLines={2} style={styles.flex}>
+            {t(`steps.${key}`)}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
@@ -347,12 +357,12 @@ const styles = themed(() => StyleSheet.create({
   gap: { gap: space.lg },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   rateRow: { flexDirection: 'row', gap: space.sm },
-  progress: { flexDirection: 'row', paddingVertical: space.xs },
-  stepCol: { flex: 1, alignItems: 'center', gap: 6 },
-  stepTrack: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
-  stepLine: { flex: 1, height: 3, borderRadius: 2, backgroundColor: ink[200] },
-  stepLineOn: { backgroundColor: brand[500] },
-  hidden: { opacity: 0 },
+  progress: { paddingVertical: space.xs, gap: 6 },
+  progressTrack: { height: 36, justifyContent: 'center' },
+  line: { position: 'absolute', top: 16.5, height: 3, borderRadius: 2, backgroundColor: ink[200] },
+  lineOn: { backgroundColor: brand[500] },
+  dotsRow: { flexDirection: 'row' },
+  dotWrap: { flex: 1, alignItems: 'center' },
   stepDot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: ink[100] },
   stepDone: { backgroundColor: brand[600] },
   stepNow: { backgroundColor: brand[700], borderWidth: 3, borderColor: brand[100], width: 34, height: 34, borderRadius: 17 },
