@@ -37,6 +37,12 @@ interface AuthState {
    * error message to show, or null on success.
    */
   signIn: (phone: string, code: string, intent?: AppRole) => Promise<string | null>;
+  /**
+   * Finishes a new account (name/email/role were sent at POST /auth/signup):
+   * verifies the signup OTP, stores the session for the chosen role and opens
+   * its app (a new caregiver lands in onboarding).
+   */
+  signUp: (phone: string, code: string, role: AppRole) => Promise<string | null>;
   signOut: () => Promise<void>;
   /** Re-read /me (after registering, or to check verification status). */
   reloadMe: () => Promise<void>;
@@ -124,6 +130,19 @@ export function AuthProvider({ children, messages }: { children: React.ReactNode
     [messages],
   );
 
+  const signUp = useCallback(async (phone: string, code: string, chosen: AppRole): Promise<string | null> => {
+    const tokens = await customerApi.authApi.signupVerify(phone, code);
+    const store = chosen === 'customer' ? customerSession : caregiverSession;
+    const api = chosen === 'customer' ? customerApi : caregiverApi;
+    store.set({ ...tokens, phone });
+    const profile = await api.meApi.get();
+    kv.setItem(ROLE_KEY, chosen);
+    kv.setItem(LAST_ROLE_KEY, chosen);
+    setMe(profile);
+    setRole(chosen);
+    return null;
+  }, []);
+
   const signOut = useCallback(async () => {
     const store = role === 'customer' ? customerSession : caregiverSession;
     const refresh = store.get()?.refreshToken;
@@ -158,10 +177,11 @@ export function AuthProvider({ children, messages }: { children: React.ReactNode
       me,
       caregiverStage: role === 'caregiver' && me ? stageFor(me) : null,
       signIn,
+      signUp,
       signOut,
       reloadMe,
     }),
-    [booting, bootError, role, me, signIn, signOut, reloadMe],
+    [booting, bootError, role, me, signIn, signUp, signOut, reloadMe],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -86,6 +86,10 @@ export interface MyCaregiverProfile extends CaregiverProfileRow {
   /** Latest 5, newest first. */
   credentialReviews: CredentialReview[];
   commissionRate: CommissionRate;
+  /** Opted in to immediate (ASAP / emergency) requests. */
+  acceptingImmediate: boolean;
+  /** Live right now: opted in AND a fresh GPS fix AND not mid-visit / blacked out. */
+  availableNow: boolean;
 }
 
 export interface RegisterCaregiverInput {

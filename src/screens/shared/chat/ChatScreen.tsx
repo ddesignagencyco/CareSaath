@@ -141,16 +141,18 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
 
   const react = (m: ChatMessage, emoji: string) => {
     setActionsFor(null);
+    if (!m.bookingId) return;
     api
-      .react(m.id, emoji)
+      .react(m.bookingId, m.id, emoji)
       .then(() => invalidate(chatKeys.messages(scope, id)))
       .catch(e => toast.error(apiError(e)));
   };
 
   const remove = (m: ChatMessage) => {
     setConfirmDelete(null);
+    if (!m.bookingId) return;
     api
-      .remove(m.id)
+      .remove(m.bookingId, m.id)
       .then(() => invalidate(chatKeys.root(scope)))
       .catch(e => toast.error(apiError(e)));
   };

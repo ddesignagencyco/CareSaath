@@ -14,5 +14,5 @@ export const API_BASE_URL = 'https://finance-napkin-overstock.ngrok-free.dev/api
 
 export const USE_MOCKS = false;
 
-/** TODO(backend): flip once /customer/chat and /caregiver/chat exist (see api/chat/api.ts). */
-export const CHAT_USE_MOCKS = true;
+/** Chat is now wired to the real backend (relationship-scoped threads + Socket.IO). */
+export const CHAT_USE_MOCKS = false;

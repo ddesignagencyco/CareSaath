@@ -1,4 +1,28 @@
 {
+  "emergency": {
+    "title": "Need care now",
+    "homeHint": "Nurses available near you, right now",
+    "disclaimer": "We'll find verified caregivers available right now near you. For a life-threatening emergency, call 1122.",
+    "forPatient": "Care for",
+    "at": "At",
+    "choosePatient": "Who needs care?",
+    "chooseAddress": "Where do you need care?",
+    "nearbyTitle": "Available near you",
+    "live": "Available",
+    "away": "{km} km away",
+    "eta": "~{n} min away",
+    "perVisit": "per visit",
+    "bookNow": "Book now",
+    "booked": "Caregiver requested — opening your booking",
+    "noneTitle": "No one available right now",
+    "none": "No caregivers are available at this moment near this address. Try again shortly, or book a scheduled visit instead.",
+    "noAddressTitle": "Add an address",
+    "noAddress": "We need a saved address to find caregivers near you.",
+    "addAddress": "Add an address",
+    "noPatientTitle": "Add a patient",
+    "noPatient": "Add who the care is for before booking.",
+    "addPatient": "Add a patient"
+  },
   "find": {
     "loadMore": "Show more"
   },

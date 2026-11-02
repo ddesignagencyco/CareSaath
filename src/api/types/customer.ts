@@ -31,6 +31,15 @@ export interface PublicCaregiver extends CaregiverSearchItem {
   availabilityRules: Pick<AvailabilityRule, "dayOfWeek" | "startTime" | "endTime">[];
 }
 
+/** GET /caregivers/nearby item: a search result plus distance/ETA for the nearby-now (emergency) flow. */
+export interface NearbyCaregiver extends CaregiverSearchItem {
+  /** Great-circle metres from the customer's point. */
+  distanceMeters: number;
+  /** Rough minutes to reach the customer at an average speed. */
+  etaMinutes: number;
+  availableNow: boolean;
+}
+
 /* ---- Patients & addresses ------------------------------------------------ */
 
 export interface PatientInput {
@@ -67,6 +76,8 @@ export interface CreateBookingInput {
   caregiverId: string;
   addressId: string;
   type?: "SINGLE" | "RECURRING";
+  /** ASAP / emergency booking: skips the availability-hours check; the caregiver auto-starts. */
+  isImmediate?: boolean;
   /** YYYY-MM-DD */
   startDate: string;
   endDate: string;

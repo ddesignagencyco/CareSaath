@@ -244,6 +244,15 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
               {joining ? tm('switchCaregiver') : tm('joinCaregiver')}
             </Text>
           </Touchable>
+          <Touchable
+            onPress={() => navigation.navigate('Signup', { role: joining ? 'caregiver' : 'customer' })}
+            accessibilityRole="button"
+            style={styles.resendBtn}
+          >
+            <Text variant="small" weight="bold" color={brand[700]} align="center">
+              {tm('newAccount')}
+            </Text>
+          </Touchable>
         </>
       ) : (
         <>

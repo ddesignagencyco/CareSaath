@@ -27,6 +27,8 @@ export interface ChatReaction {
 export interface ChatMessage {
   id: string;
   conversationId: string;
+  /** The booking this message was actually sent on — reactions/delete target this booking. */
+  bookingId?: string | null;
   /** "me" = the signed-in user; "them" = the other party. */
   sender: "me" | "them";
   type: ChatMessageType;

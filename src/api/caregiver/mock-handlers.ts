@@ -183,6 +183,8 @@ export async function getProfile(): Promise<MyCaregiverProfile> {
     documents: d.documents.filter((x) => x.caregiverId === p.id),
     credentialReviews: d.reviewsOfCredentials.filter((r) => r.caregiverId === p.id).sort((a, b) => b.decidedAt.localeCompare(a.decidedAt)).slice(0, 5),
     commissionRate: { id: p.commissionRateId, category: p.specialty, percentage: COMMISSION[p.specialty], effectiveFrom: p.createdAt, createdAt: p.createdAt, updatedAt: p.createdAt },
+    acceptingImmediate: false,
+    availableNow: false,
   });
 }
 

@@ -46,8 +46,8 @@ export function WelcomeScreen({ navigation }: AuthScreen<'Welcome'>) {
       </HeroBand>
 
       <ScrollView style={styles.panel} contentContainerStyle={[styles.panelContent, { paddingBottom: insets.bottom + space.xl }]} bounces={false}>
-        <RoleCard icon={Stethoscope} tone="teal" title={t('customerTitle')} text={t('customerText')} onPress={() => navigation.navigate('Login', { intent: 'customer' })} />
-        <RoleCard icon={HandHeart} tone="marigold" title={t('caregiverTitle')} text={t('caregiverText')} onPress={() => navigation.navigate('Login', { intent: 'caregiver' })} />
+        <RoleCard icon={Stethoscope} tone="teal" title={t('customerTitle')} text={t('customerText')} onPress={() => navigation.navigate('Signup', { role: 'customer' })} />
+        <RoleCard icon={HandHeart} tone="marigold" title={t('caregiverTitle')} text={t('caregiverText')} onPress={() => navigation.navigate('Signup', { role: 'caregiver' })} />
 
         <Touchable onPress={() => setLocale(locale === 'en' ? 'ur' : 'en')} accessibilityRole="button" style={styles.lang}>
           <Languages size={20} color={brand[700]} />

@@ -8,7 +8,7 @@ import { bookingsApi, meApi, notificationsApi, patientsApi } from '../../api/cus
 import { keys } from '../../api/customer/keys';
 import type { Specialty } from '../../api/types';
 import { HeroBand } from '../../components/brand';
-import { Activity, Bandage, Bell, Search, Stethoscope, type IconType } from '../../components/icons';
+import { Activity, Bandage, Bell, Search, Siren, Stethoscope, type IconType } from '../../components/icons';
 import { EmptyState, ErrorState, Screen, Section, Skeleton } from '../../components/screen';
 import { Text } from '../../components/Text';
 import { Avatar, Badge, Button, Card, DateBlock, Divider, DirChevron, IconButton, IconTile, Touchable, type TileTone } from '../../components/ui';
@@ -16,7 +16,7 @@ import { useT } from '../../i18n';
 import { useFmt, useLabels } from '../../i18n/format';
 import { useQuery } from '../../lib/query';
 import type { CustomerStack, CustomerTabs } from '../../navigation/types';
-import { brand, colors, ink, radius, shadow, space, themed, brandFixed } from '../../theme';
+import { brand, colors, feedback, ink, radius, shadow, space, themed, brandFixed } from '../../theme';
 import { ACTIVE_VISIT, VISIT_TONE, dayKey, todayKey, useCaregiverMap, useDayLabel, visitStart } from './components/bits';
 import { HeartHandshake, UserPlus } from './components/icons';
 import { LiveVisitCard } from './components/tracker';
@@ -48,6 +48,7 @@ export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const t = useT('customerA.home');
   const tm = useT('mobileCustomer.home');
+  const te = useT('mobileCustomer.emergency');
   const tn = useT('common.nav');
   const f = useFmt();
   const L = useLabels();
@@ -123,6 +124,22 @@ export function HomeScreen({ navigation }: Props) {
             </Text>
           </View>
           <DirChevron color={brand[600]} />
+        </Touchable>
+
+        {/* Emergency: nearest caregivers available right now. */}
+        <Touchable onPress={() => navigation.navigate('Emergency')} accessibilityRole="button" accessibilityLabel={te('title')} style={styles.emergency}>
+          <View style={styles.emergencyIcon}>
+            <Siren size={22} color="#fff" strokeWidth={2.4} />
+          </View>
+          <View style={styles.flex}>
+            <Text weight="bold" color={feedback.danger700} numberOfLines={1}>
+              {te('title')}
+            </Text>
+            <Text variant="small" color={feedback.danger600} numberOfLines={1}>
+              {te('homeHint')}
+            </Text>
+          </View>
+          <DirChevron color={feedback.danger600} />
         </Touchable>
 
         {active && (
@@ -251,6 +268,19 @@ const styles = themed(() => StyleSheet.create({
     ...shadow.pop,
   },
   searchIcon: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: brand[700], alignItems: 'center', justifyContent: 'center' },
+  emergency: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.md,
+    paddingEnd: space.lg,
+    minHeight: 64,
+    borderRadius: radius.lg,
+    backgroundColor: feedback.danger50,
+    borderWidth: 1,
+    borderColor: feedback.danger200,
+  },
+  emergencyIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: feedback.danger600, alignItems: 'center', justifyContent: 'center' },
   firstTime: { gap: space.sm, backgroundColor: brand[50], borderColor: brand[100] },
   start: { alignSelf: 'flex-start', marginTop: space.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },

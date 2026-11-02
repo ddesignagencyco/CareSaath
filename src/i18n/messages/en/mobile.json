@@ -26,7 +26,31 @@
     "welcomeBack": "Welcome back",
     "title": "Sign in with your phone",
     "description": "Enter your mobile number and we'll text you a 6-digit code. We open the right app for your number.",
-    "joinCaregiver": "New caregiver? Join here"
+    "joinCaregiver": "New caregiver? Join here",
+    "newAccount": "New here? Create an account"
+  },
+  "signup": {
+    "title": "Create your account",
+    "description": "Tell us who you are, then verify your number with a 6-digit code.",
+    "roleLabel": "I want to",
+    "customer": "Get care",
+    "caregiver": "Give care",
+    "name": "Full name",
+    "namePlaceholder": "e.g. Ayesha Khan",
+    "email": "Email",
+    "emailHint": "For receipts and updates",
+    "emailPlaceholder": "you@example.com",
+    "create": "Create account",
+    "haveAccount": "Already have an account?",
+    "logIn": "Log in",
+    "nameRequired": "Please enter your full name",
+    "nameTooShort": "Please enter your full name (at least 2 letters)",
+    "emailInvalid": "Enter a valid email address, or leave it blank",
+    "exists": "This number already has an account. Log in instead.",
+    "asCustomer": "Signing up to get care",
+    "asCaregiver": "Signing up to give care",
+    "switchToGive": "Want to give care instead?",
+    "switchToGet": "Want to get care instead?"
   },
   "settings": {
     "title": "Settings",

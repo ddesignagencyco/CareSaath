@@ -28,6 +28,7 @@ import type {
   CustomerVisitDetail,
   EmergencyContact,
   InitiatePaymentResult,
+  NearbyCaregiver,
   PatientInput,
   PromoQuote,
   PublicCaregiver,
@@ -45,6 +46,11 @@ export const authApi = {
   requestOtp: (phone: string) => (M ? mock.requestOtp(phone) : http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
   /** POST /auth/otp/verify — new numbers become CUSTOMER accounts. */
   verifyOtp: (phone: string, code: string) => (M ? mock.verifyOtp(phone, code) : http.post<TokenPair>("/auth/otp/verify", { phone, code })),
+  /** POST /auth/signup — registers a new account (409 if the number already exists). */
+  signup: (input: { phone: string; fullName: string; email?: string; role: "CUSTOMER" | "CAREGIVER" }) =>
+    http.post<{ ttlSeconds: number }>("/auth/signup", input),
+  /** POST /auth/signup/verify — verifies the signup OTP and issues tokens for the chosen role. */
+  signupVerify: (phone: string, code: string) => http.post<TokenPair>("/auth/signup/verify", { phone, code }),
   /** POST /auth/logout */
   logout: (refreshToken: string) => (M ? Promise.resolve({ ok: true }) : http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
 };
@@ -98,6 +104,9 @@ export const caregiversApi = {
     M ? mock.searchCaregivers(q) : http.get<Paginated<CaregiverSearchItem>>("/caregivers", q),
   /** GET /caregivers/:id (public profile) */
   get: (id: string) => (M ? mock.getCaregiver(id) : http.get<PublicCaregiver>(`/caregivers/${id}`)),
+  /** GET /caregivers/nearby?lat&lng&specialty — nearby-now (emergency) search, nearest first (auth required). */
+  nearbyNow: (lat: number, lng: number, specialty?: Specialty) =>
+    http.get<Paginated<NearbyCaregiver>>("/caregivers/nearby", { lat, lng, limit: 20, ...(specialty ? { specialty } : {}) }),
 };
 
 export const promosApi = {

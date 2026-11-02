@@ -22,6 +22,7 @@ import { ConversationsScreen } from '../screens/shared/chat/ConversationsScreen'
 import { useChatUnread } from '../screens/shared/chat/common';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { useUploadsBoot } from '../lib/uploads';
+import { useRealtime } from '../realtime/useRealtime';
 import { stackOptions } from './options';
 import { TabBar } from './TabBar';
 import type { CaregiverSetupStack, CaregiverStack, CaregiverTabs } from './types';
@@ -57,6 +58,7 @@ function Tabs() {
 export function CaregiverNavigator() {
   const { caregiverStage } = useAuth();
   useUploadsBoot('caregiver');
+  useRealtime('caregiver');
   if (caregiverStage !== 'approved') {
     return (
       <Setup.Navigator screenOptions={stackOptions} initialRouteName={caregiverStage === 'onboarding' ? 'Onboarding' : 'Status'}>

@@ -11,6 +11,7 @@ import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CaregiverProfileScreen } from '../screens/customer/CaregiverProfileScreen';
 import { ContactsScreen } from '../screens/customer/ContactsScreen';
+import { EmergencyScreen } from '../screens/customer/EmergencyScreen';
 import { EditProfileScreen } from '../screens/customer/EditProfileScreen';
 import { DisputesScreen } from '../screens/customer/DisputesScreen';
 import { FindCareScreen } from '../screens/customer/FindCareScreen';
@@ -26,6 +27,7 @@ import { ConversationsScreen } from '../screens/shared/chat/ConversationsScreen'
 import { useChatUnread } from '../screens/shared/chat/common';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { useUploadsBoot } from '../lib/uploads';
+import { useRealtime } from '../realtime/useRealtime';
 import { stackOptions } from './options';
 import { TabBar } from './TabBar';
 import type { CustomerStack, CustomerTabs } from './types';
@@ -57,10 +59,12 @@ function Tabs() {
 
 export function CustomerNavigator() {
   useUploadsBoot('customer');
+  useRealtime('customer');
   return (
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="CustomerTabs" component={Tabs} />
       <Stack.Screen name="CaregiverProfile" component={CaregiverProfileScreen} />
+      <Stack.Screen name="Emergency" component={EmergencyScreen} />
       <Stack.Screen name="Book" component={BookScreen} />
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} />
       <Stack.Screen name="VisitDetail" component={VisitDetailScreen} />

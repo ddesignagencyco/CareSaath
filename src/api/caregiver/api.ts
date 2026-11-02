@@ -80,6 +80,11 @@ export const availabilityApi = {
   addBlock: (dto: { startDate: string; endDate: string; reason?: string }) => (M ? mock.addBlock(dto) : http.post<AvailabilityBlock>("/caregiver/availability/blocks", dto)),
   /** DELETE /caregiver/availability/blocks/:id */
   deleteBlock: (id: string) => (M ? mock.deleteBlock(id) : http.delete<{ ok: true }>(`/caregiver/availability/blocks/${id}`)),
+  /** PUT /caregiver/available-now — opt in/out of immediate (ASAP / emergency) requests. */
+  setAvailableNow: (available: boolean) =>
+    http.put<{ acceptingImmediate: boolean; availableNow: boolean; locationUpdatedAt: string | null }>("/caregiver/available-now", { available }),
+  /** PATCH /caregiver/location — share live GPS so nearby families can book an immediate visit (keeps "available now" alive). */
+  updateLocation: (lat: number, lng: number) => http.patch<void>("/caregiver/location", { lat, lng }),
 };
 
 export const bookingsApi = {

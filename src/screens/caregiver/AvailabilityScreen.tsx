@@ -13,6 +13,7 @@ import { useT } from '../../i18n';
 import { localDayKey, useFmt } from '../../i18n/format';
 import { useAction, useQuery } from '../../lib/query';
 import { brand, colors, feedback, ink, radius, space, themed } from '../../theme';
+import { AvailableNowCard } from './components/AvailableNow';
 import { Panel } from './components/Bits';
 import { CalendarOff, Copy } from './components/icons';
 import { DateField, TimeField } from './components/Pickers';
@@ -114,6 +115,7 @@ function Editor({ availability, summary }: { availability: Availability; summary
           <Button label={tw('save')} disabled={!dirty || !valid} loading={save.isPending} onPress={() => save.run(undefined)} />
         </View>
       }>
+      <AvailableNowCard />
       <Panel
         title={tw('title')}
         description={tw('description')}>

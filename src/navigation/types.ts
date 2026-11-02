@@ -13,6 +13,8 @@ export type AuthStack = {
    * matters for a new number: "caregiver" starts caregiver onboarding.
    */
   Login: { intent?: AppRole } | undefined;
+  /** New account: name (+ optional email) + number + OTP, for the chosen role. */
+  Signup: { role?: AppRole } | undefined;
 };
 
 export type CustomerTabs = {
@@ -33,6 +35,7 @@ export type ChatRoutes = {
 export type CustomerStack = ChatRoutes & {
   CustomerTabs: NavigatorScreenParams<CustomerTabs>;
   CaregiverProfile: { id: string };
+  Emergency: undefined;
   Book: { caregiverId: string };
   BookingDetail: { id: string };
   VisitDetail: { id: string };
