@@ -25,7 +25,27 @@
     "singleVisit": "Single visit",
     "timeline": "Timeline",
     "reportIssue": "Report a safety or access issue",
-    "raiseDispute": "Raise a dispute"
+    "raiseDispute": "Raise a dispute",
+    "medicalOrders": {
+      "title": "Medical orders",
+      "addTitle": "Record an order",
+      "hint": "Add a diagnosis, prescription, or lab tests. The family is notified.",
+      "diagnosis": "Diagnosis",
+      "diagnosisPlaceholder": "e.g. Upper respiratory tract infection",
+      "medicines": "Prescription",
+      "medName": "Medicine name",
+      "dosage": "Dosage",
+      "frequency": "Frequency",
+      "duration": "Duration",
+      "instructions": "Instructions",
+      "addMedicine": "Add medicine",
+      "labTests": "Lab tests",
+      "labName": "Test name",
+      "addLabTest": "Add lab test",
+      "remove": "Remove",
+      "save": "Save order",
+      "saved": "Order saved — the family has been notified."
+    }
   },
   "flow": {
     "progress": "Visit progress",

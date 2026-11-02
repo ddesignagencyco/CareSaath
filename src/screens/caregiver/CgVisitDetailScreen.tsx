@@ -12,6 +12,7 @@ import { useQuery } from '../../lib/query';
 import type { CaregiverScreen } from '../../navigation/types';
 import { brand, colors, feedback, ink, radius, shadow, space, themed } from '../../theme';
 import { DetailRow, Panel } from './components/Bits';
+import { DoctorOrders } from './components/DoctorOrders';
 import { FileRow, FileViewer } from './components/Files';
 import { ACTIVE_STATUSES, callPhone, dateBlockLabel, openMaps, readableMedical, VISIT_TONE } from './components/helpers';
 import { MapPinned, Scale } from './components/icons';
@@ -159,6 +160,8 @@ export function CgVisitDetailScreen({ route, navigation }: CaregiverScreen<'CgVi
           ))
         )}
       </Panel>
+
+      {booking.serviceType === 'DOCTOR' && <DoctorOrders visitId={id} />}
 
       <Panel icon={MapPin} tone="mint" title={t('locationFamily')}>
         <View style={styles.inlineTop}>

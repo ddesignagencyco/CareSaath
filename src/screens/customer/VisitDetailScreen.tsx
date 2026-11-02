@@ -8,7 +8,9 @@ import { RichText, Text } from '../../components/Text';
 import { Avatar, Button, Card, DirChevron, Divider, ListRow, Touchable } from '../../components/ui';
 import { useT } from '../../i18n';
 import { useFmt, useLabels } from '../../i18n/format';
-import { useQuery } from '../../lib/query';
+import { useApiErrorText, useQuery } from '../../lib/query';
+import { useToast } from '../../components/overlay';
+import { MedicalOrdersView } from '../shared/MedicalOrders';
 import type { CustomerScreen } from '../../navigation/types';
 import { brand, colors, ink, radius, shadow, space, themed, brandFixed, accentFixed } from '../../theme';
 import { ACTIVE_VISIT, Rating, useCaregiver, visitStart, LineIcon } from './components/bits';
@@ -149,6 +151,8 @@ export function VisitDetailScreen({ route, navigation }: CustomerScreen<'VisitDe
         </Section>
       )}
 
+      {v.booking.serviceType === 'DOCTOR' && <CustomerMedicalOrders visitId={id} />}
+
       {(v.status === 'COMPLETED' || v.review) && (
         <Card>
           <ReviewPanel visit={v} caregiverName={c?.user.fullName ?? t('yourCaregiverLower')} />
@@ -214,6 +218,30 @@ export function VisitDetailScreen({ route, navigation }: CustomerScreen<'VisitDe
         onMoved={next => navigation.replace('VisitDetail', { id: next.id })}
       />
     </Screen>
+  );
+}
+
+/** The doctor's diagnosis / prescription / lab tests for a DOCTOR visit, with a PDF download. */
+function CustomerMedicalOrders({ visitId }: { visitId: string }) {
+  const t = useT('shared.medicalOrders');
+  const toast = useToast();
+  const apiError = useApiErrorText();
+  const orders = useQuery([...keys.visit, visitId, 'medical-orders'], () => visitsApi.medicalOrders(visitId));
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  if (!orders.data?.length) return null;
+  const download = (orderId: string) => {
+    setDownloadingId(orderId);
+    visitsApi
+      .openMedicalOrderPdf(visitId, orderId)
+      .catch(e => toast.error(apiError(e)))
+      .finally(() => setDownloadingId(null));
+  };
+  return (
+    <Section title={t('title')}>
+      <Card>
+        <MedicalOrdersView orders={orders.data} onDownload={download} downloadingId={downloadingId} />
+      </Card>
+    </Section>
   );
 }
 

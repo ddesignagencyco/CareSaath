@@ -71,5 +71,13 @@
     "counter": "{count}/{max}",
     "counterOptional": "{count}/{max} · اختیاری",
     "label": "وجہ"
+  },
+  "medicalOrders": {
+    "title": "ڈاکٹر کی ہدایات",
+    "recordedOn": "ریکارڈ کیا گیا {date}",
+    "diagnosis": "تشخیص",
+    "medicines": "نسخہ",
+    "labTests": "لیب ٹیسٹ",
+    "downloadPdf": "PDF ڈاؤن لوڈ کریں"
   }
 }

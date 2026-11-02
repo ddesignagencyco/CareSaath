@@ -25,7 +25,27 @@
     "singleVisit": "ایک وزٹ",
     "timeline": "ٹائم لائن",
     "reportIssue": "حفاظت یا رسائی کا مسئلہ رپورٹ کریں",
-    "raiseDispute": "تنازع درج کریں"
+    "raiseDispute": "تنازع درج کریں",
+    "medicalOrders": {
+      "title": "طبی ہدایات",
+      "addTitle": "ہدایت ریکارڈ کریں",
+      "hint": "تشخیص، نسخہ یا لیب ٹیسٹ شامل کریں۔ خاندان کو اطلاع دی جائے گی۔",
+      "diagnosis": "تشخیص",
+      "diagnosisPlaceholder": "مثلاً اوپری سانس کی نالی کا انفیکشن",
+      "medicines": "نسخہ",
+      "medName": "دوا کا نام",
+      "dosage": "خوراک",
+      "frequency": "تعدد",
+      "duration": "مدت",
+      "instructions": "ہدایات",
+      "addMedicine": "دوا شامل کریں",
+      "labTests": "لیب ٹیسٹ",
+      "labName": "ٹیسٹ کا نام",
+      "addLabTest": "لیب ٹیسٹ شامل کریں",
+      "remove": "ہٹائیں",
+      "save": "ہدایت محفوظ کریں",
+      "saved": "ہدایت محفوظ ہو گئی — خاندان کو اطلاع دے دی گئی ہے۔"
+    }
   },
   "flow": {
     "progress": "وزٹ کی پیش رفت",
