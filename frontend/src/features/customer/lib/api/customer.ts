@@ -53,6 +53,9 @@ export const authApi = {
   /** POST /auth/signup/verify — completes the sign-up with the role chosen at /auth/signup; returns tokens. */
   signupVerify: (phone: string, code: string) =>
     http.post<TokenPair>("/auth/signup/verify", { phone, code }),
+  /** POST /auth/firebase/verify — exchange a Firebase phone-auth ID token for our tokens (SMS-OTP path). */
+  firebaseVerify: (body: { idToken: string; fullName?: string; email?: string; role?: "CUSTOMER" | "CAREGIVER" }) =>
+    http.post<TokenPair>("/auth/firebase/verify", body),
   /** POST /auth/logout */
   logout: (refreshToken: string) => (http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
 };

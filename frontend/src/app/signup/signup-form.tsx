@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LoginScreen } from "@shared/auth/login-screen";
+import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { storeTokens as caregiverStoreTokens } from "@/features/caregiver/lib/auth";
 import { authApi } from "@/features/customer/lib/api/customer";
 import { session as customerSession } from "@/features/customer/lib/api/session";
@@ -84,12 +85,18 @@ export function SignupForm({ initialRole }: { initialRole: "customer" | "caregiv
           </Link>
         </>
       }
-      requestOtp={(phone, name, email) =>
-        authApi.signup({ phone, fullName: (name ?? "").trim(), ...(email ? { email } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" })
-      }
-      verifyOtp={async (phone, code) => {
-        // The backend already has the name/email/role from /auth/signup; this just verifies + issues tokens.
-        const tokens = await authApi.signupVerify(phone, code);
+      requestOtp={makeRequestOtp((phone, name, email) =>
+        authApi.signup({ phone, fullName: (name ?? "").trim(), ...(email ? { email } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" }),
+      )}
+      verifyOtp={async (phone, code, name, email) => {
+        // Email-OTP path: the backend already has name/email/role from /auth/signup.
+        // Firebase path: no prior /auth/signup call, so carry name/email/role to firebase/verify.
+        const tokens = await tokensFromOtp({
+          code,
+          firebaseVerify: authApi.firebaseVerify,
+          backendVerify: () => authApi.signupVerify(phone, code),
+          signup: { fullName: (name ?? "").trim() || undefined, email: (email ?? "").trim() || undefined, role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" },
+        });
         if (role === "caregiver") {
           clearSession();
           caregiverStoreTokens(tokens, phone);

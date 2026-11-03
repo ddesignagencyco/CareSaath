@@ -5,6 +5,7 @@ import { BadgeCheck, MapPinned, Siren } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LoginScreen } from "@shared/auth/login-screen";
+import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { DevHint } from "@shared/auth/dev-hint";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { formatPkMobile } from "@shared/lib/phone";
@@ -40,9 +41,9 @@ export default function CustomerLoginPage() {
           </DevHint>
         )
       }
-      requestOtp={authApi.requestOtp}
+      requestOtp={makeRequestOtp(authApi.requestOtp)}
       verifyOtp={async (phone, code) => {
-        const tokens = await authApi.verifyOtp(phone, code);
+        const tokens = await tokensFromOtp({ code, firebaseVerify: authApi.firebaseVerify, backendVerify: () => authApi.verifyOtp(phone, code) });
         storeTokens(tokens, phone);
         const me = await meApi.get();
         if (me.role !== "CUSTOMER") {

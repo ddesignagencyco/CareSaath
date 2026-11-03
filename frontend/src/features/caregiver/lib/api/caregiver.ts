@@ -44,6 +44,9 @@ export const authApi = {
   requestOtp: (phone: string) => (http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
   /** POST /auth/otp/verify — always yields a CUSTOMER for new numbers. */
   verifyOtp: (phone: string, code: string) => (http.post<TokenPair>("/auth/otp/verify", { phone, code })),
+  /** POST /auth/firebase/verify — exchange a Firebase phone-auth ID token for our tokens (SMS-OTP path). */
+  firebaseVerify: (body: { idToken: string; fullName?: string; email?: string; role?: "CUSTOMER" | "CAREGIVER" }) =>
+    (http.post<TokenPair>("/auth/firebase/verify", body)),
   /** POST /auth/refresh — needed right after register so the token carries CAREGIVER. */
   refresh: (refreshToken: string) => (http.post<TokenPair>("/auth/refresh", { refreshToken })),
   /** POST /auth/logout */

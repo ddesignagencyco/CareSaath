@@ -4,6 +4,7 @@ import { BadgeCheck, FileCheck2, Siren } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { LoginScreen } from "@shared/auth/login-screen";
+import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { DevHint } from "@shared/auth/dev-hint";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { authApi } from "@/features/admin/lib/api/admin";
@@ -47,9 +48,9 @@ export default function LoginPage() {
           </DevHint>
         )
       }
-      requestOtp={authApi.requestOtp}
+      requestOtp={makeRequestOtp(authApi.requestOtp)}
       verifyOtp={async (phone, code) => {
-        const tokens = await authApi.verifyOtp(phone, code);
+        const tokens = await tokensFromOtp({ code, firebaseVerify: authApi.firebaseVerify, backendVerify: () => authApi.verifyOtp(phone, code) });
         if (decodeToken(tokens.accessToken)?.role !== "ADMIN") {
           // The API signs in any phone (unknown numbers become CUSTOMERs), so a
           // non-admin gets a valid session here: revoke it and don't store it.
