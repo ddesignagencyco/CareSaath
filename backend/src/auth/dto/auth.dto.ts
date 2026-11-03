@@ -80,6 +80,23 @@ export class SignupDto {
   role!: SignupRole;
 }
 
+export class SignupPrecheckDto {
+  @ApiProperty({
+    example: '+923001110099',
+    description: 'Pakistani mobile number with country code. Returns 409 if already registered.',
+  })
+  @IsString()
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'phone must be a valid phone number (e.g. +923001234567)',
+  })
+  phone!: string;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Optional email. Returns 409 if already in use.' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
+
 export class SignupVerifyDto {
   @ApiProperty({ example: '+923001110099', description: 'Phone number that started the sign-up.' })
   @IsString()

@@ -8,6 +8,7 @@ import {
   RefreshTokenDto,
   RequestOtpDto,
   SignupDto,
+  SignupPrecheckDto,
   SignupVerifyDto,
   VerifyOtpDto,
 } from './dto/auth.dto.js';
@@ -89,6 +90,19 @@ export class AuthController {
   })
   signup(@Body() dto: SignupDto) {
     return this.auth.signup(dto);
+  }
+
+  @Public()
+  @Post('signup/precheck')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Pre-check sign-up availability',
+    description:
+      'Rejects an already-registered phone (409) or email (409) BEFORE any OTP is sent, so the clients can tell the user on the sign-up form instead of after a code is sent/verified. Used by both web (incl. the Firebase SMS path) and mobile.',
+  })
+  @ApiResponse({ status: 200, description: 'Phone and email are available.', schema: { example: { ok: true } } })
+  signupPrecheck(@Body() dto: SignupPrecheckDto) {
+    return this.auth.signupPrecheck(dto);
   }
 
   @Public()

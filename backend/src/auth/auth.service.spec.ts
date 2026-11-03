@@ -151,6 +151,16 @@ describe('AuthService.signup', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('rejects an already-used email before any OTP is sent', async () => {
+    const { service, prisma, sms } = makeService();
+    // phone free (first findUnique), email taken (second findUnique)
+    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'u-2' });
+    await expect(
+      service.signup({ phone: '+923001234567', fullName: 'Test User', email: 'taken@example.com', role: 'CUSTOMER' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(sms.sendOtp).not.toHaveBeenCalled();
+  });
+
   it('stores a SIGNUP-purpose OTP and the pending signup payload, separate from LOGIN', async () => {
     const { service, redis, prisma, sms } = makeService();
     prisma.user.findUnique.mockResolvedValue(null);
@@ -173,6 +183,34 @@ describe('AuthService.signup', () => {
       expect.any(Number),
     );
     expect(sms.sendOtp).toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.signupPrecheck', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('passes when the phone and email are both free', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(
+      service.signupPrecheck({ phone: '+923001234567', email: 'new@example.com' }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it('rejects an already-registered phone', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u-1' });
+    await expect(service.signupPrecheck({ phone: '+923001234567' })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('rejects an already-used email', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'u-2' });
+    await expect(
+      service.signupPrecheck({ phone: '+923001234567', email: 'taken@example.com' }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
 

@@ -214,11 +214,39 @@ export class AuthService {
     };
   }
 
-  /** Starts a sign-up: rejects an already-registered phone, then sends a SIGNUP-purpose OTP. */
+  /**
+   * Pre-flight for sign-up: rejects an already-used phone or email BEFORE any OTP
+   * is sent (whether the OTP comes from Firebase client-side or the backend). This
+   * lets both the web and mobile clients tell the user on the sign-up form instead
+   * of only discovering the clash after a code has been sent and verified.
+   */
+  async signupPrecheck(dto: { phone: string; email?: string }): Promise<{ ok: true }> {
+    const byPhone = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    if (byPhone) {
+      throw new ConflictException('This number is already registered');
+    }
+    if (dto.email) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (byEmail) {
+        throw new ConflictException('Email already in use');
+      }
+    }
+    return { ok: true };
+  }
+
+  /** Starts a sign-up: rejects an already-registered phone or email, then sends a SIGNUP-purpose OTP. */
   async signup(dto: { phone: string; fullName: string; email?: string; role: SignupRole }): Promise<{ ttlSeconds: number }> {
     const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     if (existing) {
       throw new ConflictException('This number is already registered');
+    }
+    // Reject a taken email up front so the OTP is never sent for a clash the
+    // account creation (signupVerify) would only reject afterwards.
+    if (dto.email) {
+      const emailOwner = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (emailOwner) {
+        throw new ConflictException('Email already in use');
+      }
     }
 
     const rateKey = `otp:rl:${dto.phone}`;

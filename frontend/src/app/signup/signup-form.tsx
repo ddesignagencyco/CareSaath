@@ -85,9 +85,17 @@ export function SignupForm({ initialRole }: { initialRole: "customer" | "caregiv
           </Link>
         </>
       }
-      requestOtp={makeRequestOtp((phone, name, email) =>
-        authApi.signup({ phone, fullName: (name ?? "").trim(), ...(email ? { email } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" }),
-      )}
+      requestOtp={async (phone, name, email) => {
+        // Reject a taken phone/email BEFORE any OTP is sent — in the Firebase SMS
+        // path the backend's /auth/signup checks never run (the SDK sends the code
+        // client-side), so this precheck is what tells the user on the form instead
+        // of after they've entered a code. In the backend path it is a harmless
+        // early guard (/auth/signup re-checks and is what actually sends the code).
+        await authApi.signupPrecheck({ phone, ...(email ? { email } : {}) });
+        return makeRequestOtp((p, n, e) =>
+          authApi.signup({ phone: p, fullName: (n ?? "").trim(), ...(e ? { email: e } : {}), role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" }),
+        )(phone, name, email);
+      }}
       verifyOtp={async (phone, code, name, email) => {
         // Email-OTP path: the backend already has name/email/role from /auth/signup.
         // Firebase path: no prior /auth/signup call, so carry name/email/role to firebase/verify.
