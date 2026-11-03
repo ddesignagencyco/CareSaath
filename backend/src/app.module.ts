@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { StorageModule } from './common/storage/storage.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CsrfMiddleware } from './auth/csrf.middleware.js';
 import { UsersModule } from './users/users.module.js';
 import { PatientsModule } from './patients/patients.module.js';
 import { AddressesModule } from './addresses/addresses.module.js';
@@ -92,5 +93,6 @@ import { FirebaseModule } from './firebase/firebase.module.js';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(compressionMiddleware()).forRoutes('*');
+    consumer.apply(CsrfMiddleware).forRoutes('*');
   }
 }

@@ -114,12 +114,13 @@ export class VerifyPhoneChangeDto {
 }
 
 export class RefreshTokenDto {
-  @ApiProperty({
-    description: 'JWT refresh token obtained from /auth/otp/verify.',
+  @ApiPropertyOptional({
+    description: 'JWT refresh token. The web client sends it as an httpOnly cookie instead, so the body is optional.',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
+  @IsOptional()
   @IsString()
-  refreshToken!: string;
+  refreshToken?: string;
 }
 
 export class FirebaseVerifyDto {
