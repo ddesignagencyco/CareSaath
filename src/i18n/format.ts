@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type {
+  CaregiverBadge,
   CaregiverBookingStatus,
   DisputeStatus,
   DocType,
@@ -163,6 +164,7 @@ export function useLabels() {
     return {
       specialty: (v: Specialty) => t(`specialty.${v}`),
       specialtyHint: (v: Specialty) => t(`specialtyHint.${v}`),
+      caregiverBadge: (v: CaregiverBadge) => t(`caregiverBadge.${v}`),
       licenseBody: (v: LicenseBody) => t(`licenseBody.${v}`),
       licenseBodyShort: (v: LicenseBody) => t(`licenseBodyShort.${v}`),
       licenseBodyOption: (v: LicenseBody) => t(`licenseBodyOption.${v}`),

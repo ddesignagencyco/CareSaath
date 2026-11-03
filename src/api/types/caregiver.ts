@@ -5,6 +5,7 @@
  * integer paisa.
  */
 import type {
+  CaregiverBadge,
   CaregiverDocument,
   CommissionRate,
   DisputeStatus,
@@ -73,6 +74,8 @@ export interface CaregiverProfileRow {
   reverifyDueAt: string | null;
   ratingAverage: string;
   ratingCount: number;
+  /** Ranking tier (bronze…platinum); null until enough completed visits. */
+  badge?: CaregiverBadge | null;
   createdAt: string;
   updatedAt: string;
 }

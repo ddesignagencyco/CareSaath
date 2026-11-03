@@ -9,6 +9,7 @@ import { Select, TextField } from '../../components/form';
 import { DateField } from './components/Pickers';
 import { BadgeCheck, Camera, Check, FileText, Pencil, ShieldCheck, Star, Stethoscope } from '../../components/icons';
 import { Sheet } from '../../components/overlay';
+import { TierBadge } from '../../components/TierBadge';
 import { ErrorState, Screen, SkeletonList } from '../../components/screen';
 import { Text } from '../../components/Text';
 import { Button, Chip, Touchable } from '../../components/ui';
@@ -105,6 +106,7 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
               </Text>
             </View>
           )}
+          {p.badge ? <TierBadge badge={p.badge} /> : null}
         </View>
       </View>
 

@@ -4,7 +4,7 @@
  * Dates are ISO strings; Decimals are strings; money is integer paisa.
  */
 import type { AvailabilityRule, Booking, CaregiverVisitDetail, PaymentMethod, PaymentStatus, PatientRelation, Visit } from "./caregiver";
-import type { LicenseBody, PayoutStatus, Specialty } from "./core";
+import type { CaregiverBadge, LicenseBody, PayoutStatus, Specialty } from "./core";
 
 /* ---- Public caregiver directory (GET /caregivers, @Public) -------------- */
 
@@ -21,6 +21,8 @@ export interface CaregiverSearchItem {
   user: { fullName: string };
   /** Viewable profile photo URL (null when none uploaded). */
   photoUrl: string | null;
+  /** Ranking tier (bronze…platinum); null until the caregiver has enough completed visits. */
+  badge?: CaregiverBadge | null;
 }
 
 /** GET /caregivers/:id */

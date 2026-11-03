@@ -33,6 +33,13 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+
+# Firebase config / secrets — keep out of version control (local build reads them from disk).
+**/google-services.json
+**/GoogleService-Info.plist
+firebase-admin*.json
+serviceAccount*.json
+*.p8
 .kotlin/
 
 # node.js

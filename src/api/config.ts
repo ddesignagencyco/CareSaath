@@ -9,7 +9,7 @@
  *
  * USE_MOCKS switches every api.ts call back to the in-app mock (offline demo).
  */
-// Live backend (Render). Local dev: 'https://finance-napkin-overstock.ngrok-free.dev/api/v1'
+// Live backend (Render). Local dev: swap for your ngrok tunnel, e.g. 'https://<id>.ngrok-free.dev/api/v1'.
 export const API_BASE_URL = 'https://caresaath-api.onrender.com/api/v1';
 
 export const USE_MOCKS = false;

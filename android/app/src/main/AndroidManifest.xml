@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Short tick when a swiped chat message snaps to reply. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 13+ runtime permission for showing FCM push notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Saving chat photos/videos to the gallery; Android 10+ needs no permission for that. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- Address pin, GPS check-in/out (FR-CG7) and SOS location. -->

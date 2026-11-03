@@ -10,6 +10,7 @@ import { Sheet } from '../../components/overlay';
 import { EmptyState, ErrorState, Screen, Skeleton, SkeletonList } from '../../components/screen';
 import { Text } from '../../components/Text';
 import { Badge, Button, Card, Chip, Divider, HScroll, type Tone } from '../../components/ui';
+import { TextField } from '../../components/form';
 import { useT } from '../../i18n';
 import { formatMoney, useFmt, useLabels } from '../../i18n/format';
 import { useAction, useQuery } from '../../lib/query';
@@ -33,11 +34,20 @@ export function PaymentsScreen({ navigation }: CustomerScreen<'Payments'>) {
   const insets = useSafeAreaInsets();
   const t = useT('customerB.payments');
   const tm = useT('mobileCustomer.find');
+  const tmc = useT('mobile.common');
   const L = useLabels();
   const [status, setStatus] = useState<(typeof STATUSES)[number]>('ALL');
   const [limit, setLimit] = useState(PAGE);
+  const [q, setQ] = useState('');
   const [viewing, setViewing] = useState<string | null>(null);
   const list = useQuery([...keys.payments, 'page', status, limit], () => paymentsApi.list({ page: 1, limit, status: status === 'ALL' ? undefined : status }));
+  const ql = q.trim().toLowerCase();
+  const items = (list.data?.items ?? []).filter(p => {
+    if (!ql) return true;
+    const name = p.visit.booking.patient.name.toLowerCase();
+    const rupees = String(Math.round(p.amount / 100));
+    return name.includes(ql) || rupees.includes(ql);
+  });
   const onPress = useCallback((id: string) => setViewing(id), []);
   const renderItem = useCallback(({ item }: { item: CustomerPaymentWithVisit }) => <PaymentRow p={item} onPress={onPress} />, [onPress]);
 
@@ -57,12 +67,15 @@ export function PaymentsScreen({ navigation }: CustomerScreen<'Payments'>) {
             />
           ))}
         </HScroll>
+        <View style={styles.search}>
+          <TextField value={q} onChangeText={setQ} placeholder={tmc('search')} autoCorrect={false} accessibilityLabel={tmc('search')} />
+        </View>
       </View>
       {list.error && !list.data ? (
         <ErrorState error={list.error} onRetry={list.refetch} />
       ) : (
         <FlatList
-          data={list.data?.items ?? []}
+          data={items}
           keyExtractor={p => p.id}
           renderItem={renderItem}
           contentContainerStyle={[styles.list, { paddingBottom: space.xxxl + insets.bottom }]}
@@ -199,6 +212,7 @@ const styles = themed(() => StyleSheet.create({
   end: { alignItems: 'flex-end', gap: 4, maxWidth: '45%' },
   filters: { paddingTop: space.lg, paddingBottom: space.md },
   chips: { gap: space.sm, paddingHorizontal: space.lg },
+  search: { paddingHorizontal: space.lg, marginTop: space.sm },
   list: { padding: space.lg, paddingTop: 0 },
   sep: { height: space.sm },
   more: { marginTop: space.lg },

@@ -9,6 +9,8 @@ export type UserStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
 export type Specialty = "NURSING" | "PHYSIOTHERAPY" | "POST_SURGERY_CARE" | "ELDERLY_CARE" | "DOCTOR";
 export type LicenseBody = "PNC" | "PMDC" | "OTHER";
 export type VerificationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+/** Caregiver ranking tier (backend-computed from completed visits/rating; admin can override). */
+export type CaregiverBadge = "BRONZE" | "SILVER" | "GOLD" | "PLATINUM";
 export type DocType = "LICENSE" | "CERTIFICATE" | "CNIC_COPY" | "OTHER";
 export type BookingStatus = "REQUESTED" | "CONFIRMED" | "DECLINED" | "CANCELLED" | "COMPLETED";
 export type VisitStatus =

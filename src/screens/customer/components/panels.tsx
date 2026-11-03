@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Linking, StyleSheet, View } from 'react-native';
 import { bookingsApi, disputesApi, paymentsApi, visitsApi } from '../../../api/customer/api';
 import { keys } from '../../../api/customer/keys';
 import type { CustomerVisitDetail, DisputeRow, IncidentPriority, PaymentMethod, SosResult, Visit } from '../../../api/types';
@@ -10,7 +10,7 @@ import { Text } from '../../../components/Text';
 import { Badge, Button, Touchable } from '../../../components/ui';
 import { useT } from '../../../i18n';
 import { formatMoney, useFmt, useLabels } from '../../../i18n/format';
-import { useAction, useQuery } from '../../../lib/query';
+import { invalidate, useAction, useQuery } from '../../../lib/query';
 import { accent, brand, colors, feedback, ink, radius, space, themed } from '../../../theme';
 import { Banner, nowHHmm, todayKey } from './bits';
 import { DateStrip, TimeWindowPicker, nextSlot, windowFrom } from './dates';
@@ -55,6 +55,9 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
   const f = useFmt();
   const toast = useToast();
   const payments = usePayments();
+  // Stripe checkout opens in the browser; these track the payment to settle on return.
+  const pendingStripe = useRef<string | null>(null);
+  const settling = useRef(false);
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [open, setOpen] = useState(false);
   const [confirmingCash, setConfirmingCash] = useState(false);
@@ -69,6 +72,7 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
     onSuccess: res => {
       setOpen(false);
       if ('checkoutUrl' in res) {
+        pendingStripe.current = res.payment.id;
         toast.success(t('redirecting'));
         Linking.openURL(res.checkoutUrl).catch(() => {});
         return;
@@ -84,6 +88,43 @@ export function PaymentPanel({ visit }: { visit: CustomerVisitDetail }) {
     onSuccess: () => setConfirmingCash(false),
   });
   const cashPending = existing?.status === 'PENDING' && existing.method === 'CASH';
+
+  // When the user returns from the Stripe browser checkout, settle the payment
+  // (idempotent confirm-stripe, polled a few times for async settle) and show the result.
+  const settleStripeOnReturn = useCallback(async () => {
+    const id = pendingStripe.current;
+    if (!id || settling.current) return;
+    settling.current = true;
+    let paid = false;
+    try {
+      for (let i = 0; i < 8; i++) {
+        try {
+          const p = await paymentsApi.confirmStripe(id);
+          if (p.status === 'PAID') {
+            paid = true;
+            break;
+          }
+          if (p.status === 'FAILED' || p.status === 'REFUNDED') break;
+        } catch {
+          // settle can lag the webhook; keep retrying
+        }
+        await new Promise<void>(resolve => setTimeout(() => resolve(), 1500));
+      }
+    } finally {
+      pendingStripe.current = null;
+      settling.current = false;
+      invalidate(keys.payments);
+      invalidate(keys.visit);
+      toast[paid ? 'success' : 'info'](paid ? t('paidToast', { amount: formatMoney(amount) }) : t('pendingToast'));
+    }
+  }, [amount, t, toast]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => {
+      if (s === 'active') void settleStripeOnReturn();
+    });
+    return () => sub.remove();
+  }, [settleStripeOnReturn]);
 
   if (!payable && !existing) return null;
 

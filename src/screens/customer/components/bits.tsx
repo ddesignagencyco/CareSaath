@@ -14,6 +14,7 @@ import { Check, Clock, MapPin, Repeat, ShieldCheck, Star } from '../../../compon
 import { Briefcase } from './icons';
 import { Text, useTextStyle } from '../../../components/Text';
 import { Avatar, Badge, Card, DateBlock, DirChevron, Touchable, type Tone } from '../../../components/ui';
+import { TierBadge } from '../../../components/TierBadge';
 import { useT } from '../../../i18n';
 import { formatMoney, localDayKey, useFmt, useLabels } from '../../../i18n/format';
 import { useQuery } from '../../../lib/query';
@@ -195,6 +196,7 @@ export const CaregiverCard = memo(function CaregiverCardView({ c, onPress }: { c
           </Text>
           <View style={styles.wrapRow}>
             <Rating average={c.ratingAverage} count={c.ratingCount} />
+            {c.badge ? <TierBadge badge={c.badge} /> : null}
           </View>
         </View>
       </View>

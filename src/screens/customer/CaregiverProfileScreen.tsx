@@ -11,6 +11,7 @@ import {
   type IconType,
 } from '../../components/icons';
 import { ErrorState, Screen, Section, Skeleton } from '../../components/screen';
+import { TierBadge } from '../../components/TierBadge';
 import { Text } from '../../components/Text';
 import {
   Avatar,
@@ -88,6 +89,7 @@ export function CaregiverProfileScreen({
             <View style={styles.ratingChip}>
               <Rating average={p.ratingAverage} count={p.ratingCount} />
             </View>
+            {p.badge ? <TierBadge badge={p.badge} /> : null}
           </View>
         )}
       </HeroBand>

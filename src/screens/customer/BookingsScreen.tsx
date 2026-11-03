@@ -8,6 +8,7 @@ import { keys } from '../../api/customer/keys';
 import type { CustomerBookingListItem } from '../../api/types';
 import { EmptyState, ErrorState, Screen, SkeletonList } from '../../components/screen';
 import { Button, Segmented } from '../../components/ui';
+import { TextField } from '../../components/form';
 import { useT } from '../../i18n';
 import { useQuery } from '../../lib/query';
 import type { CustomerStack, CustomerTabs } from '../../navigation/types';
@@ -23,7 +24,9 @@ const finished = (b: CustomerBookingListItem) => b.visits.length > 0 && b.visits
 /** FR-C9: every booking, split into active / waiting for a reply / past. */
 export function BookingsScreen({ navigation }: Props) {
   const t = useT('customerB.bookings');
+  const tm = useT('mobile.common');
   const [tab, setTab] = useState<Tab>('active');
+  const [q, setQ] = useState('');
   const list = useQuery([...keys.bookings, 'all'], () => bookingsApi.list({ limit: 100 }));
   const patients = useQuery(keys.patients, () => patientsApi.list());
   const payments = usePayments();
@@ -39,7 +42,14 @@ export function BookingsScreen({ navigation }: Props) {
     waiting: all.filter(b => b.status === 'REQUESTED'),
     past: all.filter(b => b.status === 'DECLINED' || b.status === 'CANCELLED' || b.status === 'COMPLETED' || (b.status === 'CONFIRMED' && finished(b))),
   };
-  const shown = groups[tab];
+  const ql = q.trim().toLowerCase();
+  const shown = ql
+    ? groups[tab].filter(b => {
+        const cg = caregivers[b.caregiverId]?.user.fullName ?? '';
+        const pt = patients.data?.find(p => p.id === b.patientId)?.name ?? '';
+        return cg.toLowerCase().includes(ql) || pt.toLowerCase().includes(ql);
+      })
+    : groups[tab];
 
   const open = useCallback((id: string) => navigation.navigate('BookingDetail', { id }), [navigation]);
   const renderItem = ({ item }: { item: CustomerBookingListItem }) => (
@@ -59,6 +69,9 @@ export function BookingsScreen({ navigation }: Props) {
             { value: 'past', label: t('tabPast') },
           ]}
         />
+        <View style={styles.search}>
+          <TextField value={q} onChangeText={setQ} placeholder={tm('search')} autoCorrect={false} accessibilityLabel={tm('search')} />
+        </View>
       </View>
       {list.error && !list.data ? (
         <ErrorState error={list.error} onRetry={list.refetch} />
@@ -92,6 +105,7 @@ const Separator = () => <View style={styles.sep} />;
 
 const styles = StyleSheet.create({
   tabs: { paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.md },
+  search: { marginTop: space.sm },
   list: { padding: space.lg, paddingTop: 0, paddingBottom: space.xxxl },
   sep: { height: space.md },
 });

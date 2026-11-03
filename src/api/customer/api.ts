@@ -169,6 +169,8 @@ export const paymentsApi = {
    * payment; it turns PAID once the caregiver has confirmed too.
    */
   confirmCash: (id: string, note?: string) => (M ? mock.confirmCash(id) : http.post<CustomerPayment>(`/customer/payments/${id}/confirm-cash`, note ? { note } : {})),
+  /** POST /customer/payments/:id/confirm-stripe — settle-on-return after Stripe checkout (idempotent; webhook is the fallback). */
+  confirmStripe: (id: string) => (M ? Promise.reject(new Error("Not available in demo mode")) : http.post<CustomerPaymentWithVisit>(`/customer/payments/${id}/confirm-stripe`)),
   /** GET /customer/payments/:id/receipt — PDF (PAID only), opened in the phone's viewer. Real API only. */
   openReceipt: (id: string) => http.openFile(`/customer/payments/${id}/receipt`, `care-sath-receipt-${id.slice(0, 8)}.pdf`),
   /** GET /customer/payments?status=&page=&limit= */

@@ -14,12 +14,14 @@ import { CustomerNavigator } from './CustomerNavigator';
 import { colors } from '../theme';
 import { stackOptions } from './options';
 import type { AuthStack } from './types';
+import { usePushNotifications } from '../push/usePush';
 
 const Auth = createNativeStackNavigator<AuthStack>();
 
 /** Signed out → auth stack; signed in → that role's app. Switching trees resets history. */
 export function RootNavigator() {
   const { booting, bootError, retryBoot, role } = useAuth();
+  usePushNotifications();
   if (booting) return <BrandLoader />;
   if (bootError) return <BootError error={bootError} onRetry={retryBoot} />;
   if (role === 'customer') return <CustomerNavigator />;

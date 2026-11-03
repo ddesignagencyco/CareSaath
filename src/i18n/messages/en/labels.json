@@ -177,5 +177,11 @@
     "PNC": "PNC",
     "PMDC": "PMDC",
     "OTHER": "Other"
+  },
+  "caregiverBadge": {
+    "BRONZE": "Bronze",
+    "SILVER": "Silver",
+    "GOLD": "Gold",
+    "PLATINUM": "Platinum"
   }
 }

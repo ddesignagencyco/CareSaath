@@ -25,6 +25,7 @@ export { default as Bell } from 'lucide-react-native/icons/bell';
 export { default as Wallet } from 'lucide-react-native/icons/wallet';
 export { default as FileText } from 'lucide-react-native/icons/file-text';
 export { default as Star } from 'lucide-react-native/icons/star';
+export { default as Award } from 'lucide-react-native/icons/award';
 export { default as Phone } from 'lucide-react-native/icons/phone';
 export { default as Navigation } from 'lucide-react-native/icons/navigation';
 export { default as Check } from 'lucide-react-native/icons/check';

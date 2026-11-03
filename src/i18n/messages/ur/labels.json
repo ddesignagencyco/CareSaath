@@ -177,5 +177,11 @@
     "PNC": "PNC",
     "PMDC": "PMDC",
     "OTHER": "دیگر"
+  },
+  "caregiverBadge": {
+    "BRONZE": "برانز",
+    "SILVER": "سلور",
+    "GOLD": "گولڈ",
+    "PLATINUM": "پلاٹینم"
   }
 }
