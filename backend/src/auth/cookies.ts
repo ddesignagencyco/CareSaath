@@ -35,10 +35,22 @@ export function makeCsrfToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-export function setAuthCookies(res: Response, tokens: { accessToken: string; refreshToken: string }, csrf: string): void {
+/** Read the role claim from our own access JWT (no verification; we just signed it). */
+export function roleFromAccessToken(accessToken: string): string {
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8')) as { role?: string };
+    return payload.role ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAuthCookies(res: Response, tokens: { accessToken: string; refreshToken: string }, csrf: string, role: string): void {
   res.cookie(COOKIE.access, tokens.accessToken, { httpOnly: true, secure, sameSite, path: '/', maxAge: ACCESS_TTL_MS });
   res.cookie(COOKIE.refresh, tokens.refreshToken, { httpOnly: true, secure, sameSite, path: REFRESH_COOKIE_PATH, maxAge: REFRESH_TTL_MS });
-  res.cookie(COOKIE.session, '1', { httpOnly: false, secure, sameSite, path: '/', maxAge: REFRESH_TTL_MS });
+  // Readable by JS (no secret): the signed-in role, used by the SPA for routing
+  // and section guards. Also serves as the "is signed in" flag.
+  res.cookie(COOKIE.session, role || '1', { httpOnly: false, secure, sameSite, path: '/', maxAge: REFRESH_TTL_MS });
   res.cookie(COOKIE.csrf, csrf, { httpOnly: false, secure, sameSite, path: '/', maxAge: REFRESH_TTL_MS });
 }
 

@@ -28,6 +28,7 @@ export interface RecordedCall {
   url: URL;
   headers: Record<string, string>;
   body: unknown;
+  credentials?: string;
 }
 
 type Responder = (call: RecordedCall) => Response | Promise<Response>;
@@ -46,7 +47,7 @@ export function mockFetch(respond: Responder = () => json({})) {
     const headers = Object.fromEntries(Object.entries((init.headers ?? {}) as Record<string, string>));
     let body: unknown = init.body;
     if (typeof init.body === "string") body = JSON.parse(init.body);
-    const call: RecordedCall = { method: init.method ?? "GET", url: new URL(String(input)), headers, body };
+    const call: RecordedCall = { method: init.method ?? "GET", url: new URL(String(input)), headers, body, credentials: typeof init.credentials === "string" ? init.credentials : undefined };
     calls.push(call);
     return respond(call);
   });
@@ -56,6 +57,17 @@ export function mockFetch(respond: Responder = () => json({})) {
 
 /** Path relative to the API base, e.g. "/customer/bookings". */
 export const apiPath = (call: RecordedCall) => call.url.pathname.replace(/^\/api\/v1/, "");
+
+/** Set the JS-readable cookie-auth session cookies (role flag + CSRF double-submit token). */
+export function setSessionCookies(role = "CUSTOMER"): void {
+  document.cookie = `cs_session=${role}`;
+  document.cookie = "cs_csrf=test-csrf";
+}
+/** Clear the session cookies. */
+export function clearSessionCookies(): void {
+  document.cookie = "cs_session=; max-age=0";
+  document.cookie = "cs_csrf=; max-age=0";
+}
 
 /** A syntactically valid (unsigned) JWT carrying `payload`. */
 export function fakeJwt(payload: Record<string, unknown>): string {

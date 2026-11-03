@@ -99,11 +99,11 @@ export function SignupForm({ initialRole }: { initialRole: "customer" | "caregiv
         });
         if (role === "caregiver") {
           clearSession();
-          caregiverStoreTokens(tokens, phone);
+          caregiverStoreTokens(phone);
           router.replace("/caregiver/onboarding");
           return;
         }
-        customerSession.set({ ...tokens, phone });
+        customerSession.set({ phone });
         router.replace("/customer");
       }}
     />

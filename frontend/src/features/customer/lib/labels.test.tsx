@@ -6,7 +6,7 @@ import { messages } from "@shared/i18n/messages";
 import { formatMoney } from "@shared/lib/format";
 import type { AppNotification } from "@shared/caregiver-types";
 import type { VisitStatus } from "@shared/types";
-import { fakeJwt, json, mockFetch } from "@/test/utils";
+import { json, mockFetch } from "@/test/utils";
 import { session, SESSION_KEY } from "./api/session";
 import { useSignOut } from "./auth";
 import { bookingDisplayStatus, getSeenAt, hasCancellableVisits, isUnreadableMedical, markSeen, SEEN_EVENT, useDescribe } from "./labels";
@@ -123,8 +123,8 @@ describe("useDescribe (notification texts)", () => {
 });
 
 describe("useSignOut", () => {
-  it("clears the session, removes only customer (c-*) queries, revokes the refresh token and goes to login", async () => {
-    session.set({ accessToken: fakeJwt({ sub: "u1", role: "CUSTOMER", type: "access" }), refreshToken: "refresh-1", phone: "+923211234567" });
+  it("clears the session, removes only customer (c-*) queries, calls logout and goes to login", async () => {
+    session.set({ phone: "+923211234567" });
     const f = mockFetch(() => json({ ok: true }));
     const client = new QueryClient();
     client.setQueryData(["c-me"], { id: "u1" });
@@ -140,7 +140,7 @@ describe("useSignOut", () => {
     expect(client.getQueryData(["c-bookings", "list"])).toBeUndefined();
     expect(client.getQueryData(["g-me"])).toEqual({ id: "cg" });
     expect(client.getQueryData(["admin", "x"])).toBe(1);
-    expect(f.calls.map((c) => [c.method, c.url.pathname, c.body])).toEqual([["POST", "/api/v1/auth/logout", { refreshToken: "refresh-1" }]]);
+    expect(f.calls.map((c) => [c.method, c.url.pathname, c.body])).toEqual([["POST", "/api/v1/auth/logout", {}]]);
     // Signout now does a full-page navigation to /login (window.location.assign,
     // which jsdom can't intercept) instead of router.replace, so the client
     // router cache can't restore the previous login screen with a stale OTP.

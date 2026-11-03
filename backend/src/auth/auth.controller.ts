@@ -11,7 +11,7 @@ import {
   SignupVerifyDto,
   VerifyOtpDto,
 } from './dto/auth.dto.js';
-import { clearAuthCookies, COOKIE, makeCsrfToken, readCookie, setAuthCookies } from './cookies.js';
+import { clearAuthCookies, COOKIE, makeCsrfToken, readCookie, roleFromAccessToken, setAuthCookies } from './cookies.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -24,7 +24,7 @@ export class AuthController {
    * returned in the response body with `Authorization: Bearer`.
    */
   private issueSession(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
-    setAuthCookies(res, tokens, makeCsrfToken());
+    setAuthCookies(res, tokens, makeCsrfToken(), roleFromAccessToken(tokens.accessToken));
   }
 
   @Public()

@@ -3,10 +3,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 import type { Me } from "@shared/caregiver-types";
-import type { TokenPair } from "@shared/types";
+import { sessionRole } from "@shared/api/session";
 import { authApi, meApi } from "./api/caregiver";
 import { keys } from "./api/keys";
-import { decodeToken, session, SESSION_KEY } from "./api/session";
+import { session, SESSION_KEY } from "./api/session";
 
 const SESSION_EVENT = "caresaath:caregiver-session";
 
@@ -34,14 +34,14 @@ export function useSessionRaw() {
   return { raw, hydrated };
 }
 
-export function storeTokens(tokens: TokenPair, phone: string) {
-  session.set({ ...tokens, phone });
+export function storeTokens(phone: string) {
+  // Tokens now live in httpOnly cookies set by the backend; only the phone is kept.
+  session.set({ phone });
   window.dispatchEvent(new Event(SESSION_EVENT));
 }
 
 export function tokenRole(): string | undefined {
-  const t = session.get()?.accessToken;
-  return t ? decodeToken(t)?.role : undefined;
+  return sessionRole();
 }
 
 /**
@@ -53,17 +53,9 @@ export function tokenRole(): string | undefined {
  * routes have no role guard and already work with the CUSTOMER token.)
  */
 export async function refreshTokens() {
-  const current = session.get();
-  if (!current) return;
-  try {
-    const tokens = await authApi.refresh(current.refreshToken);
-    storeTokens(tokens, current.phone);
-  } catch (e) {
-    // The pair was rotated meanwhile (a 401 retry or another tab): the new
-    // token was issued from the database role too, so there's nothing to do.
-    if (session.get()?.refreshToken !== current.refreshToken) return;
-    throw e;
-  }
+  if (!session.get()) return;
+  // Rotates the cookie pair and re-reads the DB role into the new access cookie.
+  await authApi.refresh();
 }
 
 export function useMe() {
@@ -81,11 +73,10 @@ export function homeFor(me: Me): "/caregiver/onboarding" | "/caregiver/status" |
 export function useSignOut() {
   const client = useQueryClient();
   return useCallback(async () => {
-    const refresh = session.get()?.refreshToken;
     session.clear();
     window.dispatchEvent(new Event(SESSION_EVENT));
     client.clear();
-    if (refresh) await authApi.logout(refresh).catch(() => undefined);
+    await authApi.logout().catch(() => undefined);
     // Full navigation (not router.replace) so the client router cache can't
     // restore the previous login screen with a stale phone/OTP still filled in.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard reload to drop all client state on signout

@@ -251,6 +251,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (typeof header === 'string' && /^Bearer\s+/i.test(header)) {
       return header.replace(/^Bearer\s+/i, '');
     }
+    // Web client authenticates the socket via the httpOnly cs_access cookie,
+    // sent in the WS handshake when the client connects with withCredentials.
+    const cookie = client.handshake.headers['cookie'];
+    if (typeof cookie === 'string') {
+      const m = cookie.match(/(?:^|;\s*)cs_access=([^;]+)/);
+      if (m) return decodeURIComponent(m[1]);
+    }
     const query = client.handshake.query['token'];
     return typeof query === 'string' && query ? query : null;
   }

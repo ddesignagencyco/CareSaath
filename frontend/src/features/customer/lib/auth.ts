@@ -34,8 +34,8 @@ export function useSessionRaw() {
   return { raw, hydrated };
 }
 
-export function storeTokens(tokens: TokenPair, phone: string) {
-  session.set({ ...tokens, phone });
+export function storeTokens(phone: string) {
+  session.set({ phone });
   window.dispatchEvent(new Event(SESSION_EVENT));
 }
 
@@ -52,10 +52,9 @@ export function useMe() {
 export function useSignOut() {
   const client = useQueryClient();
   return useCallback(async () => {
-    const refresh = session.get()?.refreshToken;
     clearSession();
     client.removeQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("c-") });
-    if (refresh) await authApi.logout(refresh).catch(() => undefined);
+    await authApi.logout().catch(() => undefined);
     // Full navigation (not router.replace) so the client router cache can't
     // restore the previous login screen with a stale phone/OTP still filled in.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard reload to drop all client state on signout

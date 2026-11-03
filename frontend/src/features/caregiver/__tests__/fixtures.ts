@@ -1,16 +1,14 @@
 /** Shared fixtures for caregiver page/component tests. */
 import type { Address, CaregiverBookingListItem, CaregiverVisitDetail, Visit } from "@shared/caregiver-types";
-import { fakeJwt } from "@/test/utils";
+import { setSessionCookies } from "@/test/utils";
 import { session } from "../lib/api/session";
 
 export const LOCALE_KEY = "caresaath.caregiver.locale";
 
 export function signInCaregiver() {
-  session.set({
-    accessToken: fakeJwt({ sub: "user-fatima", role: "CAREGIVER", phone: "+923001110011", type: "access" }),
-    refreshToken: "r",
-    phone: "+923001110011",
-  });
+  // Tokens now live in httpOnly cookies; the session marker only holds the phone.
+  session.set({ phone: "+923001110011" });
+  setSessionCookies("CAREGIVER");
 }
 
 const T = "2026-10-20T05:00:00.000Z";

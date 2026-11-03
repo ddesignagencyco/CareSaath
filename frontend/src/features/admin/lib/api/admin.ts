@@ -92,8 +92,8 @@ export const authApi = {
   firebaseVerify: (body: { idToken: string; fullName?: string; email?: string; role?: "CUSTOMER" | "CAREGIVER" }) =>
     http.post<TokenPair>("/auth/firebase/verify", body),
   /** POST /auth/logout */
-  logout: (refreshToken: string) =>
-    http.post<{ ok: boolean }>("/auth/logout", { refreshToken }),
+  logout: () =>
+    http.post<{ ok: boolean }>("/auth/logout", {}),
 };
 
 export const caregiversApi = {

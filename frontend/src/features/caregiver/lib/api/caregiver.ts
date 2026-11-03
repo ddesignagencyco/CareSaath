@@ -48,9 +48,9 @@ export const authApi = {
   firebaseVerify: (body: { idToken: string; fullName?: string; email?: string; role?: "CUSTOMER" | "CAREGIVER" }) =>
     (http.post<TokenPair>("/auth/firebase/verify", body)),
   /** POST /auth/refresh — needed right after register so the token carries CAREGIVER. */
-  refresh: (refreshToken: string) => (http.post<TokenPair>("/auth/refresh", { refreshToken })),
+  refresh: () => (http.post<TokenPair>("/auth/refresh", {})),
   /** POST /auth/logout */
-  logout: (refreshToken: string) => (http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
+  logout: () => (http.post<{ ok: boolean }>("/auth/logout", {})),
 };
 
 export const meApi = {

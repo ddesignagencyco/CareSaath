@@ -1,6 +1,6 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiPath, fakeJwt, json, mockFetch } from "@/test/utils";
+import { apiPath, json, mockFetch, setSessionCookies } from "@/test/utils";
 import { renderWithProviders } from "@/test/utils";
 import { ApiHealthPill } from "@/features/admin/components/shell/api-health";
 import { AdminShell } from "@/features/admin/components/shell/admin-shell";
@@ -42,9 +42,11 @@ describe("admin shell", () => {
     expect(screen.queryByText("Console content")).not.toBeInTheDocument();
   });
 
-  it("does not render the console for a non-admin token", async () => {
+  it("does not render the console for a non-admin session", async () => {
     mockFetch(() => json({ status: "ok", postgres: true, redis: true }));
-    session.set({ accessToken: fakeJwt({ sub: "c1", role: "CUSTOMER", type: "access" }), refreshToken: "R", phone: "+923001234567" });
+    // Signed in, but the cs_session role cookie is CUSTOMER, not ADMIN.
+    session.set({ phone: "+923001234567" });
+    setSessionCookies("CUSTOMER");
     renderWithProviders(
       <AdminShell>
         <p>Console content</p>

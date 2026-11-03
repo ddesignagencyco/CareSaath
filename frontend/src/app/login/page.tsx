@@ -49,7 +49,7 @@ function LoginInner() {
       verifyOtp={async (phone, code) => {
         const tokens = await tokensFromOtp({ code, firebaseVerify: authApi.firebaseVerify, backendVerify: () => authApi.verifyOtp(phone, code) });
         const role = decodeToken(tokens.accessToken)?.role;
-        const value = { ...tokens, phone };
+        const value = { phone };
         if (role === "ADMIN") {
           adminSession.set(value);
           router.replace(destinationFor("/admin"));

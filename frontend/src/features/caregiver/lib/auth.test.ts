@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Me } from "@shared/caregiver-types";
-import { apiPath, fakeJwt, json, mockFetch } from "@/test/utils";
+import { apiPath, clearSessionCookies, json, mockFetch, setSessionCookies } from "@/test/utils";
 import { session } from "./api/session";
 import { homeFor, refreshTokens, storeTokens, tokenRole } from "./auth";
 
@@ -34,42 +34,29 @@ describe("refreshTokens", () => {
     expect(f.calls).toHaveLength(0);
   });
 
-  it("stores the rotated pair (keeping the phone) and fires the session event", async () => {
-    storeTokens({ accessToken: "A1", refreshToken: "R1" }, "+923001110011");
-    let events = 0;
-    const onEvent = () => events++;
-    window.addEventListener("caresaath:caregiver-session", onEvent);
-    const f = mockFetch(() => json({ accessToken: "A2", refreshToken: "R2" }, 201));
+  it("posts /auth/refresh with credentials; the cookies rotate server-side", async () => {
+    storeTokens("+923001110011");
+    const f = mockFetch(() => json({}, 201));
     await refreshTokens();
-    window.removeEventListener("caresaath:caregiver-session", onEvent);
     expect(apiPath(f.last())).toBe("/auth/refresh");
-    expect(f.last().body).toEqual({ refreshToken: "R1" });
-    expect(session.get()).toEqual({ accessToken: "A2", refreshToken: "R2", phone: "+923001110011" });
-    expect(events).toBeGreaterThan(0);
+    expect(f.last().body).toEqual({});
+    expect(f.last().credentials).toBe("include");
+    // The session marker is untouched by refresh — only the httpOnly cookies change.
+    expect(session.get()).toEqual({ phone: "+923001110011" });
   });
 
-  it("tolerates a parallel rotation (refresh rejected because the pair already changed)", async () => {
-    storeTokens({ accessToken: "A1", refreshToken: "R1" }, "+923001110011");
-    mockFetch(() => {
-      // A 401 retry or another tab rotated the pair while this refresh was in flight.
-      session.set({ accessToken: "A9", refreshToken: "R9", phone: "+923001110011" });
-      return json({ statusCode: 401, message: "Refresh token already used" }, 401);
-    });
-    await expect(refreshTokens()).resolves.toBeUndefined();
-    expect(session.get()?.refreshToken).toBe("R9");
-  });
-
-  it("rethrows when the refresh fails and nothing rotated", async () => {
-    storeTokens({ accessToken: "A1", refreshToken: "R1" }, "+923001110011");
+  it("rethrows when the refresh fails", async () => {
+    storeTokens("+923001110011");
     mockFetch(() => json({ statusCode: 401, message: "Invalid refresh token" }, 401));
     await expect(refreshTokens()).rejects.toMatchObject({ status: 401, message: "Invalid refresh token" });
   });
 });
 
 describe("tokenRole", () => {
-  it("reads the role from the stored access token", () => {
+  it("reads the role from the cs_session cookie", () => {
+    clearSessionCookies();
     expect(tokenRole()).toBeUndefined();
-    storeTokens({ accessToken: fakeJwt({ sub: "u1", role: "CAREGIVER" }), refreshToken: "r" }, "+923001110011");
+    setSessionCookies("CAREGIVER");
     expect(tokenRole()).toBe("CAREGIVER");
   });
 });
