@@ -315,34 +315,48 @@ export function buildPrescriptionPdf(
     rxHeader();
 
     rx.medicines.forEach((m, i) => {
+      const padX = colX + 40;
+      const contentW = colX + colW - padX - 14;
+      const instrW = colX + colW - 14 - (padX + 18);
       const nameH = 14;
-      const doseLine = [m.dosage, m.frequency, m.duration].map((s) => (s ? pdfSafe(s) : '')).filter(Boolean).join('    ·    ');
+      // Borderless "table": dosage | frequency | duration sit at fixed x, so they
+      // line up vertically across every card regardless of their text length.
+      const doseX = colX + 58;
+      const doseW = 62;
+      const durW = 58;
+      const durX = colX + colW - 14 - durW;
+      const freqX = doseX + doseW + 8;
+      const freqW = Math.max(60, durX - freqX - 8);
       pdf.font('Helvetica').fontSize(9.5);
-      const doseH = doseLine ? pdf.heightOfString(doseLine, { width: colW - 76 }) : 0;
+      const dH = m.dosage ? pdf.heightOfString(pdfSafe(m.dosage), { width: doseW }) : 0;
+      const fH = m.frequency ? pdf.heightOfString(pdfSafe(m.frequency), { width: freqW }) : 0;
+      const drH = m.duration ? pdf.heightOfString(pdfSafe(m.duration), { width: durW }) : 0;
+      const hasDose = !!(m.dosage || m.frequency || m.duration);
+      const doseRowH = hasDose ? Math.max(dH, fH, drH, 11) : 0;
       const instr = m.instructions ? pdfSafe(m.instructions) : '';
       pdf.font('Helvetica-Oblique').fontSize(9);
-      const instrH = instr ? pdf.heightOfString(instr, { width: colW - 76 }) : 0;
-      const cardH = 14 + nameH + (doseLine ? doseH + 5 : 0) + (instr ? instrH + 4 : 0);
+      const instrH = instr ? pdf.heightOfString(instr, { width: instrW }) : 0;
+      const cardH = 14 + nameH + (hasDose ? doseRowH + 5 : 0) + (instr ? instrH + 4 : 0);
       if (ensureRoom(cardH + 10)) rxHeader();
 
       pdf.roundedRect(colX, y, colW, cardH, 8).fillAndStroke(CARD_BG, CARD_BORDER);
-      const padX = colX + 40;
-      const contentW = colX + colW - padX - 14;
-      // numbered circle
       pdf.circle(colX + 22, y + 18, 10).lineWidth(1.3).fillAndStroke('#ffffff', TEAL);
       pdf.font('Helvetica-Bold').fontSize(9.5).fillColor(TEAL).text(`${i + 1}`, colX + 14, y + 13.5, { width: 16, align: 'center' });
 
       let yc = y + 11;
       pdf.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfSafe(m.name), padX, yc, { width: contentW });
       yc += nameH + 2;
-      if (doseLine) {
+      if (hasDose) {
         iconPill(pdf, padX - 1, yc - 1, 13, TEAL);
-        pdf.font('Helvetica').fontSize(9.5).fillColor(INK).text(doseLine, padX + 18, yc, { width: contentW - 18 });
-        yc += doseH + 4;
+        pdf.font('Helvetica').fontSize(9.5).fillColor(INK);
+        if (m.dosage) pdf.text(pdfSafe(m.dosage), doseX, yc, { width: doseW });
+        if (m.frequency) pdf.text(pdfSafe(m.frequency), freqX, yc, { width: freqW });
+        if (m.duration) pdf.text(pdfSafe(m.duration), durX, yc, { width: durW });
+        yc += doseRowH + 4;
       }
       if (instr) {
         iconGlass(pdf, padX - 1, yc - 1, 13, GOLD);
-        pdf.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text(instr, padX + 18, yc, { width: contentW - 18 });
+        pdf.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text(instr, padX + 18, yc, { width: instrW });
         yc += instrH + 3;
       }
       y += cardH + 10;
