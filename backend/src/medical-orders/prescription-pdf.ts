@@ -336,13 +336,13 @@ export function buildPrescriptionPdf(
     }
 
     if (rx.labTests.length > 0) {
-      ensureRoom(26);
-      y += 6;
-      pdf.save();
-      pdf.roundedRect(colX, y + 1, 3.5, 11, 1.5).fill(MARIGOLD);
-      pdf.restore();
-      pdf.font('Helvetica-Bold').fontSize(9.5).fillColor(BRAND_DEEP).text('Investigations / Lab tests', colX + 10, y);
-      y += 18;
+      ensureRoom(40);
+      y += 10;
+      // Same heading treatment as the ℞ medicines block: bold title + full rule.
+      pdf.font('Helvetica-Bold').fontSize(12).fillColor(BRAND).text('Lab Tests & Investigations', colX, y);
+      y += 19;
+      pdf.moveTo(colX, y).lineTo(colX + colW, y).strokeColor(BRAND).lineWidth(1.2).stroke();
+      y += 9;
       rx.labTests.forEach((lt, i) => {
         const nameLine = pdfSafe(`${i + 1}.  ${lt.name}`);
         const instr = lt.instructions ? pdfSafe(lt.instructions) : '';
