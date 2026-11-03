@@ -158,7 +158,8 @@ function drawWaveFooter(pdf: PDFKit.PDFDocument, w: number, h: number): void {
 
 /** Right-aligned "Name (Designation)" — big name + small parenthetical role. */
 function drawRightNameDes(pdf: PDFKit.PDFDocument, rightEdge: number, name: string, des: string, y: number, big: number, small: number): void {
-  const nameTxt = pdfSafe(name);
+  // The role is shown as "(Doctor)", so drop any leading "Dr." already in the name.
+  const nameTxt = pdfSafe(name.replace(/^\s*dr\.?\s+/i, ''));
   const desTxt = `  (${pdfSafe(des)})`;
   pdf.font('Helvetica-Bold').fontSize(big);
   const nameW = pdf.widthOfString(nameTxt);
@@ -206,25 +207,28 @@ export function buildPrescriptionPdf(
     const licenseLabel = rx.licenseBody === 'OTHER' ? 'Reg' : rx.licenseBody;
 
     /* ---------------------------- header --------------------------------- */
-    drawHeart(pdf, LEFT, 30, 50);
-    pdf.moveTo(LEFT + 60, 34).lineTo(LEFT + 60, 84).strokeColor(RULE).lineWidth(1).stroke();
-    pdf.font('Helvetica-Bold').fontSize(27).fillColor(NAVY).text('CareSaath', LEFT + 72, 30);
-    pdf.font('Helvetica').fontSize(11).fillColor(TEAL).text('Home Nursing & Physiotherapy', LEFT + 73, 62);
-    pdf.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED).text('Licensed caregivers across Pakistan', LEFT + 73, 76);
-    // Real, DB-derived reference (CS-RX-<year>-<order id prefix>) — kept, placed here.
-    pdf
-      .font('Helvetica')
-      .fontSize(7.5)
-      .fillColor(MUTED)
-      .text(pdfSafe(`Rx No. ${rx.prescriptionNumber}   ·   Issued ${formatDate(rx.issuedAt)}`), LEFT + 73, 88);
-
-    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, 34, 20, 11);
     const lic = rx.licenseExpiry
       ? `${licenseLabel} No: ${rx.licenseNumber}   |   Valid till ${formatDate(rx.licenseExpiry)}`
       : `${licenseLabel} No: ${rx.licenseNumber}`;
-    pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), RIGHT - 320, 64, { width: 320, align: 'right' });
-
-    pdf.moveTo(LEFT, 102).lineTo(RIGHT, 102).strokeColor(RULE).lineWidth(1).stroke();
+    // The full letterhead header; repeated at the top of every page so
+    // continuation pages are never bare.
+    const drawHeader = () => {
+      const bx = LEFT + 70;
+      drawHeart(pdf, LEFT, 30, 48);
+      pdf.moveTo(LEFT + 58, 33).lineTo(LEFT + 58, 81).strokeColor(RULE).lineWidth(1).stroke();
+      pdf.font('Helvetica-Bold').fontSize(25).fillColor(NAVY).text('CareSaath', bx, 30);
+      pdf.font('Helvetica').fontSize(10.5).fillColor(TEAL).text('Home Nursing & Physiotherapy', bx, 56);
+      pdf.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED).text('Licensed caregivers across Pakistan', bx, 69);
+      pdf
+        .font('Helvetica')
+        .fontSize(7.5)
+        .fillColor(MUTED)
+        .text(pdfSafe(`Rx No. ${rx.prescriptionNumber}   ·   Issued ${formatDate(rx.issuedAt)}`), bx, 81);
+      drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, 32, 20, 11);
+      pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), RIGHT - 320, 57, { width: 320, align: 'right' });
+      pdf.moveTo(LEFT, 100).lineTo(RIGHT, 100).strokeColor(RULE).lineWidth(1).stroke();
+    };
+    drawHeader();
 
     /* ------------------------- patient bar ------------------------------- */
     const pbY = 114;
@@ -239,7 +243,8 @@ export function buildPrescriptionPdf(
       pdf.font('Helvetica-Bold').fontSize(11.5).fillColor(NAVY).text(pdfSafe(value), tx, pbY + 23, { width: cellW - 44, lineBreak: false, ellipsis: true });
       if (idx > 0) pdf.moveTo(LEFT + idx * cellW, pbY + 9).lineTo(LEFT + idx * cellW, pbY + pbH - 9).strokeColor(PATIENT_BORDER).lineWidth(1).stroke();
     };
-    const ageSex = [rx.patientAge != null ? `${rx.patientAge} yrs` : null, rx.patientGender || null].filter(Boolean).join('  ·  ') || '—';
+    const gender = rx.patientGender ? rx.patientGender.charAt(0).toUpperCase() + rx.patientGender.slice(1) : null;
+    const ageSex = [rx.patientAge != null ? `${rx.patientAge} yrs` : null, gender].filter(Boolean).join('  ·  ') || '—';
     cell(0, iconPerson, 'Patient', rx.patientName);
     cell(1, iconCalendar, 'Age / Sex', ageSex);
     cell(2, iconCalendar, 'Visit Date', formatDate(rx.visitDate));
@@ -293,12 +298,15 @@ export function buildPrescriptionPdf(
       y += 40;
     };
 
+    // Continuation pages: repeat the header, then flow full width below it.
+    const CONT_TOP = 112;
     const ensureRoom = (needed: number): boolean => {
       if (y + needed > BODY_BOTTOM) {
         pdf.addPage();
+        drawHeader();
         colX = LEFT;
         colW = CW;
-        y = 44;
+        y = CONT_TOP;
         return true;
       }
       return false;
@@ -346,19 +354,23 @@ export function buildPrescriptionPdf(
     }
 
     if (rx.labTests.length > 0) {
-      ensureRoom(40);
-      y += 6;
-      iconFlask(pdf, colX, y - 2, 16, TEAL);
-      pdf.font('Helvetica-Bold').fontSize(12).fillColor(TEAL).text('INVESTIGATIONS / LAB TESTS', colX + 22, y + 1, { characterSpacing: 1.5 });
-      y += 20;
-      pdf.moveTo(colX, y).lineTo(colX + colW, y).strokeColor(RULE).lineWidth(1).stroke();
-      y += 10;
+      // Keep the heading with its first item or two (no orphaned heading).
+      ensureRoom(100);
+      y += 8;
+      const labHeader = () => {
+        iconFlask(pdf, colX, y - 2, 16, TEAL);
+        pdf.font('Helvetica-Bold').fontSize(12).fillColor(TEAL).text('INVESTIGATIONS / LAB TESTS', colX + 22, y + 1, { characterSpacing: 1.5 });
+        y += 20;
+        pdf.moveTo(colX, y).lineTo(colX + colW, y).strokeColor(RULE).lineWidth(1).stroke();
+        y += 10;
+      };
+      labHeader();
       rx.labTests.forEach((lt, i) => {
         const nameLine = pdfSafe(`${i + 1}.   ${lt.name}`);
         const instr = lt.instructions ? pdfSafe(lt.instructions) : '';
         const nameH = pdf.heightOfString(nameLine, { width: colW });
         const instrH = instr ? pdf.heightOfString(instr, { width: colW - 22 }) : 0;
-        ensureRoom(nameH + instrH + 10);
+        if (ensureRoom(nameH + instrH + 10)) labHeader(); // repeat the heading on a new page
         pdf.font('Helvetica-Bold').fontSize(11).fillColor(NAVY).text(nameLine, colX, y, { width: colW });
         y += nameH + 1;
         if (instr) {
