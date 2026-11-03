@@ -28,8 +28,16 @@ const config = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-/** True only when the web Firebase config is present; otherwise callers use the backend OTP flow. */
-export const firebaseEnabled = Boolean(config.apiKey && config.authDomain && config.projectId);
+/**
+ * True only when Firebase phone-auth is explicitly switched ON *and* configured.
+ * The explicit NEXT_PUBLIC_FIREBASE_ENABLED flag is a deliberate guard: having the
+ * config present must NOT auto-fire real SMS (Firebase's free tier is tiny), so SMS
+ * stays off — callers fall back to the backend OTP flow — until someone sets the
+ * flag to "true" to actually test the SMS path.
+ */
+export const firebaseEnabled = Boolean(
+  process.env.NEXT_PUBLIC_FIREBASE_ENABLED === "true" && config.apiKey && config.authDomain && config.projectId,
+);
 
 /** The invisible reCAPTCHA mounts into this element; LoginScreen renders a matching <div>. */
 export const RECAPTCHA_CONTAINER_ID = "firebase-recaptcha";
@@ -66,6 +74,13 @@ async function freshVerifier(auth: Auth): Promise<RecaptchaVerifier> {
       // ignore — the element may already be gone
     }
     verifier = null;
+  }
+  // Empty the container before rendering again: clear() does not always remove the
+  // widget DOM, and a non-empty element throws "reCAPTCHA has already been rendered
+  // in this element" on the next send (e.g. Resend, or after a failed attempt).
+  if (typeof document !== "undefined") {
+    const el = document.getElementById(RECAPTCHA_CONTAINER_ID);
+    if (el) el.innerHTML = "";
   }
   verifier = new RecaptchaVerifier(auth, RECAPTCHA_CONTAINER_ID, { size: "invisible" });
   return verifier;
