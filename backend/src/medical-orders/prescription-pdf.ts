@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { formatDate, formatDateTime, pdfSafe } from '../receipts/receipt-pdf.js';
+import { formatDate, pdfSafe } from '../receipts/receipt-pdf.js';
 
 export interface PrescriptionMedicineLine {
   name: string;
@@ -55,8 +55,7 @@ const LEFT_CARD_W = 196;
 const RIGHT_X = LEFT + LEFT_CARD_W + 16;
 const RIGHT_W = RIGHT - RIGHT_X;
 const BODY_TOP = 176;
-const BODY_BOTTOM = 690; // content stops; signature + wave sit below
-const SIG_Y = 702;
+const BODY_BOTTOM = 710; // content stops above the wave footer
 const LEFT_CARD_BOTTOM = 715;
 
 /* ----------------------------- small vector icons ------------------------- */
@@ -210,19 +209,20 @@ export function buildPrescriptionPdf(
     drawHeart(pdf, LEFT, 30, 50);
     pdf.moveTo(LEFT + 60, 34).lineTo(LEFT + 60, 84).strokeColor(RULE).lineWidth(1).stroke();
     pdf.font('Helvetica-Bold').fontSize(27).fillColor(NAVY).text('CareSaath', LEFT + 72, 30);
-    pdf.font('Helvetica').fontSize(11).fillColor(TEAL).text('Home Nursing & Physiotherapy', LEFT + 73, 63);
-    pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text('Licensed caregivers across Pakistan', LEFT + 73, 78);
-
-    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, 32, 20, 11);
-    const lic = rx.licenseExpiry
-      ? `${licenseLabel} No: ${rx.licenseNumber}   |   Valid till ${formatDate(rx.licenseExpiry)}`
-      : `${licenseLabel} No: ${rx.licenseNumber}`;
-    pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), RIGHT - 320, 60, { width: 320, align: 'right' });
+    pdf.font('Helvetica').fontSize(11).fillColor(TEAL).text('Home Nursing & Physiotherapy', LEFT + 73, 62);
+    pdf.font('Helvetica-Oblique').fontSize(8).fillColor(MUTED).text('Licensed caregivers across Pakistan', LEFT + 73, 76);
+    // Real, DB-derived reference (CS-RX-<year>-<order id prefix>) — kept, placed here.
     pdf
       .font('Helvetica')
       .fontSize(7.5)
       .fillColor(MUTED)
-      .text(pdfSafe(`Rx No. ${rx.prescriptionNumber}   ·   Issued ${formatDate(rx.issuedAt)}`), RIGHT - 320, 74, { width: 320, align: 'right' });
+      .text(pdfSafe(`Rx No. ${rx.prescriptionNumber}   ·   Issued ${formatDate(rx.issuedAt)}`), LEFT + 73, 88);
+
+    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, 34, 20, 11);
+    const lic = rx.licenseExpiry
+      ? `${licenseLabel} No: ${rx.licenseNumber}   |   Valid till ${formatDate(rx.licenseExpiry)}`
+      : `${licenseLabel} No: ${rx.licenseNumber}`;
+    pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), RIGHT - 320, 64, { width: 320, align: 'right' });
 
     pdf.moveTo(LEFT, 102).lineTo(RIGHT, 102).strokeColor(RULE).lineWidth(1).stroke();
 
@@ -368,13 +368,6 @@ export function buildPrescriptionPdf(
         y += 8;
       });
     }
-
-    /* --------------------- signature (bottom-right) ---------------------- */
-    const sigW = 230;
-    const sigX = RIGHT - sigW;
-    pdf.moveTo(sigX, SIG_Y).lineTo(RIGHT, SIG_Y).strokeColor('#9ca3af').lineWidth(0.8).stroke();
-    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, SIG_Y + 6, 12, 8.5);
-    pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text(pdfSafe(`${licenseLabel} No: ${rx.licenseNumber}`), sigX, SIG_Y + 24, { width: sigW, align: 'right' });
 
     pdf.end();
   });
