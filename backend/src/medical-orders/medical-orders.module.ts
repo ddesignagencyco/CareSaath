@@ -10,6 +10,8 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
+  Res,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -18,6 +20,7 @@ import {
   ApiPropertyOptional,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -36,6 +39,10 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
+import type { PdfFile } from '../receipts/send-pdf.js';
+import { sendPdf } from '../receipts/send-pdf.js';
+import { buildPrescriptionPdf } from './prescription-pdf.js';
+import { medicalOrderPrescriptionDocument, medicalOrderPrescriptionNumber } from './prescription-data.js';
 import { UserRole } from '../generated/prisma/client.js';
 
 export class MedicineDto {
@@ -203,6 +210,33 @@ export class MedicalOrdersService {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  /** PDF prescription for a medical order, branded with the CareSaath letterhead. */
+  async getPdf(user: AuthUser, visitId: string, id: string): Promise<PdfFile> {
+    const visit = await this.loadVisitForParty(user, visitId);
+    const order = await this.prisma.medicalOrder.findFirst({
+      where: { id, visitId: visit.id },
+      include: {
+        visit: { select: { scheduledDate: true } },
+        doctor: {
+          select: {
+            specialty: true,
+            licenseBody: true,
+            licenseNumber: true,
+            pmdcExpiryDate: true,
+            pncExpiryDate: true,
+            user: { select: { fullName: true } },
+          },
+        },
+        patient: { select: { name: true, dateOfBirth: true, gender: true } },
+      },
+    });
+    if (!order) {
+      throw new NotFoundException('Medical order not found');
+    }
+    const pdf = await buildPrescriptionPdf(medicalOrderPrescriptionDocument(order));
+    return { filename: `caresaath-prescription-${medicalOrderPrescriptionNumber(order)}.pdf`, pdf };
+  }
 }
 
 @ApiTags('Caregiver - Visits')
@@ -234,6 +268,22 @@ export class CaregiverMedicalOrdersController {
   list(@CurrentUser() user: AuthUser, @Param('visitId', ParseUUIDPipe) visitId: string) {
     return this.medicalOrders.listForVisit(user, visitId);
   }
+
+  @Get(':id/pdf')
+  @ApiOperation({
+    summary: 'Download the prescription (PDF)',
+    description:
+      "PDF prescription for a medical order, with the CareSaath letterhead/watermark and the doctor's PMDC/PNC number. Sent as an attachment (add ?inline=true to view it in the browser).",
+  })
+  async pdf(
+    @CurrentUser() user: AuthUser,
+    @Param('visitId', ParseUUIDPipe) visitId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.medicalOrders.getPdf(user, visitId, id), inline === 'true');
+  }
 }
 
 @ApiTags('Customer - Visits')
@@ -250,6 +300,22 @@ export class CustomerMedicalOrdersController {
   })
   list(@CurrentUser() user: AuthUser, @Param('visitId', ParseUUIDPipe) visitId: string) {
     return this.medicalOrders.listForVisit(user, visitId);
+  }
+
+  @Get(':id/pdf')
+  @ApiOperation({
+    summary: 'Download the prescription (PDF)',
+    description:
+      "PDF prescription for a medical order, with the CareSaath letterhead/watermark and the doctor's PMDC/PNC number. Sent as an attachment (add ?inline=true to view it in the browser).",
+  })
+  async pdf(
+    @CurrentUser() user: AuthUser,
+    @Param('visitId', ParseUUIDPipe) visitId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+    @Query('inline') inline?: string,
+  ) {
+    sendPdf(res, await this.medicalOrders.getPdf(user, visitId, id), inline === 'true');
   }
 }
 

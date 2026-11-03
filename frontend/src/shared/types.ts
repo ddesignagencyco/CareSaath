@@ -80,6 +80,10 @@ export interface AdminCaregiver {
   cnic: string;
   licenseNumber: string;
   licenseBody: LicenseBody;
+  /** PMDC registration expiry (set when licenseBody is PMDC). */
+  pmdcExpiryDate?: string | null;
+  /** PNC registration expiry (set when licenseBody is PNC). */
+  pncExpiryDate?: string | null;
   specialty: Specialty;
   experienceYears: number | null;
   bio: string | null;

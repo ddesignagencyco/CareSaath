@@ -92,6 +92,9 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
   const [maxRate, setMaxRate] = useState(String((profile.maxRatePerVisit ?? profile.ratePerVisit) / 100));
   const [cities, setCities] = useState<string[]>(profile.serviceArea?.cities ?? []);
   const [bio, setBio] = useState(profile.bio ?? "");
+  const [licenseExpiry, setLicenseExpiry] = useState(
+    (profile.licenseBody === "PMDC" ? profile.pmdcExpiryDate : profile.licenseBody === "PNC" ? profile.pncExpiryDate : null)?.slice(0, 10) ?? "",
+  );
 
   const rateNum = Number(rate);
   const minNum = Number(minRate);
@@ -132,6 +135,8 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
         serviceCities: cities,
         bio: bio.trim(),
         ...(yearsNum !== undefined ? { experienceYears: yearsNum } : {}),
+        ...(licenseExpiry && profile.licenseBody === "PMDC" ? { pmdcExpiryDate: licenseExpiry } : {}),
+        ...(licenseExpiry && profile.licenseBody === "PNC" ? { pncExpiryDate: licenseExpiry } : {}),
       });
     },
     { invalidate: [keys.profile, keys.me], success: t("saved"), onSuccess: () => setLocale(language) },
@@ -165,6 +170,11 @@ function ProfileForm({ me, profile }: { me: Me; profile: MyCaregiverProfile }) {
           <Field label={t("years")} error={errors.years}>
             {(id) => <Input id={id} type="number" inputMode="numeric" min={0} max={60} dir="ltr" value={years} onChange={(e) => setYears(e.target.value)} className="tabular" />}
           </Field>
+          {(profile.licenseBody === "PMDC" || profile.licenseBody === "PNC") && (
+            <Field label={profile.licenseBody === "PMDC" ? t("pmdcExpiry") : t("pncExpiry")} hint={t("licenseExpiryHint")}>
+              {(id) => <Input id={id} type="date" dir="ltr" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="tabular" />}
+            </Field>
+          )}
           <Field label={t("cities")} required error={errors.cities} className="sm:col-span-2">
             {(id) => <MultiSelect inputId={id} value={cities} onChange={setCities} options={CITY_OPTIONS} placeholder={t("chooseCities")} />}
           </Field>

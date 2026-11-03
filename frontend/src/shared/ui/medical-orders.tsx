@@ -1,15 +1,26 @@
 "use client";
 
-import { ClipboardList, Pill, TestTube } from "lucide-react";
+import { ClipboardList, Download, Pill, TestTube } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { MedicalOrder } from "@shared/caregiver-types";
 import { useFmt } from "@shared/i18n/use-fmt";
+import { Button } from "@shared/ui/button";
 
 /**
  * Read-only render of a doctor's medical orders (diagnosis, prescription, lab
  * tests) for a visit. The caller supplies the Card + heading; this is the body.
+ * Pass `onDownload` to show a "Download PDF" button per order (the branded
+ * CareSaath prescription letterhead).
  */
-export function MedicalOrdersView({ orders }: { orders: MedicalOrder[] }) {
+export function MedicalOrdersView({
+  orders,
+  onDownload,
+  downloadingId,
+}: {
+  orders: MedicalOrder[];
+  onDownload?: (orderId: string) => void;
+  downloadingId?: string | null;
+}) {
   const t = useTranslations("shared.medicalOrders");
   const f = useFmt();
   if (orders.length === 0) return null;
@@ -17,7 +28,14 @@ export function MedicalOrdersView({ orders }: { orders: MedicalOrder[] }) {
     <div className="space-y-6">
       {orders.map((o) => (
         <div key={o.id} className="space-y-4">
-          <p className="text-xs text-ink-500">{t("recordedOn", { date: f.dateTime(o.createdAt) })}</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-ink-500">{t("recordedOn", { date: f.dateTime(o.createdAt) })}</p>
+            {onDownload && (
+              <Button variant="secondary" size="sm" loading={downloadingId === o.id} onClick={() => onDownload(o.id)}>
+                <Download className="size-3.5" /> {t("downloadPdf")}
+              </Button>
+            )}
+          </div>
           {o.diagnosis && (
             <section>
               <p className="mb-1 flex items-center gap-1.5 text-xs font-bold tracking-wide text-ink-500 uppercase">

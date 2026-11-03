@@ -226,6 +226,8 @@ export function CaregiverDrawer({
                 items={[
                   { label: t("fields.licenseNumber"), value: <span className="tabular font-semibold" dir="ltr">{caregiver.licenseNumber}</span> },
                   { label: t("fields.licensingBody"), value: L.licenseBody(caregiver.licenseBody) },
+                  ...(caregiver.licenseBody === "PMDC" ? [{ label: t("fields.pmdcExpiry"), value: f.date(caregiver.pmdcExpiryDate ?? null) }] : []),
+                  ...(caregiver.licenseBody === "PNC" ? [{ label: t("fields.pncExpiry"), value: f.date(caregiver.pncExpiryDate ?? null) }] : []),
                   {
                     label: t("fields.cnic"),
                     value: looksEncrypted(caregiver.cnic) ? (

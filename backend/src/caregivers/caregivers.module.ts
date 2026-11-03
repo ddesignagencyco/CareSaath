@@ -36,6 +36,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsInt,
   IsNumber,
@@ -117,6 +118,22 @@ export class RegisterCaregiverDto {
   })
   @IsEnum(LicenseBody)
   licenseBody!: LicenseBody;
+
+  @ApiPropertyOptional({
+    example: '2027-06-30',
+    description: 'PMDC registration expiry date (when licenseBody is PMDC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pmdcExpiryDate?: string;
+
+  @ApiPropertyOptional({
+    example: '2027-06-30',
+    description: 'PNC registration expiry date (when licenseBody is PNC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pncExpiryDate?: string;
 
   @ApiProperty({
     enum: Specialty,
@@ -219,6 +236,22 @@ export class UpdateCaregiverProfileDto {
   @Min(0)
   @Max(60)
   experienceYears?: number;
+
+  @ApiPropertyOptional({
+    example: '2028-06-30',
+    description: 'Renewed PMDC registration expiry date (self-reported; relevant only when licenseBody is PMDC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pmdcExpiryDate?: string;
+
+  @ApiPropertyOptional({
+    example: '2028-06-30',
+    description: 'Renewed PNC registration expiry date (self-reported; relevant only when licenseBody is PNC)',
+  })
+  @IsOptional()
+  @IsDateString()
+  pncExpiryDate?: string;
 }
 
 export class UpdateLocationDto {
@@ -416,6 +449,8 @@ export class CaregiversService {
           cnic: encryptField(dto.cnic, CNIC_KEY),
           licenseNumber: dto.licenseNumber,
           licenseBody: dto.licenseBody,
+          pmdcExpiryDate: dto.pmdcExpiryDate ? new Date(dto.pmdcExpiryDate) : null,
+          pncExpiryDate: dto.pncExpiryDate ? new Date(dto.pncExpiryDate) : null,
           specialty: dto.specialty,
           experienceYears: dto.experienceYears ?? null,
           bio: dto.bio ?? null,
@@ -530,6 +565,8 @@ export class CaregiversService {
         ...(dto.experienceYears !== undefined
           ? { experienceYears: dto.experienceYears }
           : {}),
+        ...(dto.pmdcExpiryDate !== undefined ? { pmdcExpiryDate: new Date(dto.pmdcExpiryDate) } : {}),
+        ...(dto.pncExpiryDate !== undefined ? { pncExpiryDate: new Date(dto.pncExpiryDate) } : {}),
         commissionRateId,
       },
     });

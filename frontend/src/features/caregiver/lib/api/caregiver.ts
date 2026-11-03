@@ -137,6 +137,8 @@ export const medicalOrdersApi = {
   /** POST /caregiver/visits/:visitId/medical-orders — doctor-only; the customer is notified. */
   create: (visitId: string, dto: CreateMedicalOrderInput) =>
     http.post<MedicalOrder>(`/caregiver/visits/${visitId}/medical-orders`, dto),
+  /** GET /caregiver/visits/:visitId/medical-orders/:id/pdf — branded prescription PDF. */
+  pdf: (visitId: string, id: string) => http.download(`/caregiver/visits/${visitId}/medical-orders/${id}/pdf`),
 };
 
 export const paymentsApi = {

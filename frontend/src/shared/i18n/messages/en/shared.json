@@ -88,6 +88,7 @@
     "recordedOn": "Recorded {date}",
     "diagnosis": "Diagnosis",
     "medicines": "Prescription",
-    "labTests": "Lab tests"
+    "labTests": "Lab tests",
+    "downloadPdf": "Download PDF"
   }
 }
