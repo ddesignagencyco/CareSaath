@@ -157,39 +157,24 @@ function drawWaveFooter(pdf: PDFKit.PDFDocument, w: number, h: number): void {
   band(h - 38, 15, NAVY);
 }
 
+/** Right-aligned "Name (Designation)" — big name + small parenthetical role. */
+function drawRightNameDes(pdf: PDFKit.PDFDocument, rightEdge: number, name: string, des: string, y: number, big: number, small: number): void {
+  const nameTxt = pdfSafe(name);
+  const desTxt = `  (${pdfSafe(des)})`;
+  pdf.font('Helvetica-Bold').fontSize(big);
+  const nameW = pdf.widthOfString(nameTxt);
+  pdf.font('Helvetica-Bold').fontSize(small);
+  const desW = pdf.widthOfString(desTxt);
+  const startX = rightEdge - nameW - desW;
+  pdf.font('Helvetica-Bold').fontSize(big).fillColor(NAVY).text(nameTxt, startX, y, { lineBreak: false });
+  pdf.font('Helvetica-Bold').fontSize(small).fillColor(TEAL).text(desTxt, startX + nameW, y + (big - small) * 0.68, { lineBreak: false });
+}
+
 /** The ℞ mark. */
 function drawRxMark(pdf: PDFKit.PDFDocument, x: number, y: number, color: string, big = 22): void {
   pdf.font('Helvetica-Bold').fontSize(big).fillColor(color).text('R', x, y, { lineBreak: false });
   const rWidth = pdf.widthOfString('R');
   pdf.font('Helvetica-Bold').fontSize(big * 0.58).fillColor(color).text('x', x + rWidth - big * 0.14, y + big * 0.5, { lineBreak: false });
-}
-
-/** Small vector tick (on) or light dash (off), centred at (cx, cy). */
-function drawTick(pdf: PDFKit.PDFDocument, cx: number, cy: number, on: boolean): void {
-  pdf.save();
-  if (on) {
-    pdf.lineWidth(1.3).lineCap('round').lineJoin('round').strokeColor(TEAL);
-    pdf.moveTo(cx - 2.6, cy).lineTo(cx - 0.4, cy + 2.4).lineTo(cx + 3.2, cy - 2.6).stroke();
-  } else {
-    pdf.lineWidth(1).strokeColor('#cbd5e1');
-    pdf.moveTo(cx - 2.2, cy).lineTo(cx + 2.2, cy).stroke();
-  }
-  pdf.restore();
-}
-
-/** Derive Morning / Afternoon / Night dosing from the free-text frequency. */
-function parseTiming(freq?: string | null): { m: boolean; a: boolean; n: boolean } {
-  const f = (freq || '').toLowerCase();
-  if (/\b(as needed|sos|prn|when required|if needed)\b/.test(f)) return { m: false, a: false, n: false };
-  if (/(four times|4 times|\bqid\b|4x|every\s*6\s*hour|6\s*hourly)/.test(f)) return { m: true, a: true, n: true };
-  if (/(thrice|three times|3 times|\btid\b|3x|every\s*8\s*hour|8\s*hourly)/.test(f)) return { m: true, a: true, n: true };
-  if (/(twice|two times|2 times|\bbid\b|2x|every\s*12\s*hour|12\s*hourly)/.test(f)) return { m: true, a: false, n: true };
-  const m = /morning|breakfast|\bam\b|morn/.test(f);
-  const a = /afternoon|noon|midday|lunch/.test(f);
-  const n = /night|evening|bedtime|\bhs\b|dinner/.test(f);
-  if (m || a || n) return { m, a, n };
-  if (/(once|daily|\bod\b|1x|one time|per day)/.test(f)) return { m: true, a: false, n: false };
-  return { m: false, a: false, n: false };
 }
 
 const ADVICE = ['Take medicines exactly as prescribed', 'Complete the full course', 'Keep hydrated and rest well', 'Return if symptoms persist or worsen'];
@@ -228,13 +213,16 @@ export function buildPrescriptionPdf(
     pdf.font('Helvetica').fontSize(11).fillColor(TEAL).text('Home Nursing & Physiotherapy', LEFT + 73, 63);
     pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text('Licensed caregivers across Pakistan', LEFT + 73, 78);
 
-    const rb = { x: RIGHT - 250, w: 250 };
-    pdf.font('Helvetica-Bold').fontSize(20).fillColor(NAVY).text(pdfSafe(`Dr. ${rx.doctorName}`), rb.x, 34, { width: rb.w, align: 'right' });
-    pdf.font('Helvetica-Bold').fontSize(12).fillColor(TEAL).text(pdfSafe(rx.doctorSpecialty), rb.x, 60, { width: rb.w, align: 'right' });
+    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, 32, 20, 11);
     const lic = rx.licenseExpiry
       ? `${licenseLabel} No: ${rx.licenseNumber}   |   Valid till ${formatDate(rx.licenseExpiry)}`
       : `${licenseLabel} No: ${rx.licenseNumber}`;
-    pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), rb.x, 80, { width: rb.w, align: 'right' });
+    pdf.font('Helvetica').fontSize(9).fillColor(INK).text(pdfSafe(lic), RIGHT - 320, 60, { width: 320, align: 'right' });
+    pdf
+      .font('Helvetica')
+      .fontSize(7.5)
+      .fillColor(MUTED)
+      .text(pdfSafe(`Rx No. ${rx.prescriptionNumber}   ·   Issued ${formatDate(rx.issuedAt)}`), RIGHT - 320, 74, { width: 320, align: 'right' });
 
     pdf.moveTo(LEFT, 102).lineTo(RIGHT, 102).strokeColor(RULE).lineWidth(1).stroke();
 
@@ -301,9 +289,7 @@ export function buildPrescriptionPdf(
       pdf.path(`M ${colX} ${y} L ${colX + rw} ${y} L ${colX + rw + 11} ${y + 15} L ${colX + rw} ${y + 30} L ${colX} ${y + 30} Z`).fill(NAVY);
       pdf.restore();
       drawRxMark(pdf, colX + 12, y + 3, '#ffffff', 20);
-      pdf.font('Helvetica-Bold').fontSize(12).fillColor(TEAL).text('PRESCRIPTION', colX + rw + 22, y + 9, { characterSpacing: 2.5 });
-      pdf.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(pdfSafe(`No. ${rx.prescriptionNumber}`), colX, y + 2, { width: colW, align: 'right' });
-      pdf.moveTo(colX + rw + 150, y + 15).lineTo(colX + colW, y + 15).strokeColor(RULE).lineWidth(1).stroke();
+      pdf.moveTo(colX + rw + 26, y + 15).lineTo(colX + colW, y + 15).strokeColor(RULE).lineWidth(1).stroke();
       y += 40;
     };
 
@@ -339,15 +325,7 @@ export function buildPrescriptionPdf(
       pdf.font('Helvetica-Bold').fontSize(9.5).fillColor(TEAL).text(`${i + 1}`, colX + 14, y + 13.5, { width: 16, align: 'center' });
 
       let yc = y + 11;
-      pdf.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfSafe(m.name), padX, yc);
-      // M/A/N timing ticks, right-aligned on the name row.
-      const t = parseTiming(m.frequency);
-      const tx = colX + colW - 68;
-      (['M', 'A', 'N'] as const).forEach((lab, k) => {
-        const cxk = tx + k * 20;
-        pdf.font('Helvetica-Bold').fontSize(6.5).fillColor(MUTED).text(lab, cxk - 2, yc + 1);
-        drawTick(pdf, cxk + 7, yc + 4.5, k === 0 ? t.m : k === 1 ? t.a : t.n);
-      });
+      pdf.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfSafe(m.name), padX, yc, { width: contentW });
       yc += nameH + 2;
       if (doseLine) {
         iconPill(pdf, padX - 1, yc - 1, 13, TEAL);
@@ -392,12 +370,11 @@ export function buildPrescriptionPdf(
     }
 
     /* --------------------- signature (bottom-right) ---------------------- */
-    const sigW = 210;
+    const sigW = 230;
     const sigX = RIGHT - sigW;
     pdf.moveTo(sigX, SIG_Y).lineTo(RIGHT, SIG_Y).strokeColor('#9ca3af').lineWidth(0.8).stroke();
-    pdf.font('Helvetica-Bold').fontSize(11).fillColor(NAVY).text(pdfSafe(`Dr. ${rx.doctorName}`), sigX, SIG_Y + 5, { width: sigW, align: 'right' });
-    pdf.font('Helvetica-Bold').fontSize(9).fillColor(TEAL).text(pdfSafe(rx.doctorSpecialty), sigX, SIG_Y + 20, { width: sigW, align: 'right' });
-    pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text(pdfSafe(`${licenseLabel} No: ${rx.licenseNumber}`), sigX, SIG_Y + 32, { width: sigW, align: 'right' });
+    drawRightNameDes(pdf, RIGHT, rx.doctorName, rx.doctorSpecialty, SIG_Y + 6, 12, 8.5);
+    pdf.font('Helvetica-Oblique').fontSize(8.5).fillColor(MUTED).text(pdfSafe(`${licenseLabel} No: ${rx.licenseNumber}`), sigX, SIG_Y + 24, { width: sigW, align: 'right' });
 
     pdf.end();
   });
