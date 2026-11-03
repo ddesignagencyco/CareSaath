@@ -7,6 +7,8 @@ import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useNow } from "@shared/hooks/use-now";
+import { useAction } from "@shared/api/use-action";
+import { saveBlob } from "@shared/api/http";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { visitStart } from "@shared/lib/visit";
@@ -58,6 +60,13 @@ export default function CustomerVisitPage() {
     enabled: v?.booking.serviceType === "DOCTOR",
     refetchInterval: 20_000,
   });
+  const downloadOrder = useAction(
+    async (orderId: string) => {
+      const { blob, filename } = await visitsApi.medicalOrderPdf(id, orderId);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
   const [dialog, setDialog] = useState<"sos" | "concern" | "dispute" | "reschedule" | null>(null);
 
   if (visit.isError) {
@@ -140,7 +149,11 @@ export default function CustomerVisitPage() {
                 <Card>
                   <CardHeader title={t("doctorOrders")} />
                   <CardBody>
-                    <MedicalOrdersView orders={medicalOrders.data} />
+                    <MedicalOrdersView
+                      orders={medicalOrders.data}
+                      onDownload={(orderId) => downloadOrder.mutate(orderId)}
+                      downloadingId={downloadOrder.isPending ? downloadOrder.variables ?? null : null}
+                    />
                   </CardBody>
                 </Card>
               )}

@@ -47,14 +47,20 @@ export const authApi = {
   requestOtp: (phone: string) => (http.post<{ ttlSeconds: number }>("/auth/otp/request", { phone })),
   /** POST /auth/otp/verify — login only (an unknown number now 404s; use signup for new numbers). */
   verifyOtp: (phone: string, code: string) => (http.post<TokenPair>("/auth/otp/verify", { phone, code })),
+  /** POST /auth/signup/precheck — 409 if the phone or email is already taken; called BEFORE any OTP is sent. */
+  signupPrecheck: (dto: { phone: string; email?: string }) =>
+    http.post<{ ok: boolean }>("/auth/signup/precheck", dto),
   /** POST /auth/signup — starts a sign-up: 409 if the number is already registered, else sends a SIGNUP OTP. */
   signup: (dto: { phone: string; fullName: string; email?: string; role: "CUSTOMER" | "CAREGIVER" }) =>
     http.post<{ ttlSeconds: number }>("/auth/signup", dto),
   /** POST /auth/signup/verify — completes the sign-up with the role chosen at /auth/signup; returns tokens. */
   signupVerify: (phone: string, code: string) =>
     http.post<TokenPair>("/auth/signup/verify", { phone, code }),
+  /** POST /auth/firebase/verify — exchange a Firebase phone-auth ID token for our tokens (SMS-OTP path). */
+  firebaseVerify: (body: { idToken: string; fullName?: string; email?: string; role?: "CUSTOMER" | "CAREGIVER" }) =>
+    http.post<TokenPair>("/auth/firebase/verify", body),
   /** POST /auth/logout */
-  logout: (refreshToken: string) => (http.post<{ ok: boolean }>("/auth/logout", { refreshToken })),
+  logout: () => (http.post<{ ok: boolean }>("/auth/logout", {})),
 };
 
 export const meApi = {
@@ -149,6 +155,8 @@ export const visitsApi = {
   sos: (dto: { visitId: string; note?: string }) => (http.post<SosResult>("/sos", dto)),
   /** GET /customer/visits/:id/medical-orders — the doctor's diagnosis/prescription/lab-test records. */
   medicalOrders: (id: string) => (http.get<MedicalOrder[]>(`/customer/visits/${id}/medical-orders`)),
+  /** GET /customer/visits/:id/medical-orders/:orderId/pdf — branded prescription PDF. */
+  medicalOrderPdf: (id: string, orderId: string) => http.download(`/customer/visits/${id}/medical-orders/${orderId}/pdf`),
   /** GET /customer/visits/:id/location — last-known caregiver fix while EN_ROUTE (null once checked in / no fix yet). */
   location: (id: string) => (http.get<VisitLocation | null>(`/customer/visits/${id}/location`)),
 };

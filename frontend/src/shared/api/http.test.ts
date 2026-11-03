@@ -1,20 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
-import { apiPath, json, mockFetch } from "@/test/utils";
+import { apiPath, clearSessionCookies, json, mockFetch, setSessionCookies } from "@/test/utils";
 import { ApiError, checkHealth, createHttp, NETWORK_ERROR } from "./http";
 import { createSessionStore } from "./session";
 
 const EVENT = "caresaath:test-session";
 
-function setup(session: { accessToken: string; refreshToken: string } | null = { accessToken: "A1", refreshToken: "R1" }) {
+/**
+ * Cookie-auth: a "signed-in" session is the phone marker plus the JS-readable
+ * cs_session/cs_csrf cookies (the httpOnly token cookies are invisible to JS and
+ * to jsdom, so the mock fetch simply records `credentials: "include"`).
+ */
+function setup(signedIn = true) {
   const store = createSessionStore("caresaath.test.session", EVENT);
-  if (session) store.set({ ...session, phone: "+923001110001" });
+  if (signedIn) {
+    store.set({ phone: "+923001110001" });
+    setSessionCookies("CUSTOMER");
+  } else {
+    store.clear();
+    clearSessionCookies();
+  }
   return { store, http: createHttp(store) };
 }
 
 const unauthorized = () => json({ statusCode: 401, message: "Invalid or expired access token" }, 401);
 
 describe("createHttp: requests", () => {
-  it("sends JSON with the bearer token and drops empty query params", async () => {
+  it("sends JSON with credentials and the CSRF header, and drops empty query params", async () => {
     const { http } = setup();
     const f = mockFetch(() => json({ ok: true }));
     const res = await http.post<{ ok: boolean }>("/customer/bookings", { a: 1 });
@@ -22,7 +33,9 @@ describe("createHttp: requests", () => {
     const c = f.last();
     expect(c.method).toBe("POST");
     expect(c.url.origin + c.url.pathname).toBe("http://api.test/api/v1/customer/bookings");
-    expect(c.headers.Authorization).toBe("Bearer A1");
+    // Cookie-auth: cookies ride along via credentials; the CSRF cookie is mirrored into a header.
+    expect(c.credentials).toBe("include");
+    expect(c.headers["X-CSRF-Token"]).toBe("test-csrf");
     expect(c.headers["Content-Type"]).toBe("application/json");
     expect(c.body).toEqual({ a: 1 });
 
@@ -30,11 +43,12 @@ describe("createHttp: requests", () => {
     expect(Object.fromEntries(f.last().url.searchParams)).toEqual({ city: "Lahore", page: "1" });
   });
 
-  it("sends no Authorization header when signed out, and no Content-Type for GET", async () => {
-    const { http } = setup(null);
+  it("sends credentials but no CSRF or Content-Type header for a GET", async () => {
+    const { http } = setup(false);
     const f = mockFetch(() => json([]));
     await http.get("/caregivers");
-    expect(f.last().headers.Authorization).toBeUndefined();
+    expect(f.last().credentials).toBe("include");
+    expect(f.last().headers["X-CSRF-Token"]).toBeUndefined();
     expect(f.last().headers["Content-Type"]).toBeUndefined();
   });
 
@@ -86,49 +100,41 @@ describe("createHttp: errors", () => {
 });
 
 describe("createHttp: token refresh", () => {
-  it("refreshes once on 401, stores the rotated pair, notifies, and retries", async () => {
+  it("refreshes once on a token-expiry 401 and retries (cookies swap server-side)", async () => {
     const { http, store } = setup();
-    const onSession = vi.fn();
-    window.addEventListener(EVENT, onSession);
+    // No token in the body/header — the backend rotates the httpOnly cookies.
+    // The mock flips once /auth/refresh is hit, so the retry succeeds.
+    let refreshed = false;
     const f = mockFetch((c) => {
-      if (apiPath(c) === "/auth/refresh") return json({ accessToken: "A2", refreshToken: "R2" }, 201);
-      return c.headers.Authorization === "Bearer A2" ? json({ id: "me" }) : unauthorized();
+      if (apiPath(c) === "/auth/refresh") {
+        refreshed = true;
+        return json({}, 201);
+      }
+      return refreshed ? json({ id: "me" }) : unauthorized();
     });
 
     await expect(http.get("/customer/me")).resolves.toEqual({ id: "me" });
     expect(f.calls.map((c) => `${c.method} ${apiPath(c)}`)).toEqual(["GET /customer/me", "POST /auth/refresh", "GET /customer/me"]);
-    expect(f.calls[1].body).toEqual({ refreshToken: "R1" });
+    expect(f.calls[1].body).toEqual({});
     expect(f.calls[1].headers.Authorization).toBeUndefined();
-    expect(store.get()).toMatchObject({ accessToken: "A2", refreshToken: "R2", phone: "+923001110001" });
-    expect(onSession).toHaveBeenCalled();
-    window.removeEventListener(EVENT, onSession);
+    expect(f.calls[1].credentials).toBe("include");
+    // A successful refresh leaves the session marker untouched (only the cookies change).
+    expect(store.get()).toMatchObject({ phone: "+923001110001" });
   });
 
   it("shares one refresh between concurrent 401s", async () => {
     const { http } = setup();
+    let refreshed = false;
     const f = mockFetch((c) => {
-      if (apiPath(c) === "/auth/refresh") return json({ accessToken: "A2", refreshToken: "R2" });
-      return c.headers.Authorization === "Bearer A2" ? json({ path: apiPath(c) }) : unauthorized();
+      if (apiPath(c) === "/auth/refresh") {
+        refreshed = true;
+        return json({});
+      }
+      return refreshed ? json({ path: apiPath(c) }) : unauthorized();
     });
     const results = await Promise.all([http.get("/a"), http.get("/b"), http.get("/c")]);
     expect(results).toEqual([{ path: "/a" }, { path: "/b" }, { path: "/c" }]);
     expect(f.calls.filter((c) => apiPath(c) === "/auth/refresh")).toHaveLength(1);
-  });
-
-  it("uses a pair another tab already rotated instead of burning the old refresh token", async () => {
-    const { http, store } = setup();
-    let first = true;
-    const f = mockFetch((c) => {
-      if (first) {
-        first = false;
-        // Another tab rotates while this request is in flight.
-        store.set({ accessToken: "A9", refreshToken: "R9", phone: "+923001110001" });
-        return unauthorized();
-      }
-      return c.headers.Authorization === "Bearer A9" ? json({ ok: true }) : unauthorized();
-    });
-    await expect(http.get("/customer/me")).resolves.toEqual({ ok: true });
-    expect(f.calls.some((c) => apiPath(c) === "/auth/refresh")).toBe(false);
   });
 
   it("clears the session and rethrows when the refresh is rejected", async () => {
@@ -148,7 +154,7 @@ describe("createHttp: token refresh", () => {
       message: "Invalid check-in OTP",
     });
     expect(f.calls).toHaveLength(1);
-    expect(store.get()?.refreshToken).toBe("R1");
+    expect(store.get()?.phone).toBe("+923001110001");
   });
 
   it("never refreshes for /auth/* routes or when signed out", async () => {
@@ -156,7 +162,7 @@ describe("createHttp: token refresh", () => {
     const f = mockFetch(() => json({ statusCode: 401, message: "Invalid OTP" }, 401));
     await expect(signedIn.http.post("/auth/otp/verify", { phone: "+923001110001", code: "000000" })).rejects.toMatchObject({ message: "Invalid OTP" });
     signedIn.store.clear();
-    const anonymous = setup(null);
+    const anonymous = setup(false);
     await expect(anonymous.http.get("/customer/me")).rejects.toMatchObject({ status: 401 });
     expect(f.calls.some((c) => apiPath(c) === "/auth/refresh")).toBe(false);
   });

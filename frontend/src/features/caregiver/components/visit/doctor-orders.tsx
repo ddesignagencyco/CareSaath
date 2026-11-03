@@ -9,6 +9,7 @@ import { Button } from "@shared/ui/button";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { Field, Input, Textarea } from "@shared/ui/field";
 import { MedicalOrdersView } from "@shared/ui/medical-orders";
+import { saveBlob } from "@shared/api/http";
 import type { LabTest, Medicine } from "@shared/caregiver-types";
 import { medicalOrdersApi } from "@/features/caregiver/lib/api/caregiver";
 
@@ -25,6 +26,14 @@ export function DoctorOrders({ visitId }: { visitId: string }) {
   const [diagnosis, setDiagnosis] = useState("");
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
+
+  const download = useAction(
+    async (orderId: string) => {
+      const { blob, filename } = await medicalOrdersApi.pdf(visitId, orderId);
+      saveBlob(blob, filename);
+    },
+    { invalidate: [], success: null },
+  );
 
   const meds = medicines.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
   const labs = labTests.map((l) => ({ ...l, name: l.name.trim() })).filter((l) => l.name);
@@ -56,7 +65,13 @@ export function DoctorOrders({ visitId }: { visitId: string }) {
     <Card>
       <CardHeader title={t("title")} />
       <CardBody className="space-y-6">
-        {orders.data && orders.data.length > 0 && <MedicalOrdersView orders={orders.data} />}
+        {orders.data && orders.data.length > 0 && (
+          <MedicalOrdersView
+            orders={orders.data}
+            onDownload={(id) => download.mutate(id)}
+            downloadingId={download.isPending ? download.variables ?? null : null}
+          />
+        )}
 
         <div className="space-y-5 rounded-xl border border-dashed border-ink-200 p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-ink-800">

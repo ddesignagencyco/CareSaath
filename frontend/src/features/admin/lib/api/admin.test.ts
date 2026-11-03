@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apiPath, json, mockFetch } from "@/test/utils";
+import { apiPath, json, mockFetch, setSessionCookies } from "@/test/utils";
 import {
   analyticsApi,
   authApi,
@@ -32,7 +32,7 @@ const promo = {
 const cases: Case[] = [
   ["auth.requestOtp", () => authApi.requestOtp("+923000000000"), "POST", "/auth/otp/request", { phone: "+923000000000" }],
   ["auth.verifyOtp", () => authApi.verifyOtp("+923000000000", "123456"), "POST", "/auth/otp/verify", { phone: "+923000000000", code: "123456" }],
-  ["auth.logout", () => authApi.logout("R1"), "POST", "/auth/logout", { refreshToken: "R1" }],
+  ["auth.logout", () => authApi.logout(), "POST", "/auth/logout", {}],
   ["caregivers.list", () => caregiversApi.list({ status: "PENDING", page: 2, limit: 10 }), "GET", "/admin/caregivers", undefined, { status: "PENDING", page: "2", limit: "10" }],
   ["caregivers.list (no status)", () => caregiversApi.list({ limit: 1 }), "GET", "/admin/caregivers", undefined, { limit: "1" }],
   ["caregivers.approve (with reason)", () => caregiversApi.approve("cg1", "Checked PNC"), "POST", "/admin/caregivers/cg1/approve", { reason: "Checked PNC" }],
@@ -67,7 +67,9 @@ const cases: Case[] = [
 
 describe("admin API contract (real mode)", () => {
   it.each(cases)("%s", async (_name, call, method, path, body, query) => {
-    session.set({ accessToken: "A1", refreshToken: "R1", phone: "+923000000000" });
+    // Cookie-auth: the session marker holds only the phone; tokens are httpOnly cookies.
+    session.set({ phone: "+923000000000" });
+    setSessionCookies("ADMIN");
     const f = mockFetch(() => json({}));
     await call();
     expect(f.calls).toHaveLength(1);
@@ -79,11 +81,12 @@ describe("admin API contract (real mode)", () => {
     if (body === undefined) expect(c.body).toBeUndefined();
     else expect(c.body).toEqual(body);
     if (query) expect(Object.fromEntries(c.url.searchParams)).toEqual(query);
-    if (!path.startsWith("/auth/")) expect(c.headers.Authorization).toBe("Bearer A1");
+    // The browser attaches the httpOnly session cookies — no Authorization header.
+    expect(c.credentials).toBe("include");
   });
 
   it("health.check calls GET /health without a token", async () => {
-    session.set({ accessToken: "A1", refreshToken: "R1", phone: "+923000000000" });
+    session.set({ phone: "+923000000000" });
     const f = mockFetch(() => json({ status: "ok", postgres: true, redis: false }));
     await expect(healthApi.check()).resolves.toEqual({ status: "ok", postgres: true, redis: false });
     expect(f.last().method).toBe("GET");

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { apiPath, fakeJwt, json, mockFetch } from "@/test/utils";
+import { apiPath, json, mockFetch, setSessionCookies } from "@/test/utils";
 import {
   authApi,
   availabilityApi,
@@ -15,10 +15,10 @@ import {
 } from "./caregiver";
 import { session } from "./session";
 
-const ACCESS = fakeJwt({ sub: "user-1", role: "CAREGIVER", phone: "+923001110011", type: "access" });
-
 beforeEach(() => {
-  session.set({ accessToken: ACCESS, refreshToken: "r", phone: "+923001110011" });
+  // Cookie-auth: the session marker holds only the phone; tokens are httpOnly cookies.
+  session.set({ phone: "+923001110011" });
+  setSessionCookies("CAREGIVER");
 });
 
 type Row = [name: string, call: () => Promise<unknown>, method: string, path: string, body: unknown, query?: Record<string, string>];
@@ -26,8 +26,8 @@ type Row = [name: string, call: () => Promise<unknown>, method: string, path: st
 const rows: Row[] = [
   ["authApi.requestOtp", () => authApi.requestOtp("+923001110011"), "POST", "/auth/otp/request", { phone: "+923001110011" }],
   ["authApi.verifyOtp", () => authApi.verifyOtp("+923001110011", "123456"), "POST", "/auth/otp/verify", { phone: "+923001110011", code: "123456" }],
-  ["authApi.refresh", () => authApi.refresh("R1"), "POST", "/auth/refresh", { refreshToken: "R1" }],
-  ["authApi.logout", () => authApi.logout("R1"), "POST", "/auth/logout", { refreshToken: "R1" }],
+  ["authApi.refresh", () => authApi.refresh(), "POST", "/auth/refresh", {}],
+  ["authApi.logout", () => authApi.logout(), "POST", "/auth/logout", {}],
   ["meApi.get", () => meApi.get(), "GET", "/customer/me", undefined],
   ["meApi.update", () => meApi.update({ fullName: "Fatima Noor", preferredLanguage: "UR" }), "PATCH", "/customer/me", { fullName: "Fatima Noor", preferredLanguage: "UR" }],
   [
@@ -120,13 +120,13 @@ describe("caregiver API contract (real mode)", () => {
     expect(Object.fromEntries(c.url.searchParams)).toEqual(query);
   });
 
-  it("sends the caregiver bearer token on authenticated routes, none on /auth/otp/*", async () => {
+  it("sends the session cookies (credentials: include) on every request", async () => {
     const f = mockFetch(() => json({}));
     await visitsApi.get("v1");
-    expect(f.last().headers.Authorization).toBe(`Bearer ${ACCESS}`);
+    expect(f.last().credentials).toBe("include");
     session.clear();
     await authApi.requestOtp("+923001110011");
-    expect(f.last().headers.Authorization).toBeUndefined();
+    expect(f.last().credentials).toBe("include");
   });
 
   it("sends latitude/longitude as strings for SOS and numbers for GPS check-in", async () => {
@@ -165,15 +165,22 @@ describe("caregiver API contract (real mode)", () => {
   });
 
   it("refreshes an expired access token once and retries", async () => {
-    const A2 = fakeJwt({ sub: "user-1", role: "CAREGIVER", type: "access" });
+    // Cookie-auth: no token in the body/header — the backend rotates the cookies.
+    // The mock flips once /auth/refresh is hit, so the retry succeeds.
+    let refreshed = false;
     const f = mockFetch((c) => {
-      if (apiPath(c) === "/auth/refresh") return json({ accessToken: A2, refreshToken: "r2" });
-      return c.headers.Authorization === `Bearer ${A2}` ? json({ items: [], page: 1, limit: 20, total: 0 }) : json({ statusCode: 401, message: "Invalid or expired access token" }, 401);
+      if (apiPath(c) === "/auth/refresh") {
+        refreshed = true;
+        return json({});
+      }
+      return refreshed ? json({ items: [], page: 1, limit: 20, total: 0 }) : json({ statusCode: 401, message: "Invalid or expired access token" }, 401);
     });
     await expect(bookingsApi.list({})).resolves.toMatchObject({ total: 0 });
     expect(f.calls.map((c) => `${c.method} ${apiPath(c)}`)).toEqual(["GET /caregiver/bookings", "POST /auth/refresh", "GET /caregiver/bookings"]);
-    expect(f.calls[1].body).toEqual({ refreshToken: "r" });
-    expect(session.get()).toMatchObject({ accessToken: A2, refreshToken: "r2" });
+    expect(f.calls[1].body).toEqual({});
+    expect(f.calls[1].credentials).toBe("include");
+    // The session marker is untouched by a successful refresh (only the cookies change).
+    expect(session.get()).toMatchObject({ phone: "+923001110011" });
   });
 
   it("surfaces the backend message on errors", async () => {

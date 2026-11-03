@@ -88,6 +88,7 @@
     "recordedOn": "ریکارڈ کیا گیا {date}",
     "diagnosis": "تشخیص",
     "medicines": "نسخہ",
-    "labTests": "لیب ٹیسٹ"
+    "labTests": "لیب ٹیسٹ",
+    "downloadPdf": "PDF ڈاؤن لوڈ کریں"
   }
 }

@@ -32,11 +32,11 @@ export function useRealtime(opts: {
   });
 
   useEffect(() => {
-    if (!enabled || !session.get()?.accessToken) return;
+    if (!enabled || !session.get()) return;
     const socket = io(ORIGIN, {
       transports: ["websocket"],
       // Re-read the token on every (re)connect so a refreshed token is used.
-      auth: (cb) => cb({ token: session.get()?.accessToken ?? "" }),
+      withCredentials: true,
     });
     const refetchAll = () => void queryClient.invalidateQueries();
     const refetchNotifs = () => void queryClient.invalidateQueries({ queryKey: notifKeyRef.current });

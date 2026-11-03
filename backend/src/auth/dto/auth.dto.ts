@@ -80,6 +80,23 @@ export class SignupDto {
   role!: SignupRole;
 }
 
+export class SignupPrecheckDto {
+  @ApiProperty({
+    example: '+923001110099',
+    description: 'Pakistani mobile number with country code. Returns 409 if already registered.',
+  })
+  @IsString()
+  @Matches(/^\+?[0-9]{10,15}$/, {
+    message: 'phone must be a valid phone number (e.g. +923001234567)',
+  })
+  phone!: string;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Optional email. Returns 409 if already in use.' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
+
 export class SignupVerifyDto {
   @ApiProperty({ example: '+923001110099', description: 'Phone number that started the sign-up.' })
   @IsString()
@@ -114,10 +131,51 @@ export class VerifyPhoneChangeDto {
 }
 
 export class RefreshTokenDto {
-  @ApiProperty({
-    description: 'JWT refresh token obtained from /auth/otp/verify.',
+  @ApiPropertyOptional({
+    description: 'JWT refresh token. The web client sends it as an httpOnly cookie instead, so the body is optional.',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
+  @IsOptional()
   @IsString()
-  refreshToken!: string;
+  refreshToken?: string;
+}
+
+export class FirebaseVerifyDto {
+  @ApiProperty({
+    description:
+      'Firebase ID token obtained client-side after Firebase confirms the phone OTP (firebase.auth().signInWithPhoneNumber(...).confirm(code)).',
+  })
+  @IsString()
+  idToken!: string;
+
+  @ApiPropertyOptional({
+    example: 'Ayesha Khan',
+    description: 'Full name for a NEW account. Required only the first time this phone number signs in; ignored for an existing account.',
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: 'ayesha@example.com', description: 'Optional email on file. Only used when creating a new account.' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional({
+    enum: SIGNUP_ROLES,
+    description: 'Account type for a NEW account. Required the first time this phone number signs in.',
+  })
+  @IsOptional()
+  @IsIn(SIGNUP_ROLES)
+  role?: SignupRole;
+
+  @ApiPropertyOptional({
+    enum: LOGIN_AUDIENCES,
+    description: 'App the user is signing in to, checked the same way as POST /auth/otp/verify.',
+  })
+  @IsOptional()
+  @IsIn(LOGIN_AUDIENCES)
+  audience?: LoginAudience;
 }

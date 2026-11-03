@@ -62,7 +62,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
 
   // Load STUN/TURN servers once a session is active; keep the STUN fallback on any failure.
   useEffect(() => {
-    if (!enabled || !session.get()?.accessToken) return;
+    if (!enabled || !session.get()) return;
     let cancelled = false;
     http
       .get<{ iceServers: RTCIceServer[] }>("/realtime/ice-servers")
@@ -103,8 +103,8 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
 
   // Socket lifecycle + call:* listeners.
   useEffect(() => {
-    if (!enabled || !session.get()?.accessToken) return;
-    const socket = io(ORIGIN, { transports: ["websocket"], auth: (cb) => cb({ token: session.get()?.accessToken ?? "" }) });
+    if (!enabled || !session.get()) return;
+    const socket = io(ORIGIN, { transports: ["websocket"], withCredentials: true });
     socketRef.current = socket;
 
     socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; sdp: RTCSessionDescriptionInit }) => {

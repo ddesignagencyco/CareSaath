@@ -13,7 +13,10 @@ function config(env: Record<string, string>) {
 function transportFor(env: Record<string, string>) {
   createTransport.mockClear();
   new EmailService(config(env));
-  return createTransport.mock.calls[0]![0] as unknown as Record<string, unknown>;
+  const calls = createTransport.mock.calls as unknown[][] | [];
+  const call = calls[0];
+  if (!call?.[0]) throw new Error('createTransport was not called');
+  return call[0] as unknown as Record<string, unknown>;
 }
 
 const GODADDY = {

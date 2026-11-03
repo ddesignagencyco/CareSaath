@@ -2,7 +2,7 @@
 import type { Address, Booking, PatientProfile } from "@shared/caregiver-types";
 import type { CustomerPaymentWithVisit, CustomerVisitDetail, PublicCaregiver } from "@shared/customer-types";
 import { formatMoney } from "@shared/lib/format";
-import { apiPath, fakeJwt, json, type RecordedCall } from "@/test/utils";
+import { apiPath, json, type RecordedCall, setSessionCookies } from "@/test/utils";
 import { session } from "../lib/api/session";
 
 export const STORAGE_KEY = "caresaath.customer.locale";
@@ -11,7 +11,9 @@ export const STORAGE_KEY = "caresaath.customer.locale";
 export const money = (paisa: number) => formatMoney(paisa).replace(/\s+/g, " ");
 
 export function signIn() {
-  session.set({ accessToken: fakeJwt({ sub: "cust-1", role: "CUSTOMER", phone: "+923211234567", type: "access" }), refreshToken: "r", phone: "+923211234567" });
+  // Tokens now live in httpOnly cookies; the session marker only holds the phone.
+  session.set({ phone: "+923211234567" });
+  setSessionCookies("CUSTOMER");
 }
 
 /** Respond by "METHOD /path" (path relative to the API base); unknown routes 404. */

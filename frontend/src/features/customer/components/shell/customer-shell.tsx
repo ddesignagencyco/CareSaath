@@ -104,7 +104,7 @@ function useUnread(enabled: boolean) {
 
 /**
  * Signed-in customer layout. Renders on the server (pages show skeletons);
- * on the client, visitors without a session go to /customer/login.
+ * on the client, visitors without a session go to /login.
  */
 export function CustomerShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();

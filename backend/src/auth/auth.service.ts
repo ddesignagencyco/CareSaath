@@ -18,6 +18,7 @@ import type { LoginAudience, SignupRole } from './dto/auth.dto.js';
 import { SmsService } from './sms.service.js';
 import { EmailService } from '../email/email.service.js';
 import { renderNotificationEmail } from '../email/templates.js';
+import { FirebaseService } from '../firebase/firebase.service.js';
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_REQUEST_LIMIT = 3;
@@ -52,6 +53,7 @@ export class AuthService {
     private readonly sms: SmsService,
     private readonly config: ConfigService,
     @Optional() private readonly email?: EmailService,
+    @Optional() private readonly firebase?: FirebaseService,
   ) {}
 
   /**
@@ -212,11 +214,39 @@ export class AuthService {
     };
   }
 
-  /** Starts a sign-up: rejects an already-registered phone, then sends a SIGNUP-purpose OTP. */
+  /**
+   * Pre-flight for sign-up: rejects an already-used phone or email BEFORE any OTP
+   * is sent (whether the OTP comes from Firebase client-side or the backend). This
+   * lets both the web and mobile clients tell the user on the sign-up form instead
+   * of only discovering the clash after a code has been sent and verified.
+   */
+  async signupPrecheck(dto: { phone: string; email?: string }): Promise<{ ok: true }> {
+    const byPhone = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    if (byPhone) {
+      throw new ConflictException('This number is already registered');
+    }
+    if (dto.email) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (byEmail) {
+        throw new ConflictException('Email already in use');
+      }
+    }
+    return { ok: true };
+  }
+
+  /** Starts a sign-up: rejects an already-registered phone or email, then sends a SIGNUP-purpose OTP. */
   async signup(dto: { phone: string; fullName: string; email?: string; role: SignupRole }): Promise<{ ttlSeconds: number }> {
     const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     if (existing) {
       throw new ConflictException('This number is already registered');
+    }
+    // Reject a taken email up front so the OTP is never sent for a clash the
+    // account creation (signupVerify) would only reject afterwards.
+    if (dto.email) {
+      const emailOwner = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (emailOwner) {
+        throw new ConflictException('Email already in use');
+      }
     }
 
     const rateKey = `otp:rl:${dto.phone}`;
@@ -296,6 +326,77 @@ export class AuthService {
         throw new ConflictException('Email already in use');
       }
       throw err;
+    }
+
+    const tokens = await this.issueTokens(user.id, user.role, user.phone);
+    return {
+      ...tokens,
+      user: { id: user.id, phone: user.phone, role: user.role, fullName: user.fullName },
+    };
+  }
+
+  /**
+   * Sign in or sign up using a Firebase phone-auth ID token. The client sends
+   * its own OTP via the Firebase SDK (reCAPTCHA-gated, Google's SMS) and only
+   * hands this backend the resulting ID token — this method never sees or
+   * generates an OTP code itself, it just trusts Firebase's verification.
+   *
+   * First time this phone number is seen, `fullName`/`role` (from the caller)
+   * create the account, same as signupVerify. Every time after, they are
+   * ignored and this behaves like verifyOtp.
+   */
+  async firebaseAuth(
+    idToken: string,
+    extra: { fullName?: string; email?: string; role?: SignupRole },
+    audience?: LoginAudience,
+  ): Promise<LoginResult> {
+    if (!this.firebase?.isConfigured) {
+      throw new BadRequestException('Firebase sign-in is not configured on this server');
+    }
+
+    let decoded: { phone_number?: string };
+    try {
+      decoded = await this.firebase.verifyIdToken(idToken);
+    } catch (err) {
+      throw new UnauthorizedException((err as Error).message);
+    }
+    const phone = decoded.phone_number;
+    if (!phone) {
+      // Should not happen for a phone-auth token, but the Admin SDK does not
+      // guarantee the claim shape, so fail closed rather than crash below.
+      throw new BadRequestException('Firebase token has no verified phone number');
+    }
+
+    let user = await this.prisma.user.findUnique({ where: { phone } });
+
+    if (!user) {
+      if (!extra.fullName || !extra.role) {
+        throw new BadRequestException('fullName and role are required to create a new account');
+      }
+      try {
+        user = await this.prisma.user.create({
+          data: {
+            phone,
+            fullName: extra.fullName,
+            ...(extra.email ? { email: extra.email } : {}),
+            role: extra.role === 'CAREGIVER' ? UserRole.CAREGIVER : UserRole.CUSTOMER,
+            lastLoginAt: new Date(),
+          },
+        });
+      } catch (err) {
+        if ((err as { code?: string }).code === 'P2002') {
+          throw new ConflictException('Email already in use');
+        }
+        throw err;
+      }
+    } else {
+      if (audience && !AUDIENCE_ROLES[audience].includes(user.role)) {
+        throw new ForbiddenException('This account cannot sign in to this app');
+      }
+      if (user.status !== UserStatus.ACTIVE) {
+        throw new ForbiddenException('Account is not active');
+      }
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     }
 
     const tokens = await this.issueTokens(user.id, user.role, user.phone);

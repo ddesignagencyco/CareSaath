@@ -1,19 +1,32 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator.js';
 import { AuthService } from './auth.service.js';
 import {
+  FirebaseVerifyDto,
   RefreshTokenDto,
   RequestOtpDto,
   SignupDto,
+  SignupPrecheckDto,
   SignupVerifyDto,
   VerifyOtpDto,
 } from './dto/auth.dto.js';
+import { clearAuthCookies, COOKIE, makeCsrfToken, readCookie, roleFromAccessToken, setAuthCookies } from './cookies.js';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
+
+  /**
+   * Set the WEB session as httpOnly cookies (access + refresh) plus the readable
+   * cs_session / cs_csrf flags. The native app ignores these and uses the tokens
+   * returned in the response body with `Authorization: Bearer`.
+   */
+  private issueSession(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
+    setAuthCookies(res, tokens, makeCsrfToken(), roleFromAccessToken(tokens.accessToken));
+  }
 
   @Public()
   @Post('otp/request')
@@ -56,8 +69,10 @@ export class AuthController {
       },
     },
   })
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto.phone, dto.code, dto.audience);
+  async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.verifyOtp(dto.phone, dto.code, dto.audience);
+    this.issueSession(res, result);
+    return result;
   }
 
   @Public()
@@ -78,6 +93,19 @@ export class AuthController {
   }
 
   @Public()
+  @Post('signup/precheck')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Pre-check sign-up availability',
+    description:
+      'Rejects an already-registered phone (409) or email (409) BEFORE any OTP is sent, so the clients can tell the user on the sign-up form instead of after a code is sent/verified. Used by both web (incl. the Firebase SMS path) and mobile.',
+  })
+  @ApiResponse({ status: 200, description: 'Phone and email are available.', schema: { example: { ok: true } } })
+  signupPrecheck(@Body() dto: SignupPrecheckDto) {
+    return this.auth.signupPrecheck(dto);
+  }
+
+  @Public()
   @Post('signup/verify')
   @HttpCode(200)
   @ApiOperation({
@@ -85,8 +113,30 @@ export class AuthController {
     description:
       'Verifies the SIGNUP OTP and creates the account with the role chosen at POST /auth/signup. Returns JWT access & refresh tokens.',
   })
-  signupVerify(@Body() dto: SignupVerifyDto) {
-    return this.auth.signupVerify(dto.phone, dto.code);
+  async signupVerify(@Body() dto: SignupVerifyDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.signupVerify(dto.phone, dto.code);
+    this.issueSession(res, result);
+    return result;
+  }
+
+  @Public()
+  @Post('firebase/verify')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Sign in or sign up with a Firebase phone-auth ID token',
+    description:
+      'The client sends its own OTP via the Firebase SDK and confirms it there; this only verifies the resulting ID token. ' +
+      'First time this phone number is seen, fullName + role create the account (like POST /auth/signup/verify); ' +
+      'after that they are ignored and this behaves like POST /auth/otp/verify.',
+  })
+  async firebaseVerify(@Body() dto: FirebaseVerifyDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.auth.firebaseAuth(
+      dto.idToken,
+      { fullName: dto.fullName, email: dto.email, role: dto.role },
+      dto.audience,
+    );
+    this.issueSession(res, result);
+    return result;
   }
 
   @Public()
@@ -107,8 +157,13 @@ export class AuthController {
       },
     },
   })
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.auth.refresh(dto.refreshToken);
+  async refresh(@Body() dto: RefreshTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Web sends the refresh token as an httpOnly cookie; native sends it in the body.
+    const refreshToken = dto.refreshToken ?? readCookie(req, COOKIE.refresh);
+    if (!refreshToken) throw new BadRequestException('Missing refresh token');
+    const result = await this.auth.refresh(refreshToken);
+    this.issueSession(res, result);
+    return result;
   }
 
   @Public()
@@ -123,7 +178,10 @@ export class AuthController {
     description: 'Session revoked.',
     schema: { example: { ok: true } },
   })
-  logout(@Body() dto: RefreshTokenDto) {
-    return this.auth.logout(dto.refreshToken);
+  async logout(@Body() dto: RefreshTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = dto.refreshToken ?? readCookie(req, COOKIE.refresh);
+    clearAuthCookies(res);
+    if (!refreshToken) return { ok: true };
+    return this.auth.logout(refreshToken);
   }
 }

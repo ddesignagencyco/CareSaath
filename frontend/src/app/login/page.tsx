@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { decodeToken } from "@shared/api/session";
 import { LoginScreen } from "@shared/auth/login-screen";
+import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { session as adminSession } from "@/features/admin/lib/api/session";
 import { meApi as caregiverMe } from "@/features/caregiver/lib/api/caregiver";
 import { session as caregiverSession } from "@/features/caregiver/lib/api/session";
@@ -44,11 +45,11 @@ function LoginInner() {
           </Link>
         </>
       }
-      requestOtp={authApi.requestOtp}
+      requestOtp={makeRequestOtp(authApi.requestOtp)}
       verifyOtp={async (phone, code) => {
-        const tokens = await authApi.verifyOtp(phone, code);
+        const tokens = await tokensFromOtp({ code, firebaseVerify: authApi.firebaseVerify, backendVerify: () => authApi.verifyOtp(phone, code) });
         const role = decodeToken(tokens.accessToken)?.role;
-        const value = { ...tokens, phone };
+        const value = { phone };
         if (role === "ADMIN") {
           adminSession.set(value);
           router.replace(destinationFor("/admin"));

@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { AuthUser } from '../decorators/current-user.decorator.js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
+import { COOKIE, readCookie } from '../../auth/cookies.js';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -33,7 +34,8 @@ export class JwtAuthGuard implements CanActivate {
     }
     const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     const header = request.headers.authorization;
-    const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
+    // Web client sends the access token as an httpOnly cookie; native sends Bearer.
+    const token = (header?.startsWith('Bearer ') ? header.slice(7) : undefined) ?? readCookie(request, COOKIE.access);
     if (!token) {
       throw new UnauthorizedException('Missing access token');
     }

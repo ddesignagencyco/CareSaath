@@ -1,11 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { messages } from "@shared/i18n/messages";
-import CustomerLoginPage from "@/app/customer/login/page";
 import FindCarePage from "@/app/customer/(app)/caregivers/page";
-import { apiPath, fakeJwt, mockFetch, renderWithProviders } from "@/test/utils";
-import { SESSION_KEY } from "../lib/api/session";
+import { mockFetch, renderWithProviders } from "@/test/utils";
 import { caregiver, money, router, STORAGE_KEY } from "./fixtures";
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -17,36 +14,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 const en = messages.en;
-
-describe("customer login", { timeout: 15_000 }, () => {
-  it("rejects a caregiver number: shows the error, revokes the tokens and stays signed out", async () => {
-    const user = userEvent.setup({ delay: null });
-    const tokens = { accessToken: fakeJwt({ sub: "cg-u", role: "CAREGIVER", type: "access" }), refreshToken: "refresh-cg" };
-    const f = mockFetch(
-      router({
-        "POST /auth/otp/request": { ttlSeconds: 300 },
-        "POST /auth/otp/verify": tokens,
-        "GET /customer/me": { id: "cg-u", phone: "+923001110002", role: "CAREGIVER", fullName: "Bilal", caregiverProfile: { id: "x", verificationStatus: "APPROVED" } },
-        "POST /auth/logout": { ok: true },
-      }),
-    );
-    renderWithProviders(<CustomerLoginPage />, { storageKey: STORAGE_KEY });
-
-    await user.type(screen.getByLabelText(en.shared.phone.label), "3001110002");
-    await user.click(screen.getByRole("button", { name: en.shared.login.sendCode }));
-    const firstDigit = await screen.findByLabelText(en.shared.otp.digit.replace("{n}", "1"));
-    await user.click(firstDigit);
-    await user.keyboard("123456");
-
-    expect(await screen.findByText(en.customerA.login.roleCaregiver)).toBeInTheDocument();
-    expect(f.calls.map((c) => `${c.method} ${apiPath(c)}`)).toEqual(["POST /auth/otp/request", "POST /auth/otp/verify", "GET /customer/me", "POST /auth/logout"]);
-    expect(f.calls[0].body).toEqual({ phone: "+923001110002" });
-    expect(f.calls[1].body).toEqual({ phone: "+923001110002", code: "123456" });
-    expect(f.last().body).toEqual({ refreshToken: "refresh-cg" });
-    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
-    expect(nav.replace).not.toHaveBeenCalled();
-  });
-});
 
 const results = {
   items: [

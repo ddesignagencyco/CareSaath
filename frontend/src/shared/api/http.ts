@@ -7,7 +7,6 @@
  * retries the request; if that fails the session is cleared and the section
  * shell sends the user to its login page.
  */
-import type { TokenPair } from "../types";
 import type { SessionStore } from "./session";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
@@ -37,16 +36,29 @@ function buildUrl(path: string, query?: Query): string {
   return url.toString();
 }
 
-async function send(method: string, url: string, token: string | undefined, body?: unknown): Promise<Response> {
+/** The JS-readable CSRF cookie the backend sets (double-submit token). */
+function readCsrfCookie(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const m = document.cookie.match(/(?:^|;\s*)cs_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : undefined;
+}
+
+async function send(method: string, url: string, body?: unknown): Promise<Response> {
   const isForm = body instanceof FormData;
+  const headers: Record<string, string> = {
+    // Let the browser set the multipart boundary for FormData.
+    ...(isForm || body === undefined ? {} : { "Content-Type": "application/json" }),
+  };
+  // Mirror the CSRF cookie into a header for cookie-authed, state-changing requests.
+  if (method !== "GET" && method !== "HEAD") {
+    const csrf = readCsrfCookie();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
   try {
     return await fetch(url, {
       method,
-      headers: {
-        // Let the browser set the multipart boundary for FormData.
-        ...(isForm || body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      credentials: "include", // send & receive the httpOnly session cookies
+      headers,
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
@@ -73,40 +85,33 @@ export function createHttp(store: SessionStore) {
   // One refresh at a time per section; concurrent 401s share it.
   let refreshing: Promise<boolean> | null = null;
 
-  async function refresh(usedRefreshToken: string): Promise<boolean> {
-    const current = store.get();
-    if (!current) return false;
-    // Another tab or request already rotated the pair: just use the new one.
-    if (current.refreshToken !== usedRefreshToken) return true;
-    const res = await send("POST", buildUrl("/auth/refresh"), undefined, { refreshToken: current.refreshToken }).catch(() => null);
+  async function refresh(): Promise<boolean> {
+    // The refresh token is an httpOnly cookie; the backend reads it and sets a
+    // fresh access cookie. The browser swaps the cookies for us — nothing to store.
+    const res = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
     if (!res?.ok) {
-      // A tab may have rotated it while this request was in flight.
-      const latest = store.get();
-      if (latest && latest.refreshToken !== current.refreshToken) return true;
       store.clear();
       return false;
     }
-    const tokens = (await res.json()) as TokenPair;
-    store.set({ ...current, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
     return true;
   }
 
   async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
     const url = buildUrl(path, query);
-    const before = store.get();
-    let res = await send(method, url, before?.accessToken, body);
+    const loggedIn = Boolean(store.get());
+    let res = await send(method, url, body);
 
-    if (res.status === 401 && before?.refreshToken && !path.startsWith("/auth/")) {
+    if (res.status === 401 && loggedIn && !path.startsWith("/auth/")) {
       const err = await toError(res);
       // Only the JWT guard's 401s mean "token expired". Other 401s are business
       // errors (e.g. "Invalid check-in OTP"): retrying would resend the same
       // input and burn another attempt.
       if (!TOKEN_ERRORS.has(err.message)) throw err;
-      refreshing ??= refresh(before.refreshToken).finally(() => {
+      refreshing ??= refresh().finally(() => {
         refreshing = null;
       });
       if (!(await refreshing)) throw err;
-      res = await send(method, url, store.get()?.accessToken, body);
+      res = await send(method, url, body);
     }
 
     if (!res.ok) throw await toError(res);
@@ -129,16 +134,16 @@ export function createHttp(store: SessionStore) {
     /** GET a binary response (e.g. a PDF receipt) as a Blob + its Content-Disposition filename. */
     download: async (path: string, query?: Query): Promise<{ blob: Blob; filename: string }> => {
       const url = buildUrl(path, query);
-      const before = store.get();
-      let res = await send("GET", url, before?.accessToken);
-      if (res.status === 401 && before?.refreshToken && !path.startsWith("/auth/")) {
+      const loggedIn = Boolean(store.get());
+      let res = await send("GET", url);
+      if (res.status === 401 && loggedIn && !path.startsWith("/auth/")) {
         const err = await toError(res);
         if (!TOKEN_ERRORS.has(err.message)) throw err;
-        refreshing ??= refresh(before.refreshToken).finally(() => {
+        refreshing ??= refresh().finally(() => {
           refreshing = null;
         });
         if (!(await refreshing)) throw err;
-        res = await send("GET", url, store.get()?.accessToken);
+        res = await send("GET", url);
       }
       if (!res.ok) throw await toError(res);
       const blob = await res.blob();
@@ -147,9 +152,8 @@ export function createHttp(store: SessionStore) {
     },
     /** Force a token refresh (used by the realtime socket on `auth.expired`). Returns false if there's no session. */
     refreshSession: (): Promise<boolean> => {
-      const current = store.get();
-      if (!current?.refreshToken) return Promise.resolve(false);
-      refreshing ??= refresh(current.refreshToken).finally(() => {
+      if (!store.get()) return Promise.resolve(false);
+      refreshing ??= refresh().finally(() => {
         refreshing = null;
       });
       return refreshing;
@@ -177,7 +181,7 @@ export interface Health {
 
 /** GET /health (public): whether the API, PostgreSQL and Redis are up. */
 export async function checkHealth(): Promise<Health> {
-  const res = await send("GET", buildUrl("/health"), undefined);
+  const res = await send("GET", buildUrl("/health"));
   if (!res.ok) throw await toError(res);
   return parse<Health>(res);
 }

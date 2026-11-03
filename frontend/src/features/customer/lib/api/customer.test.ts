@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { apiPath, fakeJwt, json, mockFetch } from "@/test/utils";
+import { apiPath, json, mockFetch, setSessionCookies } from "@/test/utils";
 import {
   addressesApi,
   authApi,
@@ -15,10 +15,10 @@ import {
 } from "./customer";
 import { session } from "./session";
 
-const TOKEN = fakeJwt({ sub: "cust-1", role: "CUSTOMER", phone: "+923211234567", type: "access" });
-
 beforeEach(() => {
-  session.set({ accessToken: TOKEN, refreshToken: "r", phone: "+923211234567" });
+  // Cookie-auth: the session marker holds only the phone; tokens are httpOnly cookies.
+  session.set({ phone: "+923211234567" });
+  setSessionCookies("CUSTOMER");
 });
 
 const address = { label: "Home", addressLine: "House 42, Gulberg III", city: "Lahore", latitude: "31.516300", longitude: "74.343500" };
@@ -39,7 +39,7 @@ type Row = [name: string, call: () => Promise<unknown>, method: string, path: st
 const rows: Row[] = [
   ["auth.requestOtp", () => authApi.requestOtp("+923211234567"), "POST", "/auth/otp/request", { phone: "+923211234567" }],
   ["auth.verifyOtp", () => authApi.verifyOtp("+923211234567", "123456"), "POST", "/auth/otp/verify", { phone: "+923211234567", code: "123456" }],
-  ["auth.logout", () => authApi.logout("r1"), "POST", "/auth/logout", { refreshToken: "r1" }],
+  ["auth.logout", () => authApi.logout(), "POST", "/auth/logout", {}],
   ["me.get", () => meApi.get(), "GET", "/customer/me", undefined],
   ["me.update", () => meApi.update({ fullName: "Ahmed Raza", preferredLanguage: "UR" }), "PATCH", "/customer/me", { fullName: "Ahmed Raza", preferredLanguage: "UR" }],
   ["contacts.list", () => contactsApi.list(), "GET", "/customer/emergency-contacts", undefined],
@@ -116,7 +116,8 @@ describe("customer API contract (real mode)", () => {
     // Exact match: forbidNonWhitelisted turns any extra field into a 400.
     expect(c.body).toEqual(body);
     expect(Object.fromEntries(c.url.searchParams)).toEqual(query);
-    expect(c.headers.Authorization).toBe(`Bearer ${TOKEN}`);
+    // Cookie-auth: the browser attaches the httpOnly session cookies — no Authorization header.
+    expect(c.credentials).toBe("include");
   });
 
   it("address coordinates go out as strings", async () => {
@@ -140,11 +141,11 @@ describe("customer API contract (real mode)", () => {
     expect(f.last().body).not.toHaveProperty("amount");
   });
 
-  it("public caregiver search works signed out (no Authorization header)", async () => {
+  it("public caregiver search works signed out", async () => {
     session.clear();
     const f = mockFetch(() => json({ items: [], page: 1, limit: 12, total: 0 }));
     await caregiversApi.search({ city: "Lahore" });
-    expect(f.last().headers.Authorization).toBeUndefined();
+    expect(f.last().credentials).toBe("include");
     expect(Object.fromEntries(f.last().url.searchParams)).toEqual({ city: "Lahore" });
   });
 

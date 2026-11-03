@@ -11,7 +11,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRealtime } from "@shared/api/realtime";
 import { authApi, meApi } from "@/features/admin/lib/api/admin";
 import { http } from "@/features/admin/lib/api/http";
-import { decodeToken, session } from "@/features/admin/lib/api/session";
+import { session } from "@/features/admin/lib/api/session";
+import { sessionRole } from "@shared/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
@@ -49,8 +50,7 @@ function useAdminSession() {
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   if (!raw) return { hydrated, current: null };
   const current = session.get();
-  const payload = current ? decodeToken(current.accessToken) : null;
-  return { hydrated, current: payload?.role === "ADMIN" ? current : null };
+  return { hydrated, current: current && sessionRole() === "ADMIN" ? current : null };
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -84,9 +84,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   if (hydrated && !current) return null;
 
   async function logout() {
-    const refresh = session.get()?.refreshToken;
     session.clear();
-    if (refresh) await authApi.logout(refresh).catch(() => undefined);
+    await authApi.logout().catch(() => undefined);
     // Full navigation (not router.replace) so the client router cache can't
     // restore the previous login screen with a stale phone/OTP still filled in.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate hard reload to drop all client state on signout

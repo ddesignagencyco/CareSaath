@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Lock, Smartphone } from "lucide-re
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useApiErrorText } from "../api/use-action";
+import { firebaseEnabled, RECAPTCHA_CONTAINER_ID } from "./firebase-otp";
 import { Logo } from "../brand";
 import { formatPkMobile, parsePkMobile } from "../lib/phone";
 import { Button } from "../ui/button";
@@ -315,6 +316,9 @@ export function LoginScreen(props: LoginScreenProps) {
         <p className="flex shrink-0 items-center justify-center gap-1.5 text-center text-xs text-ink-400">
           <Lock className="size-3.5" /> {props.footerNote}
         </p>
+
+        {/* Firebase phone-auth mounts its invisible reCAPTCHA here (only when configured). */}
+        {firebaseEnabled && <div id={RECAPTCHA_CONTAINER_ID} />}
       </div>
     </div>
   );

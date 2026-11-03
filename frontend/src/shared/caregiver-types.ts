@@ -57,6 +57,10 @@ export interface CaregiverProfileRow {
   cnic: string | null;
   licenseNumber: string;
   licenseBody: LicenseBody;
+  /** PMDC registration expiry (set when licenseBody is PMDC). */
+  pmdcExpiryDate?: string | null;
+  /** PNC registration expiry (set when licenseBody is PNC). */
+  pncExpiryDate?: string | null;
   specialty: Specialty;
   experienceYears: number | null;
   bio: string | null;
@@ -107,6 +111,10 @@ export interface RegisterCaregiverInput {
   cnic: string;
   licenseNumber: string;
   licenseBody: LicenseBody;
+  /** PMDC registration expiry, e.g. "2027-06-30" (when licenseBody is PMDC). */
+  pmdcExpiryDate?: string;
+  /** PNC registration expiry, e.g. "2027-06-30" (when licenseBody is PNC). */
+  pncExpiryDate?: string;
   specialty: Specialty;
   experienceYears?: number;
   bio?: string;
@@ -125,6 +133,10 @@ export interface UpdateCaregiverProfileInput {
   serviceCities?: string[];
   bio?: string;
   experienceYears?: number;
+  /** Renewed PMDC registration expiry, e.g. "2028-06-30" (relevant only when licenseBody is PMDC). */
+  pmdcExpiryDate?: string;
+  /** Renewed PNC registration expiry, e.g. "2028-06-30" (relevant only when licenseBody is PNC). */
+  pncExpiryDate?: string;
 }
 
 /* ---- Availability -------------------------------------------------------- */
