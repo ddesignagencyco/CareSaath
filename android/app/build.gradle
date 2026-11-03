@@ -91,6 +91,13 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    // Versioned APK filenames, e.g. CareSaath-v1.0-arm64-v8a-release.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
+            outputFileName = "CareSaath-v${variant.versionName}-${abi}-${variant.buildType.name}.apk"
+        }
+    }
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
