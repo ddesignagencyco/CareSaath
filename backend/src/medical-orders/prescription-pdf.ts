@@ -314,52 +314,69 @@ export function buildPrescriptionPdf(
 
     rxHeader();
 
-    rx.medicines.forEach((m, i) => {
+    const nameH = 14;
+    // Borderless "table": dosage | frequency | duration at fixed x with even gaps,
+    // so they line up across cards and the spacing is identical on every page width.
+    // Geometry is recomputed from the CURRENT column (it changes on a page break).
+    const medGeom = () => {
       const padX = colX + 40;
-      const contentW = colX + colW - padX - 14;
-      const instrW = colX + colW - 14 - (padX + 18);
-      const nameH = 14;
-      // Borderless "table": dosage | frequency | duration sit at fixed x, so they
-      // line up vertically across every card regardless of their text length.
-      const doseX = colX + 58;
-      const doseW = 62;
-      const durW = 58;
-      const durX = colX + colW - 14 - durW;
-      const freqX = doseX + doseW + 8;
-      const freqW = Math.max(60, durX - freqX - 8);
+      return {
+        padX,
+        contentW: colX + colW - padX - 14,
+        instrW: colX + colW - 14 - (padX + 18),
+        doseX: colX + 58,
+        doseW: 56,
+        freqX: colX + 120,
+        freqW: 104,
+        durX: colX + 232,
+        durW: 62,
+      };
+    };
+    const medHeights = (m: PrescriptionMedicineLine, g: ReturnType<typeof medGeom>) => {
       pdf.font('Helvetica').fontSize(9.5);
-      const dH = m.dosage ? pdf.heightOfString(pdfSafe(m.dosage), { width: doseW }) : 0;
-      const fH = m.frequency ? pdf.heightOfString(pdfSafe(m.frequency), { width: freqW }) : 0;
-      const drH = m.duration ? pdf.heightOfString(pdfSafe(m.duration), { width: durW }) : 0;
+      const dH = m.dosage ? pdf.heightOfString(pdfSafe(m.dosage), { width: g.doseW }) : 0;
+      const fH = m.frequency ? pdf.heightOfString(pdfSafe(m.frequency), { width: g.freqW }) : 0;
+      const drH = m.duration ? pdf.heightOfString(pdfSafe(m.duration), { width: g.durW }) : 0;
       const hasDose = !!(m.dosage || m.frequency || m.duration);
       const doseRowH = hasDose ? Math.max(dH, fH, drH, 11) : 0;
       const instr = m.instructions ? pdfSafe(m.instructions) : '';
       pdf.font('Helvetica-Oblique').fontSize(9);
-      const instrH = instr ? pdf.heightOfString(instr, { width: instrW }) : 0;
+      const instrH = instr ? pdf.heightOfString(instr, { width: g.instrW }) : 0;
       const cardH = 14 + nameH + (hasDose ? doseRowH + 5 : 0) + (instr ? instrH + 4 : 0);
-      if (ensureRoom(cardH + 10)) rxHeader();
+      return { hasDose, doseRowH, instr, instrH, cardH };
+    };
 
-      pdf.roundedRect(colX, y, colW, cardH, 8).fillAndStroke(CARD_BG, CARD_BORDER);
+    rx.medicines.forEach((m, i) => {
+      let g = medGeom();
+      let h = medHeights(m, g);
+      // A page break changes colX/colW, so re-derive geometry and heights after it.
+      if (ensureRoom(h.cardH + 10)) {
+        rxHeader();
+        g = medGeom();
+        h = medHeights(m, g);
+      }
+
+      pdf.roundedRect(colX, y, colW, h.cardH, 8).fillAndStroke(CARD_BG, CARD_BORDER);
       pdf.circle(colX + 22, y + 18, 10).lineWidth(1.3).fillAndStroke('#ffffff', TEAL);
       pdf.font('Helvetica-Bold').fontSize(9.5).fillColor(TEAL).text(`${i + 1}`, colX + 14, y + 13.5, { width: 16, align: 'center' });
 
       let yc = y + 11;
-      pdf.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfSafe(m.name), padX, yc, { width: contentW });
+      pdf.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfSafe(m.name), g.padX, yc, { width: g.contentW });
       yc += nameH + 2;
-      if (hasDose) {
-        iconPill(pdf, padX - 1, yc - 1, 13, TEAL);
+      if (h.hasDose) {
+        iconPill(pdf, g.padX - 1, yc - 1, 13, TEAL);
         pdf.font('Helvetica').fontSize(9.5).fillColor(INK);
-        if (m.dosage) pdf.text(pdfSafe(m.dosage), doseX, yc, { width: doseW });
-        if (m.frequency) pdf.text(pdfSafe(m.frequency), freqX, yc, { width: freqW });
-        if (m.duration) pdf.text(pdfSafe(m.duration), durX, yc, { width: durW });
-        yc += doseRowH + 4;
+        if (m.dosage) pdf.text(pdfSafe(m.dosage), g.doseX, yc, { width: g.doseW });
+        if (m.frequency) pdf.text(pdfSafe(m.frequency), g.freqX, yc, { width: g.freqW });
+        if (m.duration) pdf.text(pdfSafe(m.duration), g.durX, yc, { width: g.durW });
+        yc += h.doseRowH + 4;
       }
-      if (instr) {
-        iconGlass(pdf, padX - 1, yc - 1, 13, GOLD);
-        pdf.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text(instr, padX + 18, yc, { width: instrW });
-        yc += instrH + 3;
+      if (h.instr) {
+        iconGlass(pdf, g.padX - 1, yc - 1, 13, GOLD);
+        pdf.font('Helvetica-Oblique').fontSize(9).fillColor(MUTED).text(h.instr, g.padX + 18, yc, { width: g.instrW });
+        yc += h.instrH + 3;
       }
-      y += cardH + 10;
+      y += h.cardH + 10;
     });
 
     if (rx.medicines.length === 0) {
