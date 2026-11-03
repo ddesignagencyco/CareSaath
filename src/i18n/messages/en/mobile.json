@@ -47,6 +47,7 @@
     "nameTooShort": "Please enter your full name (at least 2 letters)",
     "emailInvalid": "Enter a valid email address, or leave it blank",
     "exists": "This number already has an account. Log in instead.",
+    "emailExists": "This email already has an account. Log in or use a different email.",
     "asCustomer": "Signing up to get care",
     "asCaregiver": "Signing up to give care",
     "switchToGive": "Want to give care instead?",

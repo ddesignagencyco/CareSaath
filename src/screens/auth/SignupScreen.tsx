@@ -95,8 +95,18 @@ export function SignupScreen({ route, navigation }: AuthScreen<'Signup'>) {
       setCode('');
       setResendIn(RESEND_SECONDS);
     } catch (e) {
-      // An already-registered number (409) points the user to log in instead.
-      setError(e instanceof ApiError && e.status === 409 ? ts('exists') : apiError(e));
+      // The backend rejects a taken phone OR email with 409 BEFORE sending the OTP,
+      // so the clash shows here on the details step (not after a code is sent). An
+      // email clash is shown on the email field; a number clash points to log in.
+      if (e instanceof ApiError && e.status === 409) {
+        if ((e.message || '').toLowerCase().includes('email')) {
+          setEmailError(ts('emailExists'));
+        } else {
+          setError(ts('exists'));
+        }
+      } else {
+        setError(apiError(e));
+      }
     } finally {
       setLoading(false);
     }
