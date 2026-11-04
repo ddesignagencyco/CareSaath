@@ -96,7 +96,7 @@ jobs:
         run: |
           result=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAc "
             SELECT CASE WHEN
-              (SELECT count(*) FROM \"User\" WHERE role = 'ADMIN' AND email = 'info@caresaath.com') = 1
+              (SELECT count(*) FROM \"User\" WHERE role = 'ADMIN' AND email = 'caresaath@gmail.com') = 1
               AND (SELECT count(*) FROM \"User\" WHERE role = 'CUSTOMER') >= 2
               AND (SELECT count(*) FROM \"CaregiverProfile\" WHERE \"verificationStatus\" = 'APPROVED') >= 3
               AND (SELECT count(*) FROM \"Booking\") >= 5

@@ -69,7 +69,7 @@ services:
       - key: SEED_ALLOW_PRODUCTION
         value: true
       - key: ADMIN_EMAIL
-        value: info@caresaath.com
+        value: caresaath@gmail.com
       - key: ADMIN_PHONE
         value: '+923000000000'
       # SMTP: signup/login OTPs are emailed to the account's email (seeded test
