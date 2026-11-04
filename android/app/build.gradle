@@ -89,14 +89,17 @@ android {
         applicationId "com.caresaath"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // Bump both per release: versionName is semver (MAJOR.MINOR.PATCH),
+        // versionCode is the build number and must always increase.
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
     }
-    // Versioned APK filenames, e.g. CareSaath-v1.0-arm64-v8a-release.apk
+    // Versioned APK filenames: <App>-v<semver>-b<build>-<abi>-<type>.apk,
+    // e.g. CareSaath-v1.0.0-b1-arm64-v8a-release.apk
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
-            outputFileName = "CareSaath-v${variant.versionName}-${abi}-${variant.buildType.name}.apk"
+            outputFileName = "CareSaath-v${variant.versionName}-b${variant.versionCode}-${abi}-${variant.buildType.name}.apk"
         }
     }
     signingConfigs {
@@ -124,7 +127,9 @@ android {
     // One APK per CPU type: each phone gets only its own native libraries.
     splits {
         abi {
-            enable true
+            // AAB builds (bundleRelease) can't use ABI splits — Play splits per
+            // device itself — so only split for APK (assemble*) builds.
+            enable !gradle.startParameter.taskNames.any { it.toLowerCase().contains("bundle") }
             reset()
             include "arm64-v8a", "armeabi-v7a"
             universalApk false
