@@ -213,12 +213,9 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
   const errors = {
     name: fullName.trim().length < 2 ? tf('errors.name') : null,
     rate: !rate || rateNum < 10 ? tf('errors.rate') : null,
-    bracket:
-      !Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum
-        ? tf('errors.bracket')
-        : rateNum < minNum || rateNum > maxNum
-          ? tf('errors.rateInBracket')
-          : null,
+    // Each bracket problem shows on the field that fixes it (the fee must sit inside min–max).
+    minRate: !Number.isFinite(minNum) || minNum < 10 ? tf('errors.minLow') : minNum > rateNum ? tf('errors.minHigh') : null,
+    maxRate: !Number.isFinite(maxNum) || maxNum < rateNum ? tf('errors.maxLow') : null,
     years: yearsNum !== undefined && (yearsNum < 0 || yearsNum > 60) ? tf('errors.years') : null,
     cities: cities.length === 0 ? tf('errors.cities') : null,
   };
@@ -289,10 +286,10 @@ function EditSheet({ profile: p, me, onClose }: { profile: MyCaregiverProfile; m
       </View>
       <View style={styles.twoCol}>
         <View style={styles.flex}>
-          <TextField label={tf('minRate')} prefix="Rs" value={minRate} onChangeText={v => setMinRate(digits(v, 6))} keyboardType="number-pad" ltr error={err('bracket')} />
+          <TextField label={tf('minRate')} prefix="Rs" value={minRate} onChangeText={v => setMinRate(digits(v, 6))} keyboardType="number-pad" ltr error={err('minRate')} />
         </View>
         <View style={styles.flex}>
-          <TextField label={tf('maxRate')} prefix="Rs" value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} keyboardType="number-pad" ltr />
+          <TextField label={tf('maxRate')} prefix="Rs" value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} keyboardType="number-pad" ltr error={err('maxRate')} />
         </View>
       </View>
       {(p.licenseBody === 'PMDC' || p.licenseBody === 'PNC') && (

@@ -88,10 +88,10 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
     2: {
       cities: cities.length === 0 ? t('errors.cities') : null,
       rate: !rate || rateNum < 10 ? t('errors.rate') : null,
-      bracket:
-        (minRate || maxRate) && (!Number.isFinite(minNum) || !Number.isFinite(maxNum) || minNum < 10 || maxNum < minNum || rateNum < minNum || rateNum > maxNum)
-          ? t('errors.bracket')
-          : null,
+      // Each bracket problem is shown on the field that fixes it. The fee must sit
+      // inside min–max; a blank min/max just defaults to the fee itself.
+      minRate: minRate ? (!Number.isFinite(minNum) || minNum < 10 ? t('errors.minLow') : minNum > rateNum ? t('errors.minHigh') : null) : null,
+      maxRate: maxRate ? (!Number.isFinite(maxNum) || maxNum < rateNum ? t('errors.maxLow') : null) : null,
     },
   };
   const err = (s: number, k: string) => (touched ? errors[s][k] : null);
@@ -271,10 +271,10 @@ export function OnboardingScreen({ navigation }: CaregiverSetupScreen<'Onboardin
           />
           <View style={styles.rateRow}>
             <View style={styles.flex}>
-              <TextField label={t('minRate')} value={minRate} onChangeText={v => setMinRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional error={err(2, 'bracket')} />
+              <TextField label={t('minRate')} value={minRate} onChangeText={v => setMinRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional error={err(2, 'minRate')} />
             </View>
             <View style={styles.flex}>
-              <TextField label={t('maxRate')} value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional />
+              <TextField label={t('maxRate')} value={maxRate} onChangeText={v => setMaxRate(digits(v, 6))} prefix="Rs" keyboardType="number-pad" ltr optional error={err(2, 'maxRate')} />
             </View>
           </View>
           <TextField label={t('about')} value={bio} onChangeText={setBio} multiline maxLength={2000} hint={t('aboutHint', { count: bio.length })} />

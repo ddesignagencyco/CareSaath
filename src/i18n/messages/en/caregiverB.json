@@ -300,8 +300,9 @@
         "rate": "Minimum rate is Rs 10",
         "years": "0 to 60 years",
         "cities": "Choose at least one city",
-        "bracket": "Min must be at least Rs 10 and not above max",
-        "rateInBracket": "Your rate must be within your min–max bracket"
+        "minLow": "Minimum rate is at least Rs 10",
+        "minHigh": "Minimum can't be above your fee",
+        "maxLow": "Maximum can't be below your fee"
       },
       "minRate": "Minimum rate (Rs)",
       "maxRate": "Maximum rate (Rs)",
@@ -349,7 +350,9 @@
       "cities": "Choose at least one city",
       "rate": "Enter your fee per visit (at least Rs 10)",
       "expiry": "Add your registration expiry date",
-      "bracket": "Min must be at least Rs 10, max not below min, and your fee within the range"
+      "minLow": "Minimum rate is at least Rs 10",
+      "minHigh": "Minimum can't be above your fee",
+      "maxLow": "Maximum can't be below your fee"
     },
     "created": "Profile created. Now upload your documents.",
     "fullName": "Full name",
