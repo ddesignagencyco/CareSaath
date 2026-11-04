@@ -35,6 +35,8 @@
     "prescription": "Prescription",
     "prescriptionTitle": "Prescription · {name}",
     "locationFamily": "Location & family",
+    "family": "Family",
+    "address": "Address",
     "directions": "Directions",
     "callFamily": "Call family",
     "bookedByUnnamed": "Booked by the family",

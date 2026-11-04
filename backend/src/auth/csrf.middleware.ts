@@ -10,7 +10,7 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  * Only state-changing requests are checked, and only when the request is driven by
  * the session COOKIE (cs_session present) rather than a Bearer token:
  *  - Native / server clients use `Authorization: Bearer` → exempt (not CSRF-able).
- *  - Pre-session requests (login, OTP) have no cs_session cookie yet → exempt.
+ *  - Auth routes (/api/v1/auth/*) establish/refresh/clear sessions → exempt.
  *  - Otherwise the X-CSRF-Token header must equal the (JS-readable) cs_csrf cookie.
  *    An attacker on another site can send the victim's cookies but cannot read the
  *    cs_csrf value to mirror it into the header, so forged requests are rejected.
@@ -19,6 +19,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export class CsrfMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction): void {
     if (SAFE_METHODS.has(req.method)) return next();
+
+    // Authentication endpoints (request OTP, verify, signup, refresh, logout) are exempt from CSRF
+    const url = req.originalUrl || req.baseUrl || req.path || '';
+    if (url.includes('/auth/')) return next();
+
     const isBearer = req.headers.authorization?.startsWith('Bearer ') ?? false;
     const hasCookieSession = Boolean(readCookie(req, COOKIE.session));
     if (isBearer || !hasCookieSession) return next();

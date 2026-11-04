@@ -7,7 +7,7 @@ import { MessagesShell } from "@shared/chat/messages-shell";
 import type { ChatThreadMeta, ChatTransport } from "@shared/chat/types";
 import { useLabels } from "@shared/i18n/use-labels";
 import { useCaregiverMap } from "@/features/customer/components/caregiver-bits";
-import { chatApi, meApi } from "@/features/customer/lib/api/customer";
+import { bookingsApi, chatApi, meApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
 
 /** One thread per caregiver (spanning all their bookings), from GET /chat/conversations. */
@@ -15,15 +15,40 @@ function useCustomerChatTransport(): ChatTransport {
   const L = useLabels();
   const me = useQuery({ queryKey: keys.me, queryFn: meApi.get, enabled: true });
   const convs = useQuery({ queryKey: ["chat-conversations", "customer"], queryFn: () => chatApi.listConversations(), refetchInterval: 30_000 });
+  const bookings = useQuery({ queryKey: [...keys.bookings, "chat-meta"], queryFn: () => bookingsApi.list({ limit: 50 }) });
   const items = convs.data ?? [];
   const caregiverMap = useCaregiverMap(items.map((c) => c.caregiverId));
 
-  const sig = items.map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${caregiverMap[c.caregiverId]?.specialty ?? ""}`).join("|");
+  const metaByCaregiver = useMemo(() => {
+    const map: Record<string, { visitId?: string }> = {};
+    for (const b of bookings.data?.items ?? []) {
+      const active = b.visits?.find((v) => !["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status));
+      const cur = map[b.caregiverId];
+      map[b.caregiverId] = { visitId: active?.id ?? cur?.visitId ?? b.visits?.[0]?.id };
+    }
+    return map;
+  }, [bookings.data]);
+
+  const sig = items
+    .map(
+      (c) =>
+        `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${caregiverMap[c.caregiverId]?.specialty ?? ""}:${metaByCaregiver[c.caregiverId]?.visitId ?? ""}`,
+    )
+    .join("|");
   const threads = useMemo<ChatThreadMeta[]>(
     () =>
       items.map((c) => {
         const cg = caregiverMap[c.caregiverId];
-        return { id: c.counterpartUserId, name: c.counterpartName, role: cg ? L.specialty(cg.specialty) : "", activeBookingId: c.activeBookingId, bookingIds: c.bookingIds, peerUserId: c.counterpartUserId };
+        const meta = metaByCaregiver[c.caregiverId];
+        return {
+          id: c.counterpartUserId,
+          name: c.counterpartName,
+          role: cg ? L.specialty(cg.specialty) : "",
+          activeBookingId: c.activeBookingId,
+          bookingIds: c.bookingIds,
+          visitId: meta?.visitId,
+          peerUserId: c.counterpartUserId,
+        };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures every field the threads depend on, stably
     [sig],

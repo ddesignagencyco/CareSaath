@@ -120,15 +120,6 @@ export default function VisitDetailPage() {
             </Badge>
           </header>
 
-          {booking && !["DECLINED", "CANCELLED"].includes(v.status) && (
-            <Link
-              href={`/caregiver/messages/${booking.id}`}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50 sm:w-auto sm:px-5"
-            >
-              <MessagesSquare className="size-4" /> {t("messageCustomer")}
-            </Link>
-          )}
-
           {active && (
             <button
               onClick={() => setDialog("sos")}
@@ -221,43 +212,57 @@ export default function VisitDetailPage() {
             </div>
 
             <div className="space-y-5">
-              {(address || customer) && (
+              {customer && (
                 <Card>
-                  <CardHeader title={t("locationFamily")} />
-                  <CardBody className="space-y-4">
-                    {address && (
-                      <>
-                        <LocationMap lat={address.latitude} lng={address.longitude} label={address.addressLine} />
-                        <div className="flex items-start gap-3">
-                          <MapPin className="mt-0.5 size-5 shrink-0 text-ink-400" />
-                          <div>
-                            {address.label && <p className="text-xs font-semibold text-ink-500">{address.label}</p>}
-                            <p dir="auto" className="text-sm font-semibold text-ink-900">{address.addressLine}</p>
-                            <p className="text-sm text-ink-500">{address.city}</p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {address && (
-                      <a
-                        href={mapsUrl(address)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+                  <CardHeader title={t("family")} />
+                  <CardBody>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={customer.fullName || t("family")} />
+                      <div>
+                        <p className="font-bold text-ink-900">{customer.fullName || t("bookedByUnnamed")}</p>
+                        <p className="text-xs text-ink-500">
+                          {customer.fullName
+                            ? t.rich("bookedBy", {
+                                name: customer.fullName,
+                                b: (c) => <span className="font-semibold text-ink-900">{c}</span>,
+                              })
+                            : t("bookedByUnnamed")}
+                        </p>
+                      </div>
+                    </div>
+                    {booking && !["DECLINED", "CANCELLED"].includes(v.status) && (
+                      <Link
+                        href={`/caregiver/messages/${booking.id}`}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50 transition-colors"
                       >
-                        <Navigation className="size-4" /> {t("directions")}
-                      </a>
+                        <MessagesSquare className="size-4" /> {t("messageCustomer")}
+                      </Link>
                     )}
-                    {customer && (
-                      <p className="text-sm text-ink-600">
-                        {customer.fullName
-                          ? t.rich("bookedBy", {
-                              name: customer.fullName,
-                              b: (c) => <span className="font-semibold text-ink-900">{c}</span>,
-                            })
-                          : t("bookedByUnnamed")}
-                      </p>
-                    )}
+                  </CardBody>
+                </Card>
+              )}
+
+              {address && (
+                <Card>
+                  <CardHeader title={t("address")} />
+                  <CardBody className="space-y-3">
+                    <LocationMap lat={address.latitude} lng={address.longitude} label={address.addressLine} />
+                    <div className="flex items-start gap-3">
+                      <MapPin className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                      <div>
+                        {address.label && <p className="text-xs font-semibold text-ink-500">{address.label}</p>}
+                        <p dir="auto" className="text-sm font-semibold text-ink-900">{address.addressLine}</p>
+                        <p className="text-sm text-ink-500">{address.city}</p>
+                      </div>
+                    </div>
+                    <a
+                      href={mapsUrl(address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50 transition-colors"
+                    >
+                      <Navigation className="size-4" /> {t("directions")}
+                    </a>
                   </CardBody>
                 </Card>
               )}
