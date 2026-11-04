@@ -2,14 +2,16 @@
  * Fetch wrapper for the NestJS API (`/api/v1`). Each section creates one client
  * bound to its own session store.
  *
- * Access tokens live 15 minutes. On a 401 the client exchanges the refresh
- * token once (POST /auth/refresh, which rotates it), stores the new pair and
- * retries the request; if that fails the session is cleared and the section
- * shell sends the user to its login page.
+ * Access tokens live 15 minutes. The client preemptively refreshes expired or
+ * near-expiry access tokens before sending requests, and also reactively intercepts
+ * 401s to exchange the refresh token (POST /auth/refresh, which rotates it).
+ *
+ * Network drops or server 5xx errors keep the session intact so the user is never
+ * logged out due to connection interruptions or sleeping backend instances.
  */
 import type { TokenPair } from "./types";
 import { API_BASE_URL, USE_MOCKS } from "./config";
-import type { SessionStore } from "./session";
+import { isTokenExpired, type SessionStore } from "./session";
 import ReactNativeBlobUtil from "react-native-blob-util";
 
 export { API_BASE_URL, USE_MOCKS };
@@ -26,8 +28,14 @@ export class ApiError extends Error {
   }
 }
 
-/** 401 messages from the backend's JwtAuthGuard (common/guards/jwt-auth.guard.ts). */
-const TOKEN_ERRORS = new Set(["Missing access token", "Invalid or expired access token"]);
+/** 401 messages that are business validation errors (e.g. doorstep check-in OTP) and must NOT trigger token refresh. */
+const BUSINESS_401_PATTERN = /check[-_]?in|checkout|otp|webhook/i;
+
+function isAuthTokenError(status: number, message: string): boolean {
+  if (status !== 401) return false;
+  if (BUSINESS_401_PATTERN.test(message)) return false;
+  return true;
+}
 
 type Query = object;
 
@@ -48,19 +56,21 @@ export interface UploadFile {
   size: number;
 }
 
-/** Extra request options for raw uploads (resumable chunks). */
+/** Extra request options for raw uploads (resumable chunks) or customized timeouts. */
 interface SendInit {
   headers?: Record<string, string>;
   /** Aborting it (pause) rejects with ApiError(0) like a dropped connection. */
   signal?: AbortSignal;
+  /** Request timeout in milliseconds (default: 25s for JSON, 60s for forms/blobs). */
+  timeoutMs?: number;
 }
 
 async function send(method: string, url: string, token: string | undefined, body?: unknown, init: SendInit = {}): Promise<Response> {
   const isForm = body instanceof FormData;
   const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
-  // No response in 20 s (3G stall) counts as a network error instead of spinning forever.
+  const timeoutMs = init.timeoutMs ?? (isForm || isBlob ? 60_000 : 25_000);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), isForm || isBlob ? 60_000 : 20_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onAbort = () => controller.abort();
   init.signal?.addEventListener("abort", onAbort);
   try {
@@ -101,43 +111,92 @@ async function parse<T>(res: Response): Promise<T> {
 }
 
 export function createHttp(store: SessionStore) {
-  // One refresh at a time per section; concurrent 401s share it.
+  // One refresh at a time per section; concurrent requests share it.
   let refreshing: Promise<boolean> | null = null;
 
-  async function refresh(usedRefreshToken: string): Promise<boolean> {
+  async function refresh(usedRefreshToken?: string): Promise<boolean> {
     const current = store.get();
-    if (!current) return false;
+    if (!current?.refreshToken) return false;
     // Another request already rotated the pair: just use the new one.
-    if (current.refreshToken !== usedRefreshToken) return true;
-    const res = await send("POST", buildUrl("/auth/refresh"), undefined, { refreshToken: current.refreshToken }).catch(() => null);
-    if (!res?.ok) {
+    if (usedRefreshToken && current.refreshToken !== usedRefreshToken) return true;
+
+    let res: Response;
+    try {
+      // 45s timeout for refresh so free-tier backend cold starts don't abort prematurely.
+      res = await send("POST", buildUrl("/auth/refresh"), undefined, { refreshToken: current.refreshToken }, { timeoutMs: 45_000 });
+    } catch {
+      // Connection dropped, offline, or request timed out.
+      // CRITICAL: DO NOT clear the session! The refresh token is still valid.
+      // Clearing the session here would log the user out on any momentary network drop or cold start.
+      return false;
+    }
+
+    if (!res.ok) {
       // Another request may have rotated it while this request was in flight.
       const latest = store.get();
       if (latest && latest.refreshToken !== current.refreshToken) return true;
-      store.clear();
+
+      // ONLY clear the session if the backend explicitly rejected the refresh token (401 / 403).
+      // Server errors (500, 502, 503, 504) must NOT clear the session.
+      if (res.status === 401 || res.status === 403) {
+        store.clear();
+      }
       return false;
     }
-    const tokens = (await res.json()) as TokenPair;
-    store.set({ ...current, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
-    return true;
+
+    try {
+      const tokens = (await res.json()) as TokenPair;
+      if (tokens.accessToken && tokens.refreshToken) {
+        store.set({ ...current, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+        return true;
+      }
+    } catch {
+      // JSON parse failure
+    }
+    return false;
+  }
+
+  async function ensureFreshToken(): Promise<string | undefined> {
+    const current = store.get();
+    if (!current) return undefined;
+    if (current.refreshToken && isTokenExpired(current.accessToken, 30)) {
+      refreshing ??= refresh(current.refreshToken).finally(() => {
+        refreshing = null;
+      });
+      await refreshing;
+    }
+    return store.get()?.accessToken;
   }
 
   async function request<T>(method: string, path: string, body?: unknown, query?: Query, init?: SendInit): Promise<T> {
     const url = buildUrl(path, query);
+
+    // Preemptively refresh if access token has expired (or is close to 30s expiry), avoiding doomed 401 requests.
+    if (!path.startsWith("/auth/")) {
+      await ensureFreshToken();
+    }
+
     const before = store.get();
     let res = await send(method, url, before?.accessToken, body, init);
 
     if (res.status === 401 && before?.refreshToken && !path.startsWith("/auth/")) {
       const err = await toError(res);
-      // Only the JWT guard's 401s mean "token expired". Other 401s are business
-      // errors (e.g. "Invalid check-in OTP"): retrying would resend the same
-      // input and burn another attempt.
-      if (!TOKEN_ERRORS.has(err.message)) throw err;
-      refreshing ??= refresh(before.refreshToken).finally(() => {
-        refreshing = null;
-      });
-      if (!(await refreshing)) throw err;
-      res = await send(method, url, store.get()?.accessToken, body, init);
+      if (isAuthTokenError(res.status, err.message)) {
+        refreshing ??= refresh(before.refreshToken).finally(() => {
+          refreshing = null;
+        });
+        const success = await refreshing;
+        if (success) {
+          res = await send(method, url, store.get()?.accessToken, body, init);
+        } else {
+          // If store was cleared (due to true 401/403 on /auth/refresh), throw err to let app redirect to login.
+          if (!store.get()) throw err;
+          // Refresh failed due to network or server blip (store was preserved). Throw NETWORK_ERROR instead of auth failure!
+          throw new ApiError(0, NETWORK_ERROR);
+        }
+      } else {
+        throw err;
+      }
     }
 
     if (!res.ok) throw await toError(res);
@@ -169,6 +228,8 @@ export function createHttp(store: SessionStore) {
           "ngrok-skip-browser-warning": "1",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         });
+
+      await ensureFreshToken();
       const before = store.get();
       let res = await get(before?.accessToken).catch(() => {
         throw new ApiError(0, NETWORK_ERROR);

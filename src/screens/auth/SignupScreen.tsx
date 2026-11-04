@@ -9,12 +9,12 @@ import { OtpInput, PhoneField, TextField } from '../../components/form';
 import { LogoMark } from '../../components/Logo';
 import { Screen } from '../../components/screen';
 import { Text } from '../../components/Text';
-import { Button, BUTTON_HEIGHT, DirChevron, Touchable } from '../../components/ui';
+import { Button, DirChevron, Touchable } from '../../components/ui';
 import { useT } from '../../i18n';
 import { formatPkMobile, parsePkMobile } from '../../lib/phone';
 import { useApiErrorText } from '../../lib/query';
 import type { AuthScreen } from '../../navigation/types';
-import { accent, brand, brandFixed, colors, feedback, ink, radius, space, themed } from '../../theme';
+import { brand, brandFixed, colors, feedback, ink, radius, space, themed } from '../../theme';
 
 const RESEND_SECONDS = 30;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

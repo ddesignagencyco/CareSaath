@@ -4,10 +4,10 @@ import { addressesApi, bookingsApi, caregiversApi, patientsApi } from '../../api
 import { keys } from '../../api/customer/keys';
 import type { Address, NearbyCaregiver, PatientProfile } from '../../api/types';
 import { CircleUser, MapPin, Navigation, Siren } from '../../components/icons';
-import { Sheet, useToast } from '../../components/overlay';
+import { Sheet } from '../../components/overlay';
 import { EmptyState, ErrorState, Screen, SkeletonList } from '../../components/screen';
 import { Text } from '../../components/Text';
-import { Avatar, Button, Card, Divider, ListRow, Touchable } from '../../components/ui';
+import { Avatar, Button, Card, Divider, ListRow } from '../../components/ui';
 import { useT } from '../../i18n';
 import { formatMoney, useLabels } from '../../i18n/format';
 import { useAction, useQuery } from '../../lib/query';
@@ -22,7 +22,6 @@ const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 export function EmergencyScreen({ navigation }: CustomerScreen<'Emergency'>) {
   const t = useT('mobileCustomer.emergency');
   const L = useLabels();
-  const toast = useToast();
 
   const addresses = useQuery(keys.addresses, addressesApi.list);
   const patients = useQuery(keys.patients, patientsApi.list);

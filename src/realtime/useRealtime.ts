@@ -8,7 +8,7 @@
  *     accepted, a payment settling, etc. show without a manual refresh.
  *   - `notification.created` / `notification.read` — refresh the in-app feed and
  *     the unread badge live.
- * The token is re-read on every (re)connect so a refreshed token is used.
+ * The token is re-read on every (re)connect and updated on session rotation.
  */
 import { useEffect } from "react";
 import { io } from "socket.io-client";
@@ -38,7 +38,7 @@ export function useRealtime(scope: ChatScope): void {
         : [caregiverKeys.bookings, caregiverKeys.visits, caregiverKeys.earnings, caregiverKeys.notifications];
 
     const socket = io(ORIGIN, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
       // ngrok's free tunnel needs this to skip its browser-warning interstitial.
       extraHeaders: { "ngrok-skip-browser-warning": "1" },
       // Re-read the token on every (re)connect so a refreshed token is used.
@@ -55,16 +55,27 @@ export function useRealtime(scope: ChatScope): void {
     });
     socket.on("notification.created", refreshNotifs);
     socket.on("notification.read", refreshNotifs);
-    // Bad/inactive token: stop, don't loop.
-    socket.on("auth.error", () => socket.close());
-    // Expired token: the REST client refreshes the session on its next call; the
-    // socket's auth callback then picks up the fresh token on auto-reconnect.
+    // Bad/inactive token: pause until fresh tokens are issued.
+    socket.on("auth.error", () => socket.disconnect());
+    // Auto-reconnect pick-up
     socket.io.on("reconnect", () => {
       refreshChat();
       refreshLive();
     });
 
+    // When background token refresh occurs, seamlessly reconnect socket with fresh token
+    const unsub = session.subscribe(() => {
+      const freshToken = session.get()?.accessToken;
+      if (freshToken) {
+        socket.auth = { token: freshToken };
+        if (!socket.connected) {
+          socket.connect();
+        }
+      }
+    });
+
     return () => {
+      unsub();
       socket.removeAllListeners();
       socket.close();
     };

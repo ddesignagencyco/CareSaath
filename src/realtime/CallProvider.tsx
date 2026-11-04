@@ -23,7 +23,6 @@ type RtcIceServer = { urls: string | string[]; username?: string; credential?: s
 type RtcConfig = { iceServers: RtcIceServer[] };
 type SdpInit = { type?: string; sdp?: string };
 type IceInit = { candidate?: string; sdpMid?: string | null; sdpMLineIndex?: number | null };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listenable = { addEventListener(type: string, cb: (e: any) => void): void };
 
 /** STUN-only fallback used until (and if) the backend's TURN config loads. */
@@ -130,7 +129,7 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
   useEffect(() => {
     if (!session.get()?.accessToken) return;
     const socket = io(ORIGIN, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       extraHeaders: { 'ngrok-skip-browser-warning': '1' },
       auth: cb => cb({ token: session.get()?.accessToken ?? '' }),
     });
@@ -167,7 +166,19 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     socket.on('call:rejected', teardown);
     socket.on('call:error', teardown);
 
+    // Keep auth token fresh on background rotation
+    const unsub = session.subscribe(() => {
+      const freshToken = session.get()?.accessToken;
+      if (freshToken && socketRef.current) {
+        socketRef.current.auth = { token: freshToken };
+        if (!socketRef.current.connected) {
+          socketRef.current.connect();
+        }
+      }
+    });
+
     return () => {
+      unsub();
       socket.removeAllListeners();
       socket.close();
       socketRef.current = null;

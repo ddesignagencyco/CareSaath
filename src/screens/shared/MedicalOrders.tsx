@@ -7,7 +7,7 @@ import { Button } from '../../components/ui';
 import { IconLine } from '../customer/components/bits';
 import { useFmt } from '../../i18n/format';
 import { useT } from '../../i18n';
-import { colors, ink, radius, space, themed } from '../../theme';
+import { ink, radius, space, themed } from '../../theme';
 
 /**
  * Read-only render of a doctor's medical orders (diagnosis, prescription, lab
