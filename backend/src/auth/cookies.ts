@@ -26,10 +26,17 @@ const isProd = process.env['NODE_ENV'] === 'production';
 const ACCESS_TTL_MS = Number(process.env['JWT_ACCESS_TTL_SECONDS'] ?? 900) * 1000;
 const REFRESH_TTL_MS = Number(process.env['JWT_REFRESH_TTL_SECONDS'] ?? 604800) * 1000;
 
-// Cross-site in production (Vercel front-end ↔ Render API) needs SameSite=None;Secure;
-// locally the SPA and API share the localhost site, so Lax works over plain http.
-const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
-const secure = isProd;
+// Cross-site in production (Vercel front-end ↔ Render API) needs SameSite=None;Secure
+// so the browser sends the cookies on cross-site fetches; locally the SPA and API
+// share the localhost site, so Lax works over plain http.
+//
+// We're in cross-site mode when NODE_ENV=production OR when running on Render (which
+// always sets RENDER=true). The RENDER fallback means cross-site auth works even if
+// NODE_ENV was never set on the host — the usual cause of "logged in but every API
+// call is 401" (Lax cookies silently dropped on cross-site requests).
+const crossSite = isProd || process.env['RENDER'] === 'true';
+const sameSite: 'none' | 'lax' = crossSite ? 'none' : 'lax';
+const secure = crossSite;
 
 export function makeCsrfToken(): string {
   return randomBytes(32).toString('base64url');
