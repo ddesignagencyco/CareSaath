@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator.js';
+import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { AuthService } from './auth.service.js';
 import {
   FirebaseVerifyDto,
@@ -12,7 +13,7 @@ import {
   SignupVerifyDto,
   VerifyOtpDto,
 } from './dto/auth.dto.js';
-import { clearAuthCookies, COOKIE, makeCsrfToken, readCookie, roleFromAccessToken, setAuthCookies } from './cookies.js';
+import { clearAuthCookies, COOKIE, makeCsrfToken, readCookie, roleFromAccessToken, setAuthCookies, setCsrfCookie } from './cookies.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -21,11 +22,31 @@ export class AuthController {
 
   /**
    * Set the WEB session as httpOnly cookies (access + refresh) plus the readable
-   * cs_session / cs_csrf flags. The native app ignores these and uses the tokens
-   * returned in the response body with `Authorization: Bearer`.
+   * cs_session / cs_csrf flags, and return the CSRF token so the SPA can hold it
+   * in memory and echo it in X-CSRF-Token (it cannot read a cross-site cookie).
+   * The native app ignores all of this and uses the body tokens as Bearer.
    */
-  private issueSession(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
-    setAuthCookies(res, tokens, makeCsrfToken(), roleFromAccessToken(tokens.accessToken));
+  private issueSession(res: Response, tokens: { accessToken: string; refreshToken: string }): string {
+    const csrf = makeCsrfToken();
+    setAuthCookies(res, tokens, csrf, roleFromAccessToken(tokens.accessToken));
+    return csrf;
+  }
+
+  /**
+   * Current web session, read from the httpOnly cookies: the SPA calls this on
+   * load to rehydrate (phone + role for the UI, csrfToken for state-changing
+   * requests) without persisting anything client-side. 401 when not signed in.
+   */
+  @Get('session')
+  @ApiOperation({ summary: 'Current web session (phone, role, CSRF token)' })
+  session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const user = (req as Request & { user?: AuthUser }).user;
+    let csrfToken = readCookie(req, COOKIE.csrf);
+    if (!csrfToken) {
+      csrfToken = makeCsrfToken();
+      setCsrfCookie(res, csrfToken);
+    }
+    return { phone: user?.phone ?? null, role: user?.role ?? null, csrfToken };
   }
 
   @Public()
@@ -71,8 +92,8 @@ export class AuthController {
   })
   async verifyOtp(@Body() dto: VerifyOtpDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.verifyOtp(dto.phone, dto.code, dto.audience);
-    this.issueSession(res, result);
-    return result;
+    const csrfToken = this.issueSession(res, result);
+    return { ...result, csrfToken };
   }
 
   @Public()
@@ -115,8 +136,8 @@ export class AuthController {
   })
   async signupVerify(@Body() dto: SignupVerifyDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.signupVerify(dto.phone, dto.code);
-    this.issueSession(res, result);
-    return result;
+    const csrfToken = this.issueSession(res, result);
+    return { ...result, csrfToken };
   }
 
   @Public()
@@ -135,8 +156,8 @@ export class AuthController {
       { fullName: dto.fullName, email: dto.email, role: dto.role },
       dto.audience,
     );
-    this.issueSession(res, result);
-    return result;
+    const csrfToken = this.issueSession(res, result);
+    return { ...result, csrfToken };
   }
 
   @Public()
@@ -162,8 +183,8 @@ export class AuthController {
     const refreshToken = dto.refreshToken ?? readCookie(req, COOKIE.refresh);
     if (!refreshToken) throw new BadRequestException('Missing refresh token');
     const result = await this.auth.refresh(refreshToken);
-    this.issueSession(res, result);
-    return result;
+    const csrfToken = this.issueSession(res, result);
+    return { ...result, csrfToken };
   }
 
   @Public()

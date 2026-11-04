@@ -5,6 +5,7 @@ import { BadgeCheck, MapPinned, Siren } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { setSessionRole } from "@shared/api/session";
 import { LoginScreen } from "@shared/auth/login-screen";
 import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { storeTokens as caregiverStoreTokens } from "@/features/caregiver/lib/auth";
@@ -105,6 +106,7 @@ export function SignupForm({ initialRole }: { initialRole: "customer" | "caregiv
           backendVerify: () => authApi.signupVerify(phone, code),
           signup: { fullName: (name ?? "").trim() || undefined, email: (email ?? "").trim() || undefined, role: role === "caregiver" ? "CAREGIVER" : "CUSTOMER" },
         });
+        setSessionRole(role === "caregiver" ? "CAREGIVER" : "CUSTOMER");
         if (role === "caregiver") {
           clearSession();
           caregiverStoreTokens(phone);

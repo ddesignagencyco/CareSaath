@@ -3,34 +3,27 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 import type { Me } from "@shared/caregiver-types";
-import { sessionRole } from "@shared/api/session";
+import { sessionReady, sessionRole, subscribeBootstrap } from "@shared/api/session";
 import { authApi, meApi } from "./api/caregiver";
 import { keys } from "./api/keys";
-import { session, SESSION_KEY } from "./api/session";
+import { session } from "./api/session";
 
 const SESSION_EVENT = "caresaath:caregiver-session";
 
 function subscribe(onChange: () => void) {
   window.addEventListener(SESSION_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(SESSION_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
+  return () => window.removeEventListener(SESSION_EVENT, onChange);
 }
 
+/** The in-memory marker's phone, or null when signed out / on the server. */
 function readRaw(): string | null {
-  try {
-    return localStorage.getItem(SESSION_KEY);
-  } catch {
-    return null;
-  }
+  return session.get()?.phone ?? null;
 }
 
-/** Raw session string; null on the server and when signed out. */
+/** `raw` is the phone (truthy when signed in); `hydrated` waits for any reload-time rehydrate. */
 export function useSessionRaw() {
   const raw = useSyncExternalStore(subscribe, readRaw, () => null);
-  const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
+  const hydrated = useSyncExternalStore(subscribeBootstrap, sessionReady, () => false);
   return { raw, hydrated };
 }
 

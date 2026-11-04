@@ -54,6 +54,11 @@ export function setAuthCookies(res: Response, tokens: { accessToken: string; ref
   res.cookie(COOKIE.csrf, csrf, { httpOnly: false, secure, sameSite, path: '/', maxAge: REFRESH_TTL_MS });
 }
 
+/** (Re)issue only the readable CSRF cookie — used by GET /auth/session when one is missing. */
+export function setCsrfCookie(res: Response, csrf: string): void {
+  res.cookie(COOKIE.csrf, csrf, { httpOnly: false, secure, sameSite, path: '/', maxAge: REFRESH_TTL_MS });
+}
+
 export function clearAuthCookies(res: Response): void {
   res.clearCookie(COOKIE.access, { httpOnly: true, secure, sameSite, path: '/' });
   res.clearCookie(COOKIE.refresh, { httpOnly: true, secure, sameSite, path: REFRESH_COOKIE_PATH });

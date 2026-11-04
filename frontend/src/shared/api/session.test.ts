@@ -4,10 +4,10 @@ import { createSessionStore, decodeToken } from "./session";
 
 const KEY = "caresaath.test.session";
 const EVENT = "caresaath:test-session";
-const SESSION = { accessToken: "A", refreshToken: "R", phone: "+923001234567" };
+const SESSION = { phone: "+923001234567" };
 
 describe("createSessionStore", () => {
-  it("round-trips through localStorage and announces every change", () => {
+  it("round-trips in memory (nothing persisted) and announces every change", () => {
     const store = createSessionStore(KEY, EVENT);
     const heard = vi.fn();
     window.addEventListener(EVENT, heard);
@@ -16,22 +16,17 @@ describe("createSessionStore", () => {
       expect(store.get()).toBeNull();
 
       store.set(SESSION);
-      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SESSION);
+      // Nothing is written to localStorage — the marker lives only in memory.
+      expect(localStorage.getItem(KEY)).toBeNull();
       expect(store.get()).toEqual(SESSION);
       expect(heard).toHaveBeenCalledTimes(1);
 
       store.clear();
-      expect(localStorage.getItem(KEY)).toBeNull();
       expect(store.get()).toBeNull();
       expect(heard).toHaveBeenCalledTimes(2);
     } finally {
       window.removeEventListener(EVENT, heard);
     }
-  });
-
-  it("returns null for corrupt JSON", () => {
-    localStorage.setItem(KEY, "{not json");
-    expect(createSessionStore(KEY).get()).toBeNull();
   });
 
   it("works without an event name and keeps sections apart", () => {

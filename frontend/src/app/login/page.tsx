@@ -4,7 +4,7 @@ import { BadgeCheck, MapPinned, Siren } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { decodeToken } from "@shared/api/session";
+import { decodeToken, setSessionRole } from "@shared/api/session";
 import { LoginScreen } from "@shared/auth/login-screen";
 import { makeRequestOtp, tokensFromOtp } from "@shared/auth/firebase-otp";
 import { session as adminSession } from "@/features/admin/lib/api/session";
@@ -49,6 +49,7 @@ function LoginInner() {
       verifyOtp={async (phone, code) => {
         const tokens = await tokensFromOtp({ code, firebaseVerify: authApi.firebaseVerify, backendVerify: () => authApi.verifyOtp(phone, code) });
         const role = decodeToken(tokens.accessToken)?.role;
+        setSessionRole(role); // keep the in-memory role in sync for section guards
         const value = { phone };
         if (role === "ADMIN") {
           adminSession.set(value);

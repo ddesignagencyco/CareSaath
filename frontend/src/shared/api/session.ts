@@ -1,49 +1,41 @@
 import type { AccessTokenPayload } from "../types";
 
 /**
- * Non-sensitive session marker. The access/refresh tokens now live in httpOnly
- * cookies (set by the backend, unreadable by JS), so this only remembers the
- * phone number for display and acts as the "signed in" flag the UI reads
- * synchronously. The real auth state is the cookies; this is kept in sync by
- * login (set) and logout / failed-refresh (clear).
+ * Non-sensitive session marker. The access/refresh tokens live in httpOnly
+ * cookies (set by the backend, unreadable by JS). Nothing is persisted on the
+ * client — not even the phone: the marker lives only in memory for the page's
+ * lifetime. After a reload the SPA rehydrates it from GET /auth/session, which
+ * reads the httpOnly cookies server-side. This is what lets the web work when
+ * the API is on a different site (Vercel ↔ Render), where JS cannot read the
+ * backend's readable cookies at all.
  */
 export interface Session {
   phone: string;
 }
 
-/**
- * localStorage-backed session marker; each section uses its own key. `event` is
- * dispatched on every change so the section's useSyncExternalStore subscribers
- * re-read it.
- */
+// In-memory marker per section key — never written to localStorage/cookies.
+const memory = new Map<string, Session | null>();
+const SESSION_EVENT = "caresaath:session";
+
+/** In-memory session marker store; each section uses its own key. */
 export function createSessionStore(key: string, event?: string) {
   const notify = () => {
-    if (event && typeof window !== "undefined") window.dispatchEvent(new Event(event));
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event(SESSION_EVENT));
+    if (event) window.dispatchEvent(new Event(event));
   };
   return {
     key,
     get(): Session | null {
-      try {
-        const raw = localStorage.getItem(key);
-        return raw ? (JSON.parse(raw) as Session) : null;
-      } catch {
-        return null;
-      }
+      return memory.get(key) ?? null;
     },
     set(value: Session) {
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-      } catch {
-        // Storage unavailable (private mode); session lasts for this page only.
-      }
+      memory.set(key, value);
       notify();
     },
     clear() {
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        // ignore
-      }
+      memory.delete(key);
+      currentRole = undefined;
       notify();
     },
   };
@@ -61,15 +53,47 @@ export function decodeToken(token: string): AccessTokenPayload | null {
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 
-/**
- * The signed-in role, read from the JS-readable `cs_session` cookie the backend
- * sets alongside the httpOnly token cookies. Used where the UI previously decoded
- * the access token's role (which is no longer readable from JS). "1" is the
- * roleless signed-in flag; anything else is the actual role.
- */
+/* ------------------------------ signed-in role ----------------------------- */
+// Held in memory (the cross-site cs_session cookie is not readable by JS).
+let currentRole: string | undefined;
+
+export function setSessionRole(role: string | undefined): void {
+  currentRole = role && role !== "1" ? role : undefined;
+}
+
+/** The signed-in role, set at login and on rehydrate. */
 export function sessionRole(): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const m = document.cookie.match(/(?:^|;\s*)cs_session=([^;]+)/);
-  const value = m ? decodeURIComponent(m[1]) : undefined;
-  return value && value !== "1" ? value : undefined;
+  return currentRole;
+}
+
+/* ------------------------------ bootstrap gate ----------------------------- */
+// While the page is rehydrating the session from /auth/session, the shells must
+// not treat "no session yet" as "logged out". `booting` is flipped on only by
+// the <SessionBootstrap> module (loaded in the app root, never in unit tests),
+// so tests keep the old "hydrated right after mount" behaviour.
+let booting = false;
+const bootListeners = new Set<() => void>();
+
+export function beginBootstrap(): void {
+  booting = true;
+  bootListeners.forEach((l) => l());
+}
+export function finishBootstrap(): void {
+  booting = false;
+  bootListeners.forEach((l) => l());
+}
+/** True once any in-flight rehydrate has settled (always true when none runs). */
+export function sessionReady(): boolean {
+  return !booting;
+}
+export function subscribeBootstrap(cb: () => void): () => void {
+  bootListeners.add(cb);
+  return () => bootListeners.delete(cb);
+}
+
+/** Test-only: clear all in-memory session state between tests. */
+export function __resetSessionForTests(): void {
+  memory.clear();
+  currentRole = undefined;
+  booting = false;
 }

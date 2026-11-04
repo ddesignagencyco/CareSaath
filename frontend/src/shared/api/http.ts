@@ -36,7 +36,22 @@ function buildUrl(path: string, query?: Query): string {
   return url.toString();
 }
 
-/** The JS-readable CSRF cookie the backend sets (double-submit token). */
+/**
+ * CSRF double-submit token, held in MEMORY. The backend's readable cs_csrf cookie
+ * cannot be read by JS when the API is on a different site (Vercel ↔ Render), so
+ * the token is delivered in the auth response bodies and echoed back in a header.
+ */
+let csrfToken: string | undefined;
+export function setCsrf(token: string | undefined): void {
+  csrfToken = token || undefined;
+}
+/** Pick up the CSRF token the backend returns on login/refresh/session responses. */
+function captureCsrf(data: unknown): void {
+  if (data && typeof data === "object" && typeof (data as { csrfToken?: unknown }).csrfToken === "string") {
+    csrfToken = (data as { csrfToken: string }).csrfToken;
+  }
+}
+/** Same-site fallback (e.g. local dev): the readable cs_csrf cookie, if present. */
 function readCsrfCookie(): string | undefined {
   if (typeof document === "undefined") return undefined;
   const m = document.cookie.match(/(?:^|;\s*)cs_csrf=([^;]+)/);
@@ -49,9 +64,9 @@ async function send(method: string, url: string, body?: unknown): Promise<Respon
     // Let the browser set the multipart boundary for FormData.
     ...(isForm || body === undefined ? {} : { "Content-Type": "application/json" }),
   };
-  // Mirror the CSRF cookie into a header for cookie-authed, state-changing requests.
+  // Echo the CSRF token into a header for cookie-authed, state-changing requests.
   if (method !== "GET" && method !== "HEAD") {
-    const csrf = readCsrfCookie();
+    const csrf = csrfToken ?? readCsrfCookie();
     if (csrf) headers["X-CSRF-Token"] = csrf;
   }
   try {
@@ -87,12 +102,14 @@ export function createHttp(store: SessionStore) {
 
   async function refresh(): Promise<boolean> {
     // The refresh token is an httpOnly cookie; the backend reads it and sets a
-    // fresh access cookie. The browser swaps the cookies for us — nothing to store.
+    // fresh access cookie. The browser swaps the cookies for us — nothing to store,
+    // but it returns a rotated CSRF token which we capture for subsequent requests.
     const res = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
     if (!res?.ok) {
       store.clear();
       return false;
     }
+    captureCsrf(await res.json().catch(() => null));
     return true;
   }
 
@@ -115,7 +132,9 @@ export function createHttp(store: SessionStore) {
     }
 
     if (!res.ok) throw await toError(res);
-    return parse<T>(res);
+    const data = await parse<T>(res);
+    captureCsrf(data); // login/signup/firebase responses carry the CSRF token
+    return data;
   }
 
   return {
@@ -159,6 +178,31 @@ export function createHttp(store: SessionStore) {
       return refreshing;
     },
   };
+}
+
+/**
+ * Rehydrate the web session after a reload: returns { phone, role } (and captures
+ * the CSRF token) read from the httpOnly cookies via GET /auth/session, or null
+ * when signed out. Tries one refresh if the access cookie has expired.
+ */
+export async function bootstrapSession(): Promise<{ phone: string; role: string } | null> {
+  const read = async (): Promise<{ phone: string; role: string } | null> => {
+    const res = await send("GET", buildUrl("/auth/session")).catch(() => null);
+    if (!res?.ok) return null;
+    const d = (await res.json().catch(() => null)) as { phone?: string; role?: string; csrfToken?: string } | null;
+    if (!d) return null;
+    captureCsrf(d);
+    return d.phone && d.role ? { phone: d.phone, role: d.role } : null;
+  };
+  let d = await read();
+  if (!d) {
+    const r = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
+    if (r?.ok) {
+      captureCsrf(await r.json().catch(() => null));
+      d = await read();
+    }
+  }
+  return d;
 }
 
 /** Save a downloaded Blob to the user's device (browser only). */

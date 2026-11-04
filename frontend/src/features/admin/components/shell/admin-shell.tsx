@@ -12,7 +12,7 @@ import { useRealtime } from "@shared/api/realtime";
 import { authApi, meApi } from "@/features/admin/lib/api/admin";
 import { http } from "@/features/admin/lib/api/http";
 import { session } from "@/features/admin/lib/api/session";
-import { sessionRole } from "@shared/api/session";
+import { sessionReady, sessionRole, subscribeBootstrap } from "@shared/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
@@ -20,34 +20,19 @@ import { Sidebar } from "./sidebar";
 
 const SESSION_EVENT = "caresaath:admin-session";
 
-const noopSubscribe = () => () => {};
-/**
- * Re-read the session whenever the store changes (sign-in, background token
- * refresh, or a failed refresh clearing it) and when another tab changes it.
- */
+/** Re-read the in-memory session whenever it changes (sign-in / refresh / clear). */
 function subscribeSession(onChange: () => void) {
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === null || e.key === session.key) onChange();
-  };
   window.addEventListener(SESSION_EVENT, onChange);
-  window.addEventListener("storage", onStorage);
-  return () => {
-    window.removeEventListener(SESSION_EVENT, onChange);
-    window.removeEventListener("storage", onStorage);
-  };
+  return () => window.removeEventListener(SESSION_EVENT, onChange);
 }
-function readStorage(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
+function readPhone(): string | null {
+  return session.get()?.phone ?? null;
 }
 
-/** Client-side guard: only an ADMIN access token may see the console. */
+/** Client-side guard: only an ADMIN session may see the console. */
 function useAdminSession() {
-  const raw = useSyncExternalStore(subscribeSession, () => readStorage(session.key), () => null);
-  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const raw = useSyncExternalStore(subscribeSession, readPhone, () => null);
+  const hydrated = useSyncExternalStore(subscribeBootstrap, sessionReady, () => false);
   if (!raw) return { hydrated, current: null };
   const current = session.get();
   return { hydrated, current: current && sessionRole() === "ADMIN" ? current : null };

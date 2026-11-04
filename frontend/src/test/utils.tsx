@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { vi } from "vitest";
+import { setCsrf } from "@shared/api/http";
+import { setSessionRole } from "@shared/api/session";
 import { LocaleProvider } from "@shared/i18n/provider";
 import { ToastProvider } from "@shared/ui/toast";
 
@@ -58,13 +60,18 @@ export function mockFetch(respond: Responder = () => json({})) {
 /** Path relative to the API base, e.g. "/customer/bookings". */
 export const apiPath = (call: RecordedCall) => call.url.pathname.replace(/^\/api\/v1/, "");
 
-/** Set the JS-readable cookie-auth session cookies (role flag + CSRF double-submit token). */
+/** Simulate a signed-in session: set the in-memory role + CSRF token the app uses. */
 export function setSessionCookies(role = "CUSTOMER"): void {
+  setSessionRole(role);
+  setCsrf("test-csrf");
+  // Also set the readable cookies for any test that inspects document.cookie.
   document.cookie = `cs_session=${role}`;
   document.cookie = "cs_csrf=test-csrf";
 }
-/** Clear the session cookies. */
+/** Clear the simulated session. */
 export function clearSessionCookies(): void {
+  setSessionRole(undefined);
+  setCsrf(undefined);
   document.cookie = "cs_session=; max-age=0";
   document.cookie = "cs_csrf=; max-age=0";
 }

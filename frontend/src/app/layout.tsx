@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Gulzar, Plus_Jakarta_Sans } from "next/font/google";
 import { AppProviders } from "@shared/app/providers";
 import { Splash } from "@shared/app/splash";
+import { SessionBootstrap } from "./session-bootstrap";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       {/* suppressHydrationWarning: browser extensions inject attributes on <body> */}
       <body className="min-h-full" suppressHydrationWarning>
         <Splash />
+        <SessionBootstrap />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>
