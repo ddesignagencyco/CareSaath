@@ -115,12 +115,12 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
    * authorized against a shared, still-active visit and logged to CallLog.
    * Client events: call:invite, call:answer, call:ice-candidate, call:end,
    * call:reject. Server events it may receive: call:incoming, call:answered,
-   * call:ice-candidate, call:ended, call:rejected, call:error.
+   * call:ice-candidate, call:ended, call:rejected, call:error, call:outgoing.
    */
   @SubscribeMessage('call:invite')
   async handleCallInvite(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { visitId: string; calleeId?: string; sdp: unknown },
+    @MessageBody() body: { visitId: string; calleeId?: string; callerName?: string; sdp: unknown },
   ): Promise<void> {
     const callerId = (client.data as SocketData).userId;
     if (!callerId) return;
@@ -129,13 +129,23 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       // caregiver's user id, so when it's omitted the callee is derived from
       // the visit's other participant instead.
       const calleeId = body.calleeId ?? (await this.calls.resolveCallee(body.visitId, callerId));
+      if (!this.realtime.isUserConnected(calleeId)) {
+        client.emit('call:error', { message: 'The other person is currently offline' });
+        return;
+      }
       const call = await this.calls.startCall(body.visitId, callerId, calleeId);
+      const caller = await this.prisma.user.findUnique({
+        where: { id: callerId },
+        select: { fullName: true },
+      });
       this.realtime.emit({ users: [calleeId] }, 'call:incoming', {
         callId: call.id,
         visitId: body.visitId,
         callerId,
+        callerName: body.callerName ?? caller?.fullName ?? '',
         sdp: body.sdp,
       });
+      client.emit('call:outgoing', { callId: call.id });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }

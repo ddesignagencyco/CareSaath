@@ -23,9 +23,9 @@ function useCaregiverChatTransport(): ChatTransport {
   const metaByCustomer = useMemo(() => {
     const map: Record<string, { visitId?: string; serviceType?: Specialty }> = {};
     for (const b of bookings.data?.items ?? []) {
-      const active = b.visits.find((v) => !["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status));
+      const active = b.visits?.find((v) => !["COMPLETED", "CANCELLED", "DECLINED"].includes(v.status));
       const cur = map[b.customerId];
-      map[b.customerId] = { visitId: active?.id ?? cur?.visitId, serviceType: cur?.serviceType ?? b.serviceType };
+      map[b.customerId] = { visitId: active?.id ?? cur?.visitId ?? b.visits?.[0]?.id, serviceType: cur?.serviceType ?? b.serviceType };
     }
     return map;
   }, [bookings.data]);

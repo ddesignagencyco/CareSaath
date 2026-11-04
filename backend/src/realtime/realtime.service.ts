@@ -55,6 +55,13 @@ export class RealtimeService {
     this.server = server;
   }
 
+  /** Returns true if at least one live socket is currently joined to the user's room. */
+  isUserConnected(userId: string): boolean {
+    if (!this.server) return true;
+    const room = this.server.sockets.adapter.rooms.get(userRoom(userId));
+    return Boolean(room && room.size > 0);
+  }
+
   /** Emit to the audience. A socket in several matching rooms still gets it once. */
   emit(audience: Audience, event: string, data: unknown): void {
     if (!this.server) return;

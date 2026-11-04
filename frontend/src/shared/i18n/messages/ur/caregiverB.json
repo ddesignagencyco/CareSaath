@@ -35,6 +35,8 @@
     "prescription": "نسخہ",
     "prescriptionTitle": "نسخہ · {name}",
     "locationFamily": "مقام اور خاندان",
+    "family": "خاندان",
+    "address": "پتہ",
     "directions": "راستہ دیکھیں",
     "callFamily": "خاندان کو کال کریں",
     "bookedByUnnamed": "بکنگ خاندان نے کی",
