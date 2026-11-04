@@ -21,7 +21,7 @@ const SEED_RESET = process.env['SEED_RESET'] === 'true';
 // ADMIN_EMAIL and the demo accounts plus-addressed aliases of it
 // (info+ayesha@caresaath.com, ...) so all test OTPs land in one inbox.
 // SEED_DEMO_EMAILS=false leaves the demo accounts without an email.
-const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'info@caresaath.com').trim().toLowerCase();
+const ADMIN_EMAIL = (process.env['ADMIN_EMAIL'] ?? 'caresaath@gmail.com').trim().toLowerCase();
 const SEED_DEMO_EMAILS = process.env['SEED_DEMO_EMAILS'] !== 'false';
 /** "Dr. Hira Siddiqui" -> "hira" */
 function caregiverTag(c) {
@@ -84,6 +84,7 @@ function hoursInto(day, hour) {
 // ===========================================================================
 
 const adminPhone = process.env['ADMIN_PHONE'] ?? '+923000000000';
+const adminName = (process.env['ADMIN_NAME'] ?? 'Administrator').trim();
 /** Sets `email` only when no other account already holds it (email is unique). */
 async function freeEmail(email, phone) {
   if (!email) return undefined;
@@ -93,11 +94,11 @@ async function freeEmail(email, phone) {
 const adminEmail = await freeEmail(ADMIN_EMAIL, adminPhone);
 const adminUser = await prisma.user.upsert({
   where: { phone: adminPhone },
-  update: { role: UserRole.ADMIN, status: 'ACTIVE', ...(adminEmail ? { email: adminEmail } : {}) },
+  update: { role: UserRole.ADMIN, status: 'ACTIVE', fullName: adminName, ...(adminEmail ? { email: adminEmail } : {}) },
   create: {
     phone: adminPhone,
     role: UserRole.ADMIN,
-    fullName: 'Platform Admin',
+    fullName: adminName,
     ...(adminEmail ? { email: adminEmail } : {}),
   },
 });
