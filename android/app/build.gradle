@@ -91,7 +91,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump both per release: versionName is semver (MAJOR.MINOR.PATCH),
         // versionCode is the build number and must always increase.
-        versionCode 1
+        versionCode 2
         versionName "1.0.0"
     }
     // Versioned APK filenames: <App>-v<semver>-b<build>-<abi>-<type>.apk,
