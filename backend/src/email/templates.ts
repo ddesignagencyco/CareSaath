@@ -15,7 +15,7 @@ import { LOGO_CID } from './logo.js';
  */
 
 const BRAND = 'CareSaath';
-export const SUPPORT_EMAIL = 'support@caresaath.pk';
+export const SUPPORT_EMAIL = 'info@caresaath.com';
 const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
 
 const C = {

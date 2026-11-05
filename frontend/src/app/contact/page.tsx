@@ -15,7 +15,7 @@ const CHANNELS = [
     icon: LifeBuoy,
     title: "Customer support",
     text: "Questions about a booking, a visit or a payment.",
-    action: { label: "support@caresaath.pk", href: "mailto:support@caresaath.pk" },
+    action: { label: "info@caresaath.com", href: "mailto:info@caresaath.com" },
   },
   {
     icon: Stethoscope,

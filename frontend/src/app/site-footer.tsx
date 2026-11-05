@@ -67,7 +67,7 @@ const SOCIALS = [
   { icon: InstagramIcon, label: "Instagram", href: "#" },
   { icon: XIcon, label: "X", href: "#" },
   { icon: LinkedinIcon, label: "LinkedIn", href: "#" },
-  { icon: Mail, label: "Email", href: "mailto:support@caresaath.pk" },
+  { icon: Mail, label: "Email", href: "mailto:info@caresaath.com" },
 ];
 
 /** Shared footer for the public pages. */

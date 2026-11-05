@@ -78,8 +78,8 @@ export default function Terms() {
         <p>
           We may update these terms as the service grows; continued use means you accept the current version. These terms are governed by the
           laws of Pakistan. Questions can be sent to{" "}
-          <a href="mailto:support@caresaath.pk" className="font-semibold text-brand-700 hover:underline">
-            support@caresaath.pk
+          <a href="mailto:info@caresaath.com" className="font-semibold text-brand-700 hover:underline">
+            info@caresaath.com
           </a>
           .
         </p>
