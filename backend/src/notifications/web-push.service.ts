@@ -35,7 +35,11 @@ export class WebPushService {
   }
 
   /** Best-effort fan-out to every subscription of the user; expired endpoints (404/410) are pruned. Never throws. */
-  async sendToUser(userId: string, payload: WebPushPayload): Promise<void> {
+  async sendToUser(
+    userId: string,
+    payload: WebPushPayload,
+    opts: { ttlSeconds?: number; urgency?: 'low' | 'normal' | 'high' } = {},
+  ): Promise<void> {
     if (!this.enabled()) return;
     try {
       const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
@@ -47,7 +51,8 @@ export class WebPushService {
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
               body,
               {
-                TTL: 24 * 3600,
+                TTL: opts.ttlSeconds ?? 24 * 3600,
+                ...(opts.urgency ? { urgency: opts.urgency } : {}),
                 vapidDetails: { subject: this.subject, publicKey: this.publicKey, privateKey: this.privateKey },
               },
             );

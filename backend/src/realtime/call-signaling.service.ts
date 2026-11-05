@@ -98,6 +98,13 @@ export class CallSignalingService {
     });
   }
 
+  async markMissed(callId: string): Promise<void> {
+    await this.prisma.callLog.update({
+      where: { id: callId },
+      data: { status: 'MISSED', endedAt: new Date() },
+    });
+  }
+
   async markRejected(callId: string): Promise<void> {
     await this.prisma.callLog.update({
       where: { id: callId },

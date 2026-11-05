@@ -24,8 +24,10 @@ describe('RealtimeGateway', () => {
     loadForRouting: ReturnType<typeof vi.fn>;
     markConnected: ReturnType<typeof vi.fn>;
     markEnded: ReturnType<typeof vi.fn>;
+    markMissed?: ReturnType<typeof vi.fn>;
     markRejected: ReturnType<typeof vi.fn>;
   };
+  let ringing: { ring: ReturnType<typeof vi.fn>; settle: ReturnType<typeof vi.fn>; pendingFor: ReturnType<typeof vi.fn> };
   let gateway: RealtimeGateway;
 
   beforeEach(() => {
@@ -41,8 +43,10 @@ describe('RealtimeGateway', () => {
       markConnected: vi.fn().mockResolvedValue(undefined),
       markEnded: vi.fn().mockResolvedValue(undefined),
       markRejected: vi.fn().mockResolvedValue(undefined),
+      markMissed: vi.fn().mockResolvedValue(undefined),
     };
-    gateway = new RealtimeGateway(jwt as never, prisma as never, realtime, calls as never);
+    ringing = { ring: vi.fn().mockResolvedValue(undefined), settle: vi.fn().mockResolvedValue(undefined), pendingFor: vi.fn().mockResolvedValue(null) };
+    gateway = new RealtimeGateway(jwt as never, prisma as never, realtime, calls as never, ringing as never);
   });
 
   it('joins only the user room and the role room for a valid token', async () => {
@@ -127,8 +131,10 @@ describe('RealtimeGateway call signaling', () => {
     loadForRouting: ReturnType<typeof vi.fn>;
     markConnected: ReturnType<typeof vi.fn>;
     markEnded: ReturnType<typeof vi.fn>;
+    markMissed?: ReturnType<typeof vi.fn>;
     markRejected: ReturnType<typeof vi.fn>;
   };
+  let ringing: { ring: ReturnType<typeof vi.fn>; settle: ReturnType<typeof vi.fn>; pendingFor: ReturnType<typeof vi.fn> };
   let gateway: RealtimeGateway;
 
   beforeEach(() => {
@@ -143,8 +149,10 @@ describe('RealtimeGateway call signaling', () => {
       markConnected: vi.fn().mockResolvedValue(undefined),
       markEnded: vi.fn().mockResolvedValue(undefined),
       markRejected: vi.fn().mockResolvedValue(undefined),
+      markMissed: vi.fn().mockResolvedValue(undefined),
     };
-    gateway = new RealtimeGateway({ verifyAsync: vi.fn() } as never, prisma as never, realtime, calls as never);
+    ringing = { ring: vi.fn().mockResolvedValue(undefined), settle: vi.fn().mockResolvedValue(undefined), pendingFor: vi.fn().mockResolvedValue(null) };
+    gateway = new RealtimeGateway({ verifyAsync: vi.fn() } as never, prisma as never, realtime, calls as never, ringing as never);
   });
 
   function fakeAuthedSocket(userId: string) {
@@ -161,6 +169,24 @@ describe('RealtimeGateway call signaling', () => {
       'call:incoming',
       expect.objectContaining({ callId: 'call-1', callerId: 'u-caller' }),
     );
+  });
+
+  it('rings the callee and tells the caller how long, even when the callee is offline', async () => {
+    calls.startCall.mockResolvedValue({ id: 'call-1' });
+    realtime.isUserConnected = vi.fn().mockReturnValue(false) as never;
+    const socket = fakeAuthedSocket('u-caller');
+    await gateway.handleCallInvite(socket as never, { visitId: 'v-1', calleeId: 'u-callee', sdp: { x: 1 } });
+    expect(realtimeEmit).not.toHaveBeenCalledWith({ users: ['u-callee'] }, 'call:incoming', expect.anything());
+    expect(ringing.ring).toHaveBeenCalledWith('u-callee', expect.objectContaining({ callId: 'call-1', visitId: 'v-1' }));
+    expect(socket.emit).toHaveBeenCalledWith('call:outgoing', { callId: 'call-1', calleeOnline: false, ringSeconds: 30 });
+  });
+
+  it('hands a device that connects mid-ring the call still waiting for it', async () => {
+    const pending = { callId: 'call-1', visitId: 'v-1', callerId: 'u-caller', callerName: 'Ayesha', sdp: {} };
+    ringing.pendingFor.mockResolvedValue(pending);
+    const socket = fakeAuthedSocket('u-callee');
+    await gateway.handleCallSync(socket as never);
+    expect(socket.emit).toHaveBeenCalledWith('call:incoming', pending);
   });
 
   it('emits call:error to the inviter when there is no shared active visit', async () => {

@@ -15,6 +15,7 @@ import type { UserRole } from '../generated/prisma/client.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RealtimeService, roleRoom, userRoom } from './realtime.service.js';
 import { CallSignalingService } from './call-signaling.service.js';
+import { CallRingingService, RING_SECONDS } from './call-ringing.service.js';
 
 interface AccessPayload {
   sub: string;
@@ -47,6 +48,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly calls: CallSignalingService,
+    private readonly ringing: CallRingingService,
   ) {}
 
   afterInit(server: Server): void {
@@ -129,25 +131,44 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       // caregiver's user id, so when it's omitted the callee is derived from
       // the visit's other participant instead.
       const calleeId = body.calleeId ?? (await this.calls.resolveCallee(body.visitId, callerId));
-      if (!this.realtime.isUserConnected(calleeId)) {
-        client.emit('call:error', { message: 'The other person is currently offline' });
-        return;
-      }
       const call = await this.calls.startCall(body.visitId, callerId, calleeId);
       const caller = await this.prisma.user.findUnique({
         where: { id: callerId },
         select: { fullName: true },
       });
-      this.realtime.emit({ users: [calleeId] }, 'call:incoming', {
+      const incoming = {
         callId: call.id,
         visitId: body.visitId,
         callerId,
         callerName: body.callerName ?? caller?.fullName ?? '',
         sdp: body.sdp,
-      });
-      client.emit('call:outgoing', { callId: call.id });
+      };
+      // Ring like a phone call even when the other person is offline: their
+      // devices get a push, and opening the app in time picks the call up.
+      const calleeOnline = this.realtime.isUserConnected(calleeId);
+      if (calleeOnline) {
+        this.realtime.emit({ users: [calleeId] }, 'call:incoming', incoming);
+      }
+      await this.ringing.ring(calleeId, incoming);
+      client.emit('call:outgoing', { callId: call.id, calleeOnline, ringSeconds: RING_SECONDS });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
+    }
+  }
+
+  /**
+   * A device that just connected (e.g. opened from an "incoming call" push)
+   * asks for any call still ringing for this user, so it can show it.
+   */
+  @SubscribeMessage('call:sync')
+  async handleCallSync(@ConnectedSocket() client: Socket): Promise<void> {
+    const userId = (client.data as SocketData).userId;
+    if (!userId) return;
+    try {
+      const pending = await this.ringing.pendingFor(userId);
+      if (pending) client.emit('call:incoming', pending);
+    } catch (err) {
+      this.logger.warn(`call:sync failed: ${(err as Error).message}`);
     }
   }
 
@@ -160,6 +181,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
+      await this.ringing.settle(call.id, call.calleeId);
       await this.calls.markConnected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:answered', { callId: call.id, sdp: body.sdp });
@@ -196,7 +218,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
-      await this.calls.markEnded(call.id);
+      await this.ringing.settle(call.id, call.calleeId);
+      // Hanging up before it was answered is a missed call for the callee, not a call.
+      if (call.status === 'INITIATED' && call.callerId === userId) {
+        await this.calls.markMissed(call.id);
+      } else {
+        await this.calls.markEnded(call.id);
+      }
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:ended', { callId: call.id });
     } catch (err) {
@@ -213,6 +241,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
+      await this.ringing.settle(call.id, call.calleeId);
       await this.calls.markRejected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:rejected', { callId: call.id });
