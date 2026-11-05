@@ -4,6 +4,8 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import type { App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import type { Auth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
+import type { Messaging } from 'firebase-admin/messaging';
 
 /**
  * Wraps Firebase Admin SDK auth access. Note: firebase-admin v14 uses the
@@ -50,6 +52,14 @@ export class FirebaseService implements OnModuleInit {
 
   get isConfigured(): boolean {
     return !!this.authInstance;
+  }
+
+  /**
+   * Firebase Cloud Messaging for native push, from the same service account as
+   * phone auth. Null until FIREBASE_ADMIN_SDK_KEY is set.
+   */
+  get messaging(): Messaging | null {
+    return this.app ? getMessaging(this.app) : null;
   }
 
   private getAuth(): Auth {

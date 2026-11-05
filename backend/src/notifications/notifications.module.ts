@@ -38,6 +38,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  DevicePlatform,
   NotificationChannel,
   NotificationStatus,
   Prisma,
@@ -60,6 +61,8 @@ import {
   WhatsAppChannelAdapter,
 } from './channels.js';
 import { WebPushService } from './web-push.service.js';
+import { NativePushService } from './native-push.service.js';
+import { FirebaseModule } from '../firebase/firebase.module.js';
 
 export interface NotifyInput {
   userId: string;
@@ -150,6 +153,24 @@ export class PushSubscribeDto {
   keys!: PushSubscriptionKeysDto;
 }
 
+export class RegisterDeviceDto {
+  @ApiProperty({ description: 'Firebase Cloud Messaging registration token from the native app (messaging().getToken())' })
+  @IsString()
+  @MaxLength(4096)
+  token!: string;
+
+  @ApiProperty({ enum: DevicePlatform, example: DevicePlatform.ANDROID })
+  @IsEnum(DevicePlatform)
+  platform!: DevicePlatform;
+}
+
+export class UnregisterDeviceDto {
+  @ApiProperty({ description: 'The FCM registration token to remove' })
+  @IsString()
+  @MaxLength(4096)
+  token!: string;
+}
+
 export class PushUnsubscribeDto {
   @ApiProperty({ description: 'The endpoint to remove (PushSubscription.endpoint)' })
   @IsString()
@@ -175,6 +196,7 @@ export class NotificationsService {
     emailAdapter: EmailChannelAdapter,
     @Optional() private readonly realtime?: RealtimeService,
     @Optional() private readonly webPush?: WebPushService,
+    @Optional() private readonly nativePush?: NativePushService,
   ) {
     this.adapters = [pushAdapter, smsAdapter, whatsappAdapter, emailAdapter];
   }
@@ -265,14 +287,16 @@ export class NotificationsService {
               RealtimeEvents.notificationCreated,
               { ...created, ...sent, readAt: null },
             );
-            // ...and to their closed tabs / installed app via Web Push (fire-and-forget).
-            void this.webPush?.sendToUser(input.userId, {
+            // ...and to their closed tabs (Web Push) and phones (FCM), fire-and-forget.
+            const pushPayload = {
               id: created.id,
               event: input.event,
               title,
               body: input.message ?? null,
               data: input.payload,
-            });
+            };
+            void this.webPush?.sendToUser(input.userId, pushPayload);
+            void this.nativePush?.sendToUser(input.userId, pushPayload);
           }
         } catch {
           await this.prisma.notification.update({
@@ -384,6 +408,28 @@ export class NotificationsService {
     return { removed: result.count };
   }
 
+  /**
+   * Stores (or re-assigns to the caller) one native app's FCM token. Idempotent per
+   * token: the same phone signing in as another account moves the token over, so a
+   * device only ever receives the pushes of whoever is signed in on it.
+   */
+  async registerDevice(user: AuthUser, dto: RegisterDeviceDto) {
+    const device = await this.prisma.deviceToken.upsert({
+      where: { token: dto.token },
+      update: { userId: user.sub, platform: dto.platform },
+      create: { userId: user.sub, token: dto.token, platform: dto.platform },
+    });
+    return { id: device.id, platform: device.platform, enabled: this.nativePush?.enabled() ?? false };
+  }
+
+  /** Removes one of the caller's device tokens (on logout or when the app's token changes). */
+  async unregisterDevice(user: AuthUser, dto: UnregisterDeviceDto): Promise<{ removed: number }> {
+    const result = await this.prisma.deviceToken.deleteMany({
+      where: { token: dto.token, userId: user.sub },
+    });
+    return { removed: result.count };
+  }
+
   /** Every channel, defaulting to enabled when the caller has no saved preference for it. */
   async listPreferences(user: AuthUser): Promise<Array<{ channel: NotificationChannel; enabled: boolean }>> {
     const rows = await this.prisma.notificationPreference.findMany({ where: { userId: user.sub } });
@@ -470,6 +516,26 @@ export class NotificationsController {
     return this.notifications.unsubscribePush(user, dto);
   }
 
+  @Post('devices')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Register a native app device for push',
+    description: 'Stores the app\'s FCM registration token for the caller; every in-app notification is then also sent to that phone through Firebase Cloud Messaging (respecting the PUSH channel preference). Idempotent per token; call again whenever the token changes. Returns enabled=false while the server has no Firebase credentials.',
+  })
+  registerDevice(@CurrentUser() user: AuthUser, @Body() dto: RegisterDeviceDto) {
+    return this.notifications.registerDevice(user, dto);
+  }
+
+  @Post('devices/remove')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Remove a native app device',
+    description: 'Deletes the caller\'s FCM token (call on logout, before the session is cleared).',
+  })
+  unregisterDevice(@CurrentUser() user: AuthUser, @Body() dto: UnregisterDeviceDto) {
+    return this.notifications.unregisterDevice(user, dto);
+  }
+
   @Get('preferences')
   @ApiOperation({
     summary: 'Get notification channel preferences',
@@ -490,7 +556,7 @@ export class NotificationsController {
 }
 
 @Module({
-  imports: [EmailModule],
+  imports: [EmailModule, FirebaseModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
@@ -499,6 +565,7 @@ export class NotificationsController {
     PushChannelAdapter,
     EmailChannelAdapter,
     WebPushService,
+    NativePushService,
   ],
   exports: [NotificationsService],
 })
