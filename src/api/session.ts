@@ -1,5 +1,5 @@
 import type { AccessTokenPayload, TokenPair } from './types';
-import { kv } from '../lib/storage';
+import { secureKv as kv } from '../lib/secureStorage';
 
 export interface Session extends TokenPair {
   phone: string;
@@ -9,8 +9,8 @@ export interface Session extends TokenPair {
  * Token store; customer and caregiver each use their own key. Subscribers are
  * told about every change (including a background token refresh).
  *
- * TODO(backend): tokens sit in AsyncStorage like the web's localStorage. Move
- * them to Keychain / EncryptedSharedPreferences before release.
+ * Tokens live in the OS secure store (Android Keystore / iOS Keychain) via
+ * `secureKv`, never in plain AsyncStorage.
  */
 export function createSessionStore(key: string) {
   const listeners = new Set<() => void>();

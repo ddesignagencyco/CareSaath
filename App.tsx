@@ -12,6 +12,9 @@ import { LogoMark } from './src/components/Logo';
 import { ToastProvider } from './src/components/overlay';
 import { SettingsProvider, useSettings, useT } from './src/i18n';
 import { hydrateStorage } from './src/lib/storage';
+import { hydrateSecureStorage } from './src/lib/secureStorage';
+import { SESSION_KEY as CUSTOMER_SESSION_KEY } from './src/api/customer/session';
+import { SESSION_KEY as CAREGIVER_SESSION_KEY } from './src/api/caregiver/session';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { activeScheme, brand, colors, setActiveScheme, themed } from './src/theme';
 
@@ -54,7 +57,11 @@ function Shell() {
 function App() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    hydrateStorage().finally(() => setReady(true));
+    // Plain settings first, then the tokens: the secure store migrates any
+    // legacy plain-storage session it finds, so it needs that cache loaded.
+    hydrateStorage()
+      .then(() => hydrateSecureStorage([CUSTOMER_SESSION_KEY, CAREGIVER_SESSION_KEY]))
+      .finally(() => setReady(true));
   }, []);
 
   return (
