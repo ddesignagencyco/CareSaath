@@ -117,7 +117,7 @@ export function SosSheet({ visible, visit, onClose }: { visible: boolean; visit:
       {result ? (
         <View style={styles.sent}>
           <Text weight="semibold" color={feedback.danger700}>
-            {t('result', { admins: result.notifiedAdmins, contacts: result.notifiedContacts })}
+            {t('result')}
           </Text>
         </View>
       ) : (

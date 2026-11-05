@@ -47,7 +47,7 @@
     "policeNote": "Emergency",
     "edhi": "Edhi 115",
     "edhiNote": "Ambulance",
-    "result": "{admins, plural, one {# safety team member} other {# safety team members}} and {contacts, plural, one {# emergency contact} other {# emergency contacts}} notified. If anyone is in danger, call emergency services now.",
+    "result": "The Care Saath team has been alerted about this visit. If anyone is in danger, call Rescue 1122 now.",
     "failed": "Couldn't send SOS. Call emergency services directly.",
     "button": "SOS · Emergency help"
   },

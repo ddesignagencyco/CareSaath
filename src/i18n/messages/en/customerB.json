@@ -90,7 +90,7 @@
     "call1122": "Medical emergency: call 1122",
     "reportConcern": "Report a safety concern",
     "raiseDispute": "Raise a dispute",
-    "sosDescription": "Care Saath's safety team and your emergency contacts are alerted immediately.",
+    "sosDescription": "The Care Saath team is alerted right away about this visit.",
     "caregiverUnavailable": "Caregiver details aren't available right now.",
     "disputesTitle": "Disputes about this visit"
   },
@@ -162,11 +162,11 @@
   },
   "concern": {
     "title": "Report a safety concern",
-    "description": "Goes straight to Care Saath's safety team. For emergencies, use SOS or call 1122.",
+    "description": "Goes straight to the Care Saath team. For emergencies, use SOS or call 1122.",
     "severity": "How serious is it?",
     "whatHappened": "What happened?",
     "send": "Send report",
-    "success": "Concern sent to the Care Saath safety team. We'll contact you.",
+    "success": "Concern sent to the Care Saath team. We'll contact you.",
     "priorityHint": {
       "LOW": "Late arrival, minor issue",
       "MEDIUM": "Unprofessional behaviour, poor care",

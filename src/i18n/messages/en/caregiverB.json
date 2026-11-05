@@ -120,16 +120,16 @@
     "paymentRequired": "The visit can't be completed until the payment is verified — card settled, or cash confirmed by both sides."
   },
   "safety": {
-    "sosDescription": "Care Saath's safety team is alerted immediately, along with the family's emergency contact.",
+    "sosDescription": "The Care Saath team is alerted right away about this visit.",
     "family": "Family",
     "priorityHint": {
       "LOW": "Access problem, wrong address",
       "MEDIUM": "Uncomfortable situation, needs follow-up",
       "HIGH": "Threat, harassment or unsafe home"
     },
-    "reportSent": "Report sent to the Care Saath safety team.",
+    "reportSent": "Report sent to the Care Saath team.",
     "reportTitle": "Report a safety or access issue",
-    "reportDescription": "Goes straight to the Care Saath safety team. For emergencies, use SOS instead.",
+    "reportDescription": "Goes straight to the Care Saath team. For emergencies, use SOS instead.",
     "sendReport": "Send report",
     "howSerious": "How serious is it?",
     "whatHappened": "What happened?",

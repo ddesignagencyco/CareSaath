@@ -365,7 +365,7 @@ export function SosSheet({ visitId, description, visible, onClose }: { visitId: 
       footer={!result ? <Button label={t('send')} icon={Siren} variant="danger" size="lg" block loading={send.isPending} onPress={() => send.run(undefined)} /> : undefined}>
       {result ? (
         <Banner tone="success" icon={Check}>
-          {t('result', { admins: result.notifiedAdmins, contacts: result.notifiedContacts })}
+          {t('result')}
         </Banner>
       ) : (
         <>
