@@ -149,31 +149,40 @@ export function SignupScreen({ route, navigation }: AuthScreen<'Signup'>) {
             {step === 'details' ? ts('title') : t('login.checkPhone')}
           </Text>
           <Text color={brandFixed[100]}>
-            {step === 'details' ? ts('description') : `${t('login.stepVerify')} · ${parsed.ok ? formatPkMobile(parsed.e164) : ''}`}
+            {step === 'details'
+              ? ts(role === 'caregiver' ? 'caregiverSubtitle' : 'customerSubtitle')
+              : `${t('login.stepVerify')} · ${parsed.ok ? formatPkMobile(parsed.e164) : ''}`}
           </Text>
         </HeroBand>
       }
       footer={
         step === 'details' ? (
-          <Button label={ts('create')} size="lg" block loading={loading} onPress={createAccount} />
+          <View style={styles.footer}>
+            <Button label={ts('create')} size="lg" block loading={loading} onPress={createAccount} />
+            <Touchable onPress={() => navigation.navigate('Login', { intent: role })} accessibilityRole="button" style={styles.link}>
+              <Text variant="small" color={colors.textMuted} align="center">
+                {ts('haveAccount')}{' '}
+                <Text variant="small" weight="bold" color={brand[700]}>
+                  {ts('logIn')}
+                </Text>
+              </Text>
+            </Touchable>
+            {/* Role was chosen on Welcome; switching is a quiet option here, not a second picker. */}
+            <Touchable onPress={() => setRole(role === 'customer' ? 'caregiver' : 'customer')} accessibilityRole="button" style={styles.link}>
+              <Text variant="small" color={colors.textMuted} align="center">
+                {ts(role === 'customer' ? 'giveInstead' : 'getInstead')}{' '}
+                <Text variant="small" weight="bold" color={brand[700]}>
+                  {ts('switch')}
+                </Text>
+              </Text>
+            </Touchable>
+          </View>
         ) : (
           <Button label={t('login.verify')} size="lg" block loading={loading} disabled={code.length !== 6} onPress={() => verify()} />
         )
       }>
       {step === 'details' ? (
         <>
-          {/* Role was already chosen on Welcome — show it as context with a quiet switch, not a second picker. */}
-          <View style={styles.roleChip}>
-            <Text variant="small" weight="semibold" color={brand[800]} style={styles.flex} numberOfLines={1}>
-              {role === 'caregiver' ? ts('asCaregiver') : ts('asCustomer')}
-            </Text>
-            <Touchable onPress={() => setRole(role === 'customer' ? 'caregiver' : 'customer')} accessibilityRole="button" hitSlop={8} style={styles.switchRole}>
-              <Text variant="small" weight="bold" color={brand[700]} numberOfLines={1}>
-                {role === 'customer' ? ts('switchToGive') : ts('switchToGet')}
-              </Text>
-            </Touchable>
-          </View>
-
           <TextField
             label={ts('name')}
             placeholder={ts('namePlaceholder')}
@@ -215,17 +224,6 @@ export function SignupScreen({ route, navigation }: AuthScreen<'Signup'>) {
             returnKeyType="done"
           />
 
-          <Touchable
-            onPress={() => navigation.navigate('Login', { intent: role })}
-            accessibilityRole="button"
-            style={styles.alt}>
-            <Text variant="small" color={colors.textMuted} align="center">
-              {ts('haveAccount')}{' '}
-              <Text variant="small" weight="bold" color={brand[700]}>
-                {ts('logIn')}
-              </Text>
-            </Text>
-          </Touchable>
         </>
       ) : (
         <>
@@ -271,19 +269,8 @@ const styles = themed(() =>
     heroTop: { flexDirection: 'row', alignItems: 'center', marginBottom: space.lg },
     heroBack: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
     heroTitle: { letterSpacing: -0.6, marginBottom: space.sm },
-    roleChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.sm,
-      backgroundColor: brand[50],
-      borderWidth: 1,
-      borderColor: brand[100],
-      borderRadius: radius.md,
-      paddingVertical: space.sm,
-      paddingHorizontal: space.md,
-    },
-    switchRole: { minHeight: 32, justifyContent: 'center' },
-    alt: { minHeight: 44, justifyContent: 'center', marginTop: space.xs },
+    footer: { gap: 0 },
+    link: { minHeight: 40, justifyContent: 'center' },
     resend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, flexWrap: 'wrap' },
     resendBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm, borderRadius: radius.sm, overflow: 'hidden' },
   }),

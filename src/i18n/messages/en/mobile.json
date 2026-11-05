@@ -24,7 +24,9 @@
     "title": "Sign in with your phone",
     "description": "Enter your mobile number and we'll text you a 6-digit code. We open the right app for your number.",
     "joinCaregiver": "New caregiver? Join here",
-    "newAccount": "New here? Create an account"
+    "newAccount": "New here? Create an account",
+    "newHere": "New to Care Saath?",
+    "createAccount": "Create an account"
   },
   "signup": {
     "title": "Create your account",
@@ -48,7 +50,12 @@
     "asCustomer": "Signing up to get care",
     "asCaregiver": "Signing up to give care",
     "switchToGive": "Want to give care instead?",
-    "switchToGet": "Want to get care instead?"
+    "switchToGet": "Want to get care instead?",
+    "customerSubtitle": "You're signing up to book care for yourself or family.",
+    "caregiverSubtitle": "You're signing up to give care as a nurse or physiotherapist.",
+    "giveInstead": "Want to give care instead?",
+    "getInstead": "Want to book care instead?",
+    "switch": "Switch"
   },
   "settings": {
     "title": "Settings",

@@ -7,12 +7,12 @@ import { HeroBand } from '../../components/brand';
 import { LogoMark } from '../../components/Logo';
 import { Screen } from '../../components/screen';
 import { Text } from '../../components/Text';
-import { Button, DirChevron, Touchable, BUTTON_HEIGHT } from '../../components/ui';
+import { Button, DirChevron, Touchable } from '../../components/ui';
 import { useT } from '../../i18n';
 import { formatPkMobile, parsePkMobile } from '../../lib/phone';
 import { useApiErrorText } from '../../lib/query';
 import type { AuthScreen } from '../../navigation/types';
-import { accent,
+import {
   brand,
   colors,
   feedback,
@@ -150,38 +150,33 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
                     </React.Fragment>
                   ))}
           </Text>
-          <View style={styles.steps} accessibilityLabel={t('login.progress')}>
-            {[t('login.stepPhone'), t('login.stepVerify')].map((label, i) => {
-              const on = (step === 'phone' ? 0 : 1) >= i;
-              return (
-                <View
-                  key={label}
-                  style={[styles.stepPill, on && styles.stepPillOn]}
-                >
-                  <Text
-                    variant="caption"
-                    weight="bold"
-                    color={on ? brandFixed[900] : brandFixed[100]}
-                    numberOfLines={1}
-                  >
-                    {label}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
         </HeroBand>
       }
       footer={
         step === 'phone' ? (
-          <Button
-            label={t('login.sendCode')}
-            size="lg"
-            block
-            loading={loading}
-            disabled={!phone}
-            onPress={sendCode}
-          />
+          <View style={styles.footer}>
+            <Button
+              label={t('login.sendCode')}
+              size="lg"
+              block
+              loading={loading}
+              disabled={!phone}
+              onPress={sendCode}
+            />
+            {/* New users create an account (name + role chosen there); existing numbers just sign in. */}
+            <Touchable
+              onPress={() => navigation.navigate('Signup', { role: joining ? 'caregiver' : 'customer' })}
+              accessibilityRole="button"
+              style={styles.link}
+            >
+              <Text variant="small" color={colors.textMuted} align="center">
+                {tm('newHere')}{' '}
+                <Text variant="small" weight="bold" color={brand[700]}>
+                  {tm('createAccount')}
+                </Text>
+              </Text>
+            </Touchable>
+          </View>
         ) : (
           <Button
             label={t('login.verify')}
@@ -210,16 +205,6 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
           <Text variant="small" color={ink[400]}>
             {tc('footerNote')}
           </Text>
-          {/* New users create an account (name + role chosen there); existing numbers just sign in. */}
-          <Touchable
-            onPress={() => navigation.navigate('Signup', { role: joining ? 'caregiver' : 'customer' })}
-            accessibilityRole="button"
-            style={styles.switch}
-          >
-            <Text variant="small" weight="bold" color={brand[700]} align="center">
-              {tm('newAccount')}
-            </Text>
-          </Touchable>
         </>
       ) : (
         <>
@@ -300,14 +285,6 @@ const styles = themed(() => StyleSheet.create({
     justifyContent: 'center',
   },
   heroTitle: { letterSpacing: -0.6, marginBottom: space.sm },
-  steps: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
-  stepPill: {
-    paddingHorizontal: space.md,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  stepPillOn: { backgroundColor: accent[400] },
   resend: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -315,14 +292,8 @@ const styles = themed(() => StyleSheet.create({
     gap: space.sm,
     flexWrap: 'wrap',
   },
-  switch: {
-    minHeight: BUTTON_HEIGHT,
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: brand[100],
-    backgroundColor: colors.surface,
-  },
+  footer: { gap: space.xs },
+  link: { minHeight: 44, justifyContent: 'center' },
   resendBtn: {
     minHeight: 44,
     justifyContent: 'center',
