@@ -84,7 +84,9 @@ export function CallOverlay({
     call.status === "incoming"
       ? t("incomingCall")
       : call.status === "outgoing"
-        ? t("calling")
+        ? call.ringing
+          ? t("ringing")
+          : t("calling")
         : call.status === "reconnecting"
           ? t("connecting")
           : call.remoteStream
