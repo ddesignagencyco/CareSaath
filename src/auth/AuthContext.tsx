@@ -8,6 +8,7 @@ import { decodeToken } from '../api/session';
 import type { Me } from '../api/types';
 import { clearQueries } from '../lib/query';
 import { kv } from '../lib/storage';
+import { unregisterPushDevice } from '../push/registration';
 
 export type AppRole = 'customer' | 'caregiver';
 
@@ -147,6 +148,8 @@ export function AuthProvider({ children, messages }: { children: React.ReactNode
     const store = role === 'customer' ? customerSession : caregiverSession;
     const refresh = store.get()?.refreshToken;
     const api = role === 'customer' ? customerApi : caregiverApi;
+    // Stop pushes to this phone while the session can still authorize the call.
+    await unregisterPushDevice();
     clearAll();
     if (refresh) await api.authApi.logout(refresh).catch(() => undefined);
   }, [role, clearAll]);

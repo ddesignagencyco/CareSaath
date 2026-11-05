@@ -1,6 +1,9 @@
 package com.carenative
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -22,6 +25,22 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    createNotificationChannel()
     loadReactNative(this)
+  }
+
+  /**
+   * Push notifications from the backend (FCM) target this channel; firebase.json
+   * also makes it FCM's default. Creating an existing channel is a no-op, and the
+   * user can still change its sound or importance in system settings.
+   */
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val channel = NotificationChannel(
+      "caresaath-default",
+      "CareSaath alerts",
+      NotificationManager.IMPORTANCE_HIGH,
+    ).apply { description = "Bookings, visits, messages and safety alerts" }
+    getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
   }
 }

@@ -1,22 +1,25 @@
 import { useEffect } from 'react';
 import { getMessaging, onMessage, onTokenRefresh } from '@react-native-firebase/messaging';
 import { getFcmToken, requestPushPermission } from './messaging';
+import { registerPushDevice } from './registration';
+import { useToast } from '../components/overlay';
+import type { AppRole } from '../auth/AuthContext';
 
 /**
- * Wires FCM on the device: asks permission, fetches the token, and listens for
- * incoming messages.
- *
- * Server registration of the token is intentionally a TODO — the backend
- * device-token endpoint is not built yet. For now the token is logged (dev only)
- * so a push can be sent from the Firebase console ("Cloud Messaging → Send test
- * message") straight to this device to verify receipt, no backend required.
+ * Wires FCM for the signed-in role: asks permission, registers the device's
+ * token with the backend (and again whenever FCM rotates it), and shows
+ * foreground messages as a toast.
  *
  * Background / quit-state notifications with a `notification` payload are shown
- * by the OS automatically (see the handler registered in index.js); foreground
- * messages arrive via onMessage below.
+ * by the OS automatically on the "caresaath-default" channel (created in
+ * MainApplication.kt; see also index.js and firebase.json). Signed out, nothing
+ * is registered; sign-out removes the token (see AuthContext.signOut).
  */
-export function usePushNotifications(): void {
+export function usePushNotifications(role: AppRole | null): void {
+  const toast = useToast();
+
   useEffect(() => {
+    if (!role) return;
     let active = true;
     const unsubs: Array<() => void> = [];
     (async () => {
@@ -24,24 +27,25 @@ export function usePushNotifications(): void {
       if (!granted || !active) return;
 
       const token = await getFcmToken();
-      if (token && __DEV__) {
-        // Grep logcat for "FCM-TOKEN" to copy this into the Firebase console test sender.
-        console.log('[FCM-TOKEN]', token);
+      if (!active) return;
+      if (token) {
+        if (__DEV__) console.log('[FCM-TOKEN]', token);
+        await registerPushDevice(role, token).catch(() => undefined);
       }
-      // TODO(backend): POST `token` to the device-token endpoint once it exists,
-      // and re-POST on refresh below. Deferred per current scope (no backend changes).
 
       const m = getMessaging();
       unsubs.push(
         onTokenRefresh(m, next => {
-          if (__DEV__) console.log('[FCM-TOKEN:refresh]', next);
+          registerPushDevice(role, next).catch(() => undefined);
         }),
       );
       unsubs.push(
         onMessage(m, async msg => {
-          // Foreground: no OS banner by default. Live data is already kept fresh by
-          // the realtime socket, so just trace it in dev for now.
-          if (__DEV__) console.log('[FCM] foreground message', msg?.messageId ?? '');
+          // Foreground: Android shows no banner on its own. The realtime socket
+          // already refreshes the in-app feed, so a toast is enough to surface it.
+          const title = msg.notification?.title;
+          const body = msg.notification?.body;
+          if (title || body) toast.info(body ? `${title ?? ''}${title ? ' — ' : ''}${body}` : String(title));
         }),
       );
     })();
@@ -50,5 +54,5 @@ export function usePushNotifications(): void {
       active = false;
       unsubs.forEach(u => u());
     };
-  }, []);
+  }, [role, toast]);
 }
