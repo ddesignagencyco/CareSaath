@@ -67,6 +67,17 @@ react {
 def enableProguardInReleaseBuilds = true
 
 /**
+ * Release signing: true once all four CARESAATH_UPLOAD_* properties are set
+ * (see signingConfigs.release). Without them release builds fall back to the
+ * public debug key, with a warning, so local test builds keep working.
+ */
+def hasReleaseSigning = ['CARESAATH_UPLOAD_STORE_FILE', 'CARESAATH_UPLOAD_STORE_PASSWORD',
+                         'CARESAATH_UPLOAD_KEY_ALIAS', 'CARESAATH_UPLOAD_KEY_PASSWORD'].every { project.hasProperty(it) }
+if (!hasReleaseSigning && gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
+    logger.warn('WARNING: CARESAATH_UPLOAD_* not set - release build is signed with the PUBLIC debug key. Do not distribute it.')
+}
+
+/**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
  * For example, to use the international variant, you can use:
@@ -91,7 +102,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Bump both per release: versionName is semver (MAJOR.MINOR.PATCH),
         // versionCode is the build number and must always increase.
-        versionCode 2
+        versionCode 3
         versionName "1.0.0"
     }
     // Versioned APK filenames: <App>-v<semver>-b<build>-<abi>-<type>.apk,
@@ -109,15 +120,26 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Private upload key for release/Play builds. The four values come from
+        // ~/.gradle/gradle.properties (or -P flags / CI secrets), never from this
+        // repo, so the key and its passwords stay out of git.
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(CARESAATH_UPLOAD_STORE_FILE)
+                storePassword CARESAATH_UPLOAD_STORE_PASSWORD
+                keyAlias CARESAATH_UPLOAD_KEY_ALIAS
+                keyPassword CARESAATH_UPLOAD_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // The debug key is public: an APK signed with it can be replaced by
+            // anyone's build. It is only a fallback until the upload key is set up.
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             // R8 removes unused code; this then drops resources nothing references.
             shrinkResources enableProguardInReleaseBuilds

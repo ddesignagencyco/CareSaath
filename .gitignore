@@ -33,6 +33,7 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+*.jks
 
 # Firebase config / secrets — keep out of version control (local build reads them from disk).
 **/google-services.json
