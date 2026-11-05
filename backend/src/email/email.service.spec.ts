@@ -101,6 +101,28 @@ describe('EmailService.sendEmail', () => {
     expect(sendMail).toHaveBeenCalledTimes(2);
   });
 
+  it('attaches the logo inline for a real mail server', async () => {
+    const sendMail = vi.fn().mockResolvedValue({ messageId: '1' });
+    createTransport.mockReturnValueOnce({ sendMail, verify: vi.fn() } as never);
+    await new EmailService(config(GODADDY)).sendEmail('user@example.com', 's', '<img src="cid:caresaath-logo">');
+    const sent = sendMail.mock.calls[0]![0] as { html: string; attachments?: { cid: string }[] };
+    expect(sent.html).toContain('cid:caresaath-logo');
+    expect(sent.attachments?.[0]?.cid).toBe('caresaath-logo');
+  });
+
+  it('embeds the logo as a data URI for a local mail catcher, which cannot show attachments', async () => {
+    const sendMail = vi.fn().mockResolvedValue({ messageId: '1' });
+    createTransport.mockReturnValueOnce({ sendMail, verify: vi.fn() } as never);
+    await new EmailService(config({ SMTP_HOST: 'localhost', SMTP_PORT: '11025' })).sendEmail(
+      'user@example.com',
+      's',
+      '<img src="cid:caresaath-logo">',
+    );
+    const sent = sendMail.mock.calls[0]![0] as { html: string; attachments?: unknown };
+    expect(sent.html).toContain('src="data:image/png;base64,');
+    expect(sent.attachments).toBeUndefined();
+  });
+
   it('does not retry a permanent rejection', async () => {
     const sendMail = vi
       .fn()

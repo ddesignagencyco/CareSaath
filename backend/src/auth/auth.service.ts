@@ -17,7 +17,7 @@ import { ConfigService } from '../config/platform-config.module.js';
 import type { LoginAudience, SignupRole } from './dto/auth.dto.js';
 import { SmsService } from './sms.service.js';
 import { EmailService } from '../email/email.service.js';
-import { renderNotificationEmail } from '../email/templates.js';
+import { otpEmailSubject, renderOtpEmail } from '../email/templates.js';
 import { FirebaseService } from '../firebase/firebase.service.js';
 
 const OTP_MAX_ATTEMPTS = 5;
@@ -70,11 +70,8 @@ export class AuthService {
     if (!this.email?.isConfigured) return;
     const label = purpose === OtpPurpose.SIGNUP ? 'sign-up' : 'login';
     const minutes = Math.max(1, Math.round(ttlSeconds / 60));
-    const html = renderNotificationEmail({
-      title: `Your CareSaath ${label} code`,
-      message: `Your ${label} code is ${code}. It expires in ${minutes} minutes. If you did not request it, ignore this email.`,
-    });
-    this.email.sendEmail(to, `CareSaath ${label} code: ${code}`, html).catch((err: Error) => {
+    const html = renderOtpEmail({ code, purpose: label, ttlMinutes: minutes });
+    this.email.sendEmail(to, otpEmailSubject(label), html).catch((err: Error) => {
       // The transport already logged the SMTP-level cause at error level.
       this.logger.warn(`${purpose} OTP email to ${to} failed: ${err.message}`);
     });

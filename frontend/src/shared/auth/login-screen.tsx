@@ -136,9 +136,6 @@ export function LoginScreen(props: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
   const [code, setCode] = useState("");
-  // Dev convenience: if the backend returns the OTP in its response (non-production),
-  // show it and prefill the input so you don't have to read it from the server console.
-  const [devCode, setDevCode] = useState<string | null>(null);
   // Field-format validation stays inline (so you can see which field); submit/API errors go to a toast.
   const [codeInvalid, setCodeInvalid] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -165,12 +162,9 @@ export function LoginScreen(props: LoginScreenProps) {
     if (!nameOk || !emailOk || !parsed.ok) return;
     setLoading(true);
     try {
-      const res = await props.requestOtp(fullPhone, name.trim() || undefined, email.trim() || undefined);
-      // Non-production backends may echo the OTP as `devCode`; prefill it so no console is needed.
-      const dev = res && typeof res === "object" && typeof (res as { devCode?: unknown }).devCode === "string" ? (res as { devCode: string }).devCode : null;
-      setDevCode(dev);
+      await props.requestOtp(fullPhone, name.trim() || undefined, email.trim() || undefined);
       setStep("otp");
-      setCode(dev ?? "");
+      setCode("");
       setResendIn(RESEND_SECONDS);
       toast.success(t("login.codeSent", { phone: formatPkMobile(fullPhone) }));
     } catch (err) {
@@ -286,12 +280,6 @@ export function LoginScreen(props: LoginScreenProps) {
               <div className="mt-7">
                 <OtpInput value={code} onChange={(v) => { setCode(v); setCodeInvalid(false); }} onComplete={verify} invalid={codeInvalid} disabled={loading} autoFocus />
               </div>
-
-              {devCode && (
-                <p className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-accent-50 px-3 py-2 text-center text-xs font-semibold text-accent-700 ring-1 ring-accent-400/30">
-                  Dev code <b className="tabular tracking-widest">{devCode}</b> · auto-filled
-                </p>
-              )}
 
               <Button type="submit" size="lg" className="mt-6 w-full" loading={loading} disabled={code.length !== 6}>
                 {t("login.verify")}

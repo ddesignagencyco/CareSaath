@@ -67,7 +67,7 @@ describe('UsersService', () => {
     expect(email.sendEmail).toHaveBeenCalledWith(
       'ali@example.com',
       'Welcome to CareSaath',
-      expect.stringContaining('Welcome to CareSaath'),
+      expect.stringContaining('Welcome, Ali'),
     );
   });
 

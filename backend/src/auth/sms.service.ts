@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
+import { otpMirrorSubject, renderOtpMirrorEmail } from '../email/templates.js';
 
 /** Context carried alongside an OTP so it can be mirrored to the ops inbox. */
 export interface OtpMirrorContext {
@@ -48,16 +49,15 @@ export class SmsService {
     if (!context?.alreadyEmailed && context?.email) recipients.add(context.email);
     if (recipients.size === 0) return;
 
-    const subject = `[CareSaath] OTP ${code} — ${context?.purpose ?? 'LOGIN'}`;
-    const html = `
-      <p>Your CareSaath verification code is <strong>${code}</strong>.</p>
-      <p>Purpose: ${context?.purpose ?? 'LOGIN'}<br />
-         Phone: ${phone}<br />
-         ${context?.visitId ? `Visit: ${context.visitId}<br />` : ''}
-         ${context?.fullName ? `Account: ${context.fullName}<br />` : ''}
-         ${context?.role ? `Role: ${context.role}<br />` : ''}
-         This code expires in 5 minutes. If you did not request it, ignore this email.</p>
-    `;
+    const subject = otpMirrorSubject(context?.purpose ?? 'LOGIN');
+    const html = renderOtpMirrorEmail({
+      code,
+      purpose: context?.purpose ?? 'LOGIN',
+      phone,
+      role: context?.role,
+      visitId: context?.visitId,
+      ttlMinutes: 5,
+    });
     // Sent one at a time so a failure for one recipient cannot suppress the
     // other, and so neither address is disclosed to the other in a To: header.
     for (const to of recipients) {

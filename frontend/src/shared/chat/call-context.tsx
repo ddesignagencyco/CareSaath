@@ -244,7 +244,6 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       // When testing on a PC/laptop without a mic or when device is not found,
       // create a silent dummy audio stream so WebRTC connects smoothly for testing.
       if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
-        console.warn("[getMedia] No microphone found on this device; using silent dummy audio track so call connects.");
         const fallbackStream = createSilentAudioStream();
         localRef.current = fallbackStream;
         return fallbackStream;
@@ -322,7 +321,6 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     });
 
     socket.on("call:error", (err: { message?: string }) => {
-      console.warn("[call:error]", err?.message);
       toastRef.current.error(err?.message || tRef.current("userOffline"));
       teardownRef.current();
     });
@@ -367,7 +365,6 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
         if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
           toastRef.current.error(tRef.current("micBlocked"));
         } else {
-          console.warn("[startCall failed]", err);
           toastRef.current.error(error?.message || "Failed to start call");
         }
         teardownRef.current();

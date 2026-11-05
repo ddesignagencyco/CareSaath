@@ -33,7 +33,7 @@ describe('AuthService.requestOtp — email delivery', () => {
     const code = sms.sendOtp.mock.calls[0]![1] as string;
     expect(email.sendEmail).toHaveBeenCalledWith(
       'info@caresaath.com',
-      `CareSaath login code: ${code}`,
+      'Your CareSaath sign-in code',
       expect.stringContaining(code),
     );
   });
@@ -67,7 +67,7 @@ describe('AuthService.signup — email delivery', () => {
     const code = sms.sendOtp.mock.calls[0]![1] as string;
     expect(email.sendEmail).toHaveBeenCalledWith(
       'new.user@example.com',
-      `CareSaath sign-up code: ${code}`,
+      'Confirm your CareSaath account',
       expect.stringContaining(code),
     );
   });

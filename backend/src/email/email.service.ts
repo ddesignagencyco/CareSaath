@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { LOGO_CID, LOGO_PNG_BASE64 } from './logo.js';
 
 /** Network-level SMTP errors that are worth exactly one retry. */
 const TRANSIENT_ERROR_CODES = new Set([
@@ -26,6 +27,7 @@ function isTruthyFlag(value: string): boolean {
 /** Cheap HTML -> text fallback: a multipart message scores far better with spam filters. */
 function htmlToText(html: string): string {
   return html
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -152,6 +154,21 @@ export class EmailService implements OnModuleInit {
     return !!err?.responseCode && TRANSIENT_RESPONSE_CODES.has(err.responseCode);
   }
 
+  /**
+   * Branded templates reference the logo as cid:caresaath-logo. Real mail servers
+   * get it as an inline attachment (Gmail and Outlook drop SVG and data: images).
+   * A local mail catcher (MailHog on localhost) cannot display inline attachments,
+   * so there the logo is embedded as a data: URI instead.
+   */
+  private withLogo(html: string): { html: string; attachments?: { filename: string; content: Buffer; cid: string }[] } {
+    const ref = `cid:${LOGO_CID}`;
+    if (!html.includes(ref)) return { html };
+    if (this.host === 'localhost' || this.host === '127.0.0.1') {
+      return { html: html.split(ref).join(`data:image/png;base64,${LOGO_PNG_BASE64}`) };
+    }
+    return { html, attachments: [{ filename: 'caresaath.png', content: Buffer.from(LOGO_PNG_BASE64, 'base64'), cid: LOGO_CID }] };
+  }
+
   async sendEmail(to: string, subject: string, html: string) {
     if (!this.isConfigured) {
       throw new Error('SMTP is not configured (SMTP_HOST is empty)');
@@ -170,8 +187,8 @@ export class EmailService implements OnModuleInit {
           from,
           to,
           subject,
-          html,
           text: htmlToText(html),
+          ...this.withLogo(html),
         });
         if (attempt > 1) {
           this.logger.log(`Email to ${to} succeeded on retry.`);
