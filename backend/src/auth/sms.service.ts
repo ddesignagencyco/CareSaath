@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
-import { renderOtpMirrorEmail } from '../email/templates.js';
+import { otpMirrorSubject, renderOtpMirrorEmail } from '../email/templates.js';
 
 /** Context carried alongside an OTP so it can be mirrored to the ops inbox. */
 export interface OtpMirrorContext {
@@ -49,12 +49,11 @@ export class SmsService {
     if (!context?.alreadyEmailed && context?.email) recipients.add(context.email);
     if (recipients.size === 0) return;
 
-    const subject = `[CareSaath] OTP ${code} — ${context?.purpose ?? 'LOGIN'}`;
+    const subject = otpMirrorSubject(context?.purpose ?? 'LOGIN');
     const html = renderOtpMirrorEmail({
       code,
       purpose: context?.purpose ?? 'LOGIN',
       phone,
-      fullName: context?.fullName,
       role: context?.role,
       visitId: context?.visitId,
       ttlMinutes: 5,

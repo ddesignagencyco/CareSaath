@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { LOGO_CID, LOGO_PNG_BASE64 } from './logo.js';
 
 /** Network-level SMTP errors that are worth exactly one retry. */
 const TRANSIENT_ERROR_CODES = new Set([
@@ -26,6 +27,7 @@ function isTruthyFlag(value: string): boolean {
 /** Cheap HTML -> text fallback: a multipart message scores far better with spam filters. */
 function htmlToText(html: string): string {
   return html
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -172,6 +174,10 @@ export class EmailService implements OnModuleInit {
           subject,
           html,
           text: htmlToText(html),
+          // Branded templates reference the logo as cid:caresaath-logo; ship it inline.
+          ...(html.includes(`cid:${LOGO_CID}`)
+            ? { attachments: [{ filename: 'caresaath.png', content: Buffer.from(LOGO_PNG_BASE64, 'base64'), cid: LOGO_CID }] }
+            : {}),
         });
         if (attempt > 1) {
           this.logger.log(`Email to ${to} succeeded on retry.`);

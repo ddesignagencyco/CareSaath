@@ -28,8 +28,8 @@ describe('EmailChannelAdapter', () => {
       expect.stringContaining('Your booking was accepted.'),
     );
     const html = emailService.sendEmail.mock.calls[0][2] as string;
-    expect(html).not.toContain('URGENT');
-    expect(html).not.toContain('ACTION REQUIRED');
+    expect(html).not.toContain('Urgent');
+    expect(html).not.toContain('Action required');
   });
 
   it('sends an action-required styled email for an admin-only event', async () => {
@@ -42,7 +42,7 @@ describe('EmailChannelAdapter', () => {
       message: 'A caregiver requested a payout.',
     });
     const html = emailService.sendEmail.mock.calls[0][2] as string;
-    expect(html).toContain('ACTION REQUIRED');
+    expect(html).toContain('Action required');
   });
 
   it('sends a critical-styled email for an SOS event', async () => {
@@ -55,7 +55,7 @@ describe('EmailChannelAdapter', () => {
       message: 'Emergency raised.',
     });
     const html = emailService.sendEmail.mock.calls[0][2] as string;
-    expect(html).toContain('URGENT');
+    expect(html).toContain('Urgent');
   });
 
   it('propagates adapter failures so the notification is marked FAILED', async () => {

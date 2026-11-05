@@ -1,46 +1,52 @@
+import { LOGO_CID } from './logo.js';
+
 /**
- * Every email CareSaath sends, built from one email-safe layout.
+ * Every email CareSaath sends, built on one layout that mirrors the web app:
+ * the same logo lockup, ink scale, care-teal and marigold accents
+ * (frontend/src/shared/brand.tsx, frontend/src/shared/styles/theme.css).
  *
- * Email clients (Gmail, Outlook, Apple Mail) ignore <style> blocks, flexbox and
- * most modern CSS, so everything here is table-based with inline styles and
- * system fonts. Colours follow the web app's brand tokens
- * (frontend/src/shared/styles/theme.css): care teal, warm amber, green-tinted inks.
- * Every value that comes from a user or the database goes through escapeHtml.
+ * Email clients ignore <style> blocks, flexbox and most modern CSS, so the
+ * markup is table-based with inline styles and system fonts. The logo is an
+ * inline attachment (see EmailService) because Gmail and Outlook drop SVG.
+ *
+ * Privacy: emails never carry phone numbers or credentials beyond the one code
+ * a message exists to deliver, and codes are kept out of subjects and inbox
+ * previews, which show on locked screens. Every dynamic value is escaped.
  */
 
 const BRAND = 'CareSaath';
-const SUPPORT_EMAIL = 'info@caresaath.com';
+export const SUPPORT_EMAIL = 'support@caresaath.pk';
 const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
 
-const COLOR = {
+const C = {
   brand: '#167267',
-  brandDark: '#123e3a',
-  brandTint: '#edf8f6',
-  brandBorder: '#a8ded5',
-  accent: '#d27a12',
-  accentTint: '#fff8eb',
-  danger: '#c62828',
-  dangerTint: '#fdecea',
-  ink: '#141a18',
-  body: '#38423f',
-  muted: '#63706c',
-  line: '#e4eae8',
-  page: '#f0f4f3',
-  card: '#ffffff',
+  brandDeep: '#134a45',
+  brandSoft: '#edf8f6',
+  marigold: '#ee9b1d',
+  amberInk: '#ae5913',
+  amberSoft: '#fff8eb',
+  danger: '#b42318',
+  dangerSoft: '#fef3f2',
+  ink900: '#141a18',
+  ink700: '#38423f',
+  ink500: '#63706c',
+  ink400: '#85918e',
+  ink100: '#e4eae8',
+  ink50: '#f0f4f3',
+  ink25: '#f7f9f8',
+  white: '#ffffff',
 };
 
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-const MONO = "'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace";
+const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
 type Variant = 'standard' | 'admin' | 'critical';
 
-const VARIANT: Record<Variant, { accent: string; tint: string; label: string | null }> = {
-  standard: { accent: COLOR.brand, tint: COLOR.brandTint, label: null },
-  admin: { accent: COLOR.accent, tint: COLOR.accentTint, label: 'ACTION REQUIRED' },
-  critical: { accent: COLOR.danger, tint: COLOR.dangerTint, label: 'URGENT' },
+const CALLOUT: Record<Exclude<Variant, 'standard'>, { label: string; line: string; ink: string; soft: string }> = {
+  admin: { label: 'Action required', line: C.marigold, ink: C.amberInk, soft: C.amberSoft },
+  critical: { label: 'Urgent', line: C.danger, ink: C.danger, soft: C.dangerSoft },
 };
 
-function escapeHtml(value: string): string {
+function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -49,68 +55,106 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/* ─── Building blocks ─── */
-
-function heading(text: string): string {
-  return `<h1 style="margin:0 0 12px; font-family:${FONT}; font-size:22px; line-height:30px; font-weight:700; color:${COLOR.ink};">${escapeHtml(text)}</h1>`;
+/** "+923001112233" → "•••• 2233": enough for ops to match a request, useless to anyone else. */
+export function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : '••••';
 }
 
-function paragraph(text: string): string {
-  return `<p style="margin:0 0 16px; font-family:${FONT}; font-size:15px; line-height:24px; color:${COLOR.body};">${escapeHtml(text)}</p>`;
-}
+/* ─── Pieces ─── */
 
-function badge(label: string, color: string, tint: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;"><tr>
-    <td style="background:${tint}; border:1px solid ${color}; border-radius:999px; padding:4px 12px; font-family:${FONT}; font-size:11px; line-height:16px; font-weight:700; letter-spacing:0.8px; color:${color};">${escapeHtml(label)}</td>
-  </tr></table>`;
-}
+const h1 = (text: string) =>
+  `<h1 style="margin:0 0 12px; font-family:${SANS}; font-size:24px; line-height:32px; font-weight:700; letter-spacing:-0.3px; color:${C.ink900};">${esc(text)}</h1>`;
 
-/** Bulletproof button: a padded table cell, so it renders as a button in Outlook too. */
-function button(href: string, label: string, color: string = COLOR.brand): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr>
-    <td style="border-radius:10px; background:${color};">
-      <a href="${escapeHtml(href)}" target="_blank" style="display:inline-block; padding:13px 26px; font-family:${FONT}; font-size:15px; line-height:20px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:10px;">${escapeHtml(label)}</a>
+const p = (text: string, last = false) =>
+  `<p style="margin:0 0 ${last ? 0 : 16}px; font-family:${SANS}; font-size:15px; line-height:24px; color:${C.ink700};">${esc(text)}</p>`;
+
+const small = (text: string) =>
+  `<p style="margin:0; font-family:${SANS}; font-size:13px; line-height:20px; color:${C.ink500};">${esc(text)}</p>`;
+
+const spacer = (px: number) => `<div style="height:${px}px; line-height:${px}px; font-size:1px;">&nbsp;</div>`;
+
+const rule = () =>
+  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:1px; line-height:1px; font-size:1px; background:${C.ink100};">&nbsp;</td></tr></table>`;
+
+/** A table-cell button, so it keeps its shape in Outlook. */
+function button(href: string, label: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td style="border-radius:10px; background:${C.brand};">
+      <a href="${esc(href)}" target="_blank" style="display:inline-block; padding:12px 22px; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.white}; text-decoration:none; border-radius:10px;">${esc(label)}</a>
     </td>
   </tr></table>`;
 }
 
-/** The one-time code, large and spaced so it is easy to read and copy. */
-function codeBlock(code: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 20px;"><tr>
-    <td align="center" style="background:${COLOR.brandTint}; border:1px dashed ${COLOR.brandBorder}; border-radius:12px; padding:20px 12px;">
-      <span style="font-family:${MONO}; font-size:34px; line-height:40px; font-weight:700; letter-spacing:10px; color:${COLOR.brandDark};">${escapeHtml(code)}</span>
+/** The one code an OTP email exists to deliver: large, spaced, easy to copy. */
+function code(value: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td style="background:${C.ink25}; border:1px solid ${C.ink100}; border-radius:12px; padding:22px 16px; text-align:center;">
+      <span style="font-family:${SANS}; font-size:34px; line-height:40px; font-weight:700; letter-spacing:12px; color:${C.brandDeep}; font-variant-numeric:tabular-nums;">${esc(value)}</span>
     </td>
   </tr></table>`;
 }
 
-/** Label / value rows, e.g. the context of an OTP in the ops inbox. */
-function details(rows: Array<[string, string | null | undefined]>): string {
-  const filled = rows.filter((row): row is [string, string] => Boolean(row[1]));
-  if (filled.length === 0) return '';
-  const cells = filled
-    .map(([label, value], i) => {
-      const divider = i ? `border-top:1px solid ${COLOR.line};` : '';
-      return `<tr>
-      <td style="padding:10px 14px; ${divider} font-family:${FONT}; font-size:13px; line-height:18px; color:${COLOR.muted}; width:38%;">${escapeHtml(label)}</td>
-      <td style="padding:10px 14px; ${divider} font-family:${FONT}; font-size:14px; line-height:18px; font-weight:600; color:${COLOR.ink};">${escapeHtml(value)}</td>
-    </tr>`;
-    })
-    .join('');
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px; border:1px solid ${COLOR.line}; border-radius:10px; border-collapse:separate;">${cells}</table>`;
+/** Severity strip for admin and urgent notifications: a quiet left edge, not a shouting badge. */
+function callout(variant: Exclude<Variant, 'standard'>): string {
+  const s = CALLOUT[variant];
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;"><tr>
+    <td style="border-left:3px solid ${s.line}; background:${s.soft}; border-radius:0 8px 8px 0; padding:10px 14px; font-family:${SANS}; font-size:13px; line-height:18px; font-weight:600; color:${s.ink};">${esc(s.label)}</td>
+  </tr></table>`;
 }
 
-/** A quiet note under the main content (security hints, "not you?"). */
-function note(text: string): string {
-  return `<p style="margin:16px 0 0; padding-top:16px; border-top:1px solid ${COLOR.line}; font-family:${FONT}; font-size:13px; line-height:20px; color:${COLOR.muted};">${escapeHtml(text)}</p>`;
+/** Label / value pairs on hairlines. Empty values are skipped. */
+function facts(rows: Array<[string, string | null | undefined]>): string {
+  const filled = rows.filter((r): r is [string, string] => Boolean(r[1]));
+  if (!filled.length) return '';
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${filled
+    .map(
+      ([label, value]) => `<tr>
+      <td style="padding:11px 0; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; color:${C.ink500};">${esc(label)}</td>
+      <td align="right" style="padding:11px 0; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.ink900};">${esc(value)}</td>
+    </tr>`,
+    )
+    .join('')}</table>`;
 }
 
-/**
- * The page: hidden preheader (the inbox preview line), brand header, a white
- * card with a coloured top edge, and the footer.
- */
-function layout(opts: { preheader: string; accent?: string; content: string }): string {
-  const accent = opts.accent ?? COLOR.brand;
-  const year = new Date().getFullYear();
+/** Numbered next steps (a real sequence, so the numbers carry meaning). */
+function steps(items: string[]): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${items
+    .map(
+      (item, i) => `<tr>
+      <td valign="top" style="width:28px; padding:0 0 12px;">
+        <div style="width:22px; height:22px; border-radius:11px; background:${C.brandSoft}; font-family:${SANS}; font-size:12px; line-height:22px; font-weight:700; color:${C.brand}; text-align:center;">${i + 1}</div>
+      </td>
+      <td valign="top" style="padding:1px 0 12px 8px; font-family:${SANS}; font-size:15px; line-height:22px; color:${C.ink700};">${esc(item)}</td>
+    </tr>`,
+    )
+    .join('')}</table>`;
+}
+
+/** The site's lockup: logo mark, "Care" + teal "Saath", marigold rule and HOME CARE. */
+function lockup(): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td valign="middle" style="width:40px;"><img src="cid:${LOGO_CID}" width="40" height="40" alt="${BRAND}" style="display:block; width:40px; height:40px; border:0; border-radius:12px;"></td>
+    <td valign="middle" style="padding-left:12px;">
+      <div style="font-family:${SANS}; font-size:19px; line-height:20px; font-weight:800; letter-spacing:-0.3px; color:${C.ink900};">Care<span style="color:${C.brand};">Saath</span></div>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px;"><tr>
+        <td valign="middle" style="width:12px;"><div style="width:12px; height:1px; line-height:1px; font-size:1px; background:${C.marigold};">&nbsp;</div></td>
+        <td valign="middle" style="padding-left:6px; font-family:${SANS}; font-size:10px; line-height:12px; font-weight:700; letter-spacing:2px; color:${C.ink500};">HOME CARE</td>
+      </tr></table>
+    </td>
+  </tr></table>`;
+}
+
+function footer(): string {
+  const link = (href: string, label: string) =>
+    `<a href="${href}" target="_blank" style="color:${C.ink500}; text-decoration:underline;">${label}</a>`;
+  return `<p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500};">Verified home nursing and physiotherapy across Pakistan — booked, tracked and paid from one app, in Urdu or English.</p>
+    <p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500};">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:${C.brand}; text-decoration:none; font-weight:600;">${SUPPORT_EMAIL}</a></p>
+    <p style="margin:0; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink400};">${link(`${WEB_URL}/privacy`, 'Privacy')} &nbsp;·&nbsp; ${link(`${WEB_URL}/terms`, 'Terms')} &nbsp;·&nbsp; ${link(`${WEB_URL}/contact`, 'Contact')}<br>&copy; ${new Date().getFullYear()} ${BRAND}. This is an automated message; replies are not monitored.</p>`;
+}
+
+/** Page shell: hidden inbox preview, lockup, white card, footer. */
+function layout(preview: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -120,32 +164,19 @@ function layout(opts: { preheader: string; accent?: string; content: string }): 
   <meta name="supported-color-schemes" content="light">
   <title>${BRAND}</title>
 </head>
-<body style="margin:0; padding:0; background:${COLOR.page}; -webkit-text-size-adjust:100%;">
-  <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">${escapeHtml(opts.preheader)}&#8199;&#65279;&#847;&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${COLOR.page};">
+<body style="margin:0; padding:0; background:${C.ink50}; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+  <div style="display:none; max-height:0; max-width:0; overflow:hidden; opacity:0; mso-hide:all;">${esc(preview)}${'&#847;&zwnj;&nbsp;'.repeat(40)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.ink50};">
     <tr>
-      <td align="center" style="padding:32px 16px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;">
+      <td align="center" style="padding:40px 16px 48px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+          <tr><td style="padding:0 0 24px;">${lockup()}</td></tr>
           <tr>
-            <td style="padding:0 4px 18px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-                <td style="width:34px; height:34px; background:${COLOR.brand}; border-radius:9px; text-align:center; vertical-align:middle; font-family:${FONT}; font-size:18px; line-height:34px; font-weight:800; color:#ffffff;">C</td>
-                <td style="padding-left:10px; font-family:${FONT}; font-size:19px; line-height:24px; font-weight:800; color:${COLOR.brandDark};">${BRAND}<br><span style="font-size:12px; line-height:16px; font-weight:500; color:${COLOR.muted};">Care at home, verified</span></td>
-              </tr></table>
+            <td style="background:${C.white}; border:1px solid ${C.ink100}; border-radius:16px; padding:40px 40px 36px;">
+              ${body}
             </td>
           </tr>
-          <tr>
-            <td style="background:${COLOR.card}; border-radius:16px; border-top:4px solid ${accent}; padding:32px 32px 28px; box-shadow:0 1px 3px rgba(20,26,24,0.06);">
-              ${opts.content}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:22px 8px 0; font-family:${FONT}; font-size:12px; line-height:19px; color:${COLOR.muted}; text-align:center;">
-              Questions? Write to <a href="mailto:${SUPPORT_EMAIL}" style="color:${COLOR.brand}; text-decoration:none; font-weight:600;">${SUPPORT_EMAIL}</a><br>
-              This is an automated message, please don't reply to it.<br>
-              &copy; ${year} ${BRAND} &middot; <a href="${WEB_URL}" style="color:${COLOR.muted}; text-decoration:underline;">${WEB_URL.replace(/^https?:\/\//, '')}</a>
-            </td>
-          </tr>
+          <tr><td style="padding:28px 4px 0;">${footer()}</td></tr>
         </table>
       </td>
     </tr>
@@ -157,109 +188,139 @@ function layout(opts: { preheader: string; accent?: string; content: string }): 
 /* ─── Emails ─── */
 
 /** Any catalogue notification event (booking, visit, payment, safety, admin queue). */
-export function renderNotificationEmail(opts: {
-  title: string;
-  message?: string;
-  variant?: Variant;
-}): string {
-  const variant = VARIANT[opts.variant ?? 'standard'];
-  return layout({
-    preheader: opts.message || opts.title,
-    accent: variant.accent,
-    content: [
-      variant.label ? badge(variant.label, variant.accent, variant.tint) : '',
-      heading(opts.title),
-      opts.message ? paragraph(opts.message) : '',
-      button(WEB_URL, 'Open CareSaath', variant.accent),
+export function renderNotificationEmail(opts: { title: string; message?: string; variant?: Variant }): string {
+  const variant = opts.variant ?? 'standard';
+  return layout(
+    opts.message || opts.title,
+    [
+      variant === 'standard' ? '' : callout(variant),
+      h1(opts.title),
+      opts.message ? p(opts.message) : '',
+      spacer(8),
+      button(WEB_URL, 'View in CareSaath'),
     ].join(''),
-  });
+  );
+}
+
+/** Subject for the account holder's own code email. Never contains the code. */
+export function otpEmailSubject(purpose: 'login' | 'sign-up'): string {
+  return purpose === 'sign-up' ? 'Confirm your CareSaath account' : 'Your CareSaath sign-in code';
 }
 
 /** The code a person signs in or signs up with. */
 export function renderOtpEmail(opts: { code: string; purpose: 'login' | 'sign-up'; ttlMinutes: number }): string {
-  const action = opts.purpose === 'sign-up' ? 'finish creating your account' : 'sign in';
-  return layout({
-    preheader: `Your CareSaath ${opts.purpose} code is ${opts.code}`,
-    content: [
-      heading(`Your ${opts.purpose} code`),
-      paragraph(`Enter this code in CareSaath to ${action}.`),
-      codeBlock(opts.code),
-      paragraph(`It expires in ${opts.ttlMinutes} minute${opts.ttlMinutes === 1 ? '' : 's'} and works only once.`),
-      note(
-        "CareSaath will never ask you for this code by phone, WhatsApp or SMS. If you didn't request it, you can ignore this email: nobody can sign in without the code.",
+  const signup = opts.purpose === 'sign-up';
+  const minutes = `${opts.ttlMinutes} minute${opts.ttlMinutes === 1 ? '' : 's'}`;
+  return layout(
+    signup ? `Your verification code expires in ${minutes}.` : `Your sign-in code expires in ${minutes}.`,
+    [
+      h1(signup ? 'Confirm your account' : 'Sign in to CareSaath'),
+      p(signup ? 'Enter this code in CareSaath to finish creating your account.' : 'Enter this code in CareSaath to sign in.'),
+      spacer(4),
+      code(opts.code),
+      spacer(16),
+      p(`The code expires in ${minutes} and can be used once.`, true),
+      spacer(28),
+      rule(),
+      spacer(20),
+      small(
+        "CareSaath staff will never ask you for this code. If you didn't request it, you can ignore this email — your account stays secure without it.",
       ),
     ].join(''),
-  });
+  );
 }
 
-/** Copy of a verification code for the ops inbox (OTP_MIRROR_EMAIL), with its context. */
+const PURPOSE_LABEL: Record<string, string> = {
+  LOGIN: 'Sign-in',
+  SIGNUP: 'Sign-up',
+  CHANGE_PHONE: 'Phone change',
+  VISIT_CHECKIN: 'Visit check-in',
+};
+
+/** "VISIT_CHECKIN" → "Visit check-in"; unknown purposes fall back to sentence case. */
+function purposeLabel(purpose: string): string {
+  const words = purpose.replace(/_/g, ' ').toLowerCase();
+  return PURPOSE_LABEL[purpose] ?? words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Subject for the ops-inbox copy. Names the purpose only, never the code or the number. */
+export function otpMirrorSubject(purpose: string): string {
+  return `CareSaath ops · ${purposeLabel(purpose)} code issued`;
+}
+
+/**
+ * Copy of a verification code for the ops inbox (OTP_MIRROR_EMAIL). Carries the
+ * code (that is its job) but only a masked phone and the role, never the name.
+ */
 export function renderOtpMirrorEmail(opts: {
   code: string;
   purpose: string;
   phone: string;
-  fullName?: string | null;
   role?: string | null;
   visitId?: string | null;
   ttlMinutes: number;
 }): string {
-  return layout({
-    preheader: `${opts.purpose} code ${opts.code} for ${opts.phone}`,
-    accent: COLOR.accent,
-    content: [
-      badge('OPS COPY', COLOR.accent, COLOR.accentTint),
-      heading('Verification code issued'),
-      codeBlock(opts.code),
-      details([
-        ['Purpose', opts.purpose],
-        ['Phone', opts.phone],
-        ['Account', opts.fullName],
-        ['Role', opts.role],
-        ['Visit', opts.visitId],
-        ['Expires in', `${opts.ttlMinutes} minutes`],
+  const purpose = purposeLabel(opts.purpose);
+  return layout(
+    `${purpose} code issued.`,
+    [
+      callout('admin'),
+      h1('Verification code issued'),
+      p(`${purpose} code sent. Share it only with the verified account holder, after confirming their identity.`),
+      spacer(4),
+      code(opts.code),
+      spacer(20),
+      facts([
+        ['Purpose', purpose],
+        ['Phone', maskPhone(opts.phone)],
+        ['Role', opts.role ? opts.role.charAt(0) + opts.role.slice(1).toLowerCase() : null],
+        ['Visit reference', opts.visitId],
+        ['Valid for', `${opts.ttlMinutes} minutes`],
       ]),
-      note('This copy goes to the operations inbox only. Treat it as confidential: anyone with this code can complete the action above.'),
+      spacer(20),
+      small('Sent to the operations inbox only. Do not forward this email.'),
     ].join(''),
-  });
+  );
 }
 
 /** Sent the first time a user adds an email address to their CareSaath account. */
 export function renderWelcomeEmail(opts: { name?: string | null; role: string }): string {
-  const greetingName = opts.name?.trim() || 'there';
+  const first = opts.name?.trim().split(/\s+/)[0] || '';
   const caregiver = opts.role === 'CAREGIVER';
-  const intro = caregiver
-    ? "Your caregiver account now has an email on file. We'll send booking requests, visit reminders and payout updates here, alongside the app."
-    : "Your account now has an email on file. We'll send booking confirmations, visit updates and receipts here, alongside the app.";
-  return layout({
-    preheader: `Welcome to CareSaath, ${greetingName}`,
-    content: [
-      heading(`Welcome to CareSaath, ${greetingName}`),
-      paragraph(intro),
-      details(
+  return layout(
+    caregiver ? 'Your caregiver account is ready for updates by email.' : 'Your account is ready for updates by email.',
+    [
+      h1(first ? `Welcome, ${first}` : 'Welcome to CareSaath'),
+      p(
         caregiver
-          ? [
-              ['Next step', 'Complete your profile and documents'],
-              ['Then', 'Set your weekly availability'],
-            ]
-          : [
-              ['Next step', 'Add the patient and your home address'],
-              ['Then', 'Book a verified nurse or physiotherapist'],
-            ],
+          ? "Your email is now linked to your caregiver account. We'll send booking requests, visit reminders and payout updates here, alongside the app."
+          : "Your email is now linked to your account. We'll send booking confirmations, visit updates and receipts here, alongside the app.",
       ),
-      button(WEB_URL, caregiver ? 'Open your dashboard' : 'Book care'),
-      note(`Didn't add this email yourself? Contact us right away at ${SUPPORT_EMAIL}.`),
+      spacer(8),
+      steps(
+        caregiver
+          ? ['Complete your profile and upload your documents', 'Set your weekly availability', 'Accept your first booking request']
+          : ['Add the patient and your home address', 'Choose a verified nurse or physiotherapist', 'Track the visit live and pay in the app'],
+      ),
+      spacer(12),
+      button(WEB_URL, caregiver ? 'Open your dashboard' : 'Find care'),
+      spacer(28),
+      rule(),
+      spacer(20),
+      small(`Didn't add this email to a CareSaath account? Let us know at ${SUPPORT_EMAIL}.`),
     ].join(''),
-  });
+  );
 }
 
 /** Admin SMTP diagnostics (POST /email/send-test). */
 export function renderSmtpTestEmail(): string {
-  return layout({
-    preheader: 'SMTP is configured correctly',
-    content: [
-      badge('TEST', COLOR.brand, COLOR.brandTint),
-      heading('Email delivery is working'),
-      paragraph('This test message was sent from the CareSaath admin tools to confirm the SMTP settings. No action is needed.'),
-      details([['Sent at', new Date().toUTCString()]]),
+  return layout(
+    'Email delivery is working.',
+    [
+      h1('Email delivery is working'),
+      p('This test was sent from the CareSaath admin tools to confirm the mail settings. No action is needed.'),
+      spacer(8),
+      facts([['Sent', new Date().toUTCString()]]),
     ].join(''),
-  });
+  );
 }

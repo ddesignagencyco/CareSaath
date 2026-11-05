@@ -63,7 +63,7 @@ describe('SmsService OTP mirror', () => {
     expect(recipients(email)).toEqual([OPS_INBOX]);
   });
 
-  it('includes the code and its purpose so the ops inbox is self-explanatory', async () => {
+  it('includes the code and its purpose, but keeps the code and the full number out of reach', async () => {
     vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
     const { sms, email } = makeService();
     await sms.sendOtp('+923001112233', '654321', {
@@ -71,10 +71,12 @@ describe('SmsService OTP mirror', () => {
       visitId: 'visit-1',
     });
     const [, subject, html] = email.sendEmail.mock.calls[0]!;
-    expect(subject).toContain('654321');
-    expect(subject).toContain('VISIT_CHECKIN');
+    // The subject shows on lock screens and notification previews: purpose only.
+    expect(subject).toContain('Visit check-in');
+    expect(subject).not.toContain('654321');
     expect(html).toContain('654321');
-    expect(html).toContain('+923001112233');
+    expect(html).toContain('•••• 2233');
+    expect(html).not.toContain('+923001112233');
   });
 
   it('one recipient failing does not stop the other', async () => {
