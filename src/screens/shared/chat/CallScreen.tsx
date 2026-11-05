@@ -8,7 +8,7 @@ import { useT } from '../../../i18n';
 import { formatDuration } from '../../../lib/voice';
 import { space } from '../../../theme';
 
-type OverlayCall = { status: 'outgoing' | 'incoming' | 'connected'; peerName: string; muted: boolean };
+type OverlayCall = { status: 'outgoing' | 'incoming' | 'connected'; peerName: string; muted: boolean; ringing?: boolean; calleeOnline?: boolean };
 
 /**
  * Animated sound wave bars for active audio calls, mirroring the web equalizer.
@@ -176,6 +176,8 @@ export function CallOverlay({
                 ? formatDuration(secs * 1000)
                 : isIncoming
                 ? t('incomingCall')
+                : call.ringing && call.calleeOnline
+                ? t('ringing')
                 : t('calling')}
             </Text>
           </View>

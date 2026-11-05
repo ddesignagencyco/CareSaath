@@ -17,6 +17,8 @@ import type { ChatScope } from '../api/chat/types';
 import { CallOverlay } from '../screens/shared/chat/CallScreen';
 import { useToast } from '../components/overlay';
 import { useApiErrorText } from '../lib/query';
+import { useT } from '../i18n';
+import { CallSounds } from './CallSounds';
 
 /** Socket.IO connects to the API origin, not the `/api/v1` REST base. */
 const ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -29,12 +31,20 @@ type Listenable = { addEventListener(type: string, cb: (e: any) => void): void }
 
 /** STUN-only fallback used until (and if) the backend's TURN config loads. */
 const ICE_FALLBACK: RtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+/** Server rings for this long when `call:outgoing` omits it. */
+const DEFAULT_RING_SECONDS = 30;
+/** Grace on top of the server's ring window before the caller gives up on its own. */
+const RING_GRACE_MS = 5000;
 
 export interface ActiveCall {
   status: 'outgoing' | 'incoming' | 'connected';
   callId: string | null;
   peerName: string;
   muted: boolean;
+  /** Caller side: the server confirmed the invite (`call:outgoing`) and is ringing the callee. */
+  ringing?: boolean;
+  /** Caller side: the callee had a live socket when the call started. */
+  calleeOnline?: boolean;
 }
 
 export interface CallApi {
@@ -68,19 +78,36 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
   const http = scope === 'customer' ? customerHttp : caregiverHttp;
 
   const [active, setActive] = useState<ActiveCall | null>(null);
+  /** Callee tapped Accept; silence the ringtone while media and the answer are set up. */
+  const [answering, setAnswering] = useState(false);
   const toast = useToast();
   const apiError = useApiErrorText();
+  const tChat = useT('mobile.chat');
   // Read from the socket listeners, which are attached once; a ref keeps them current.
   const showError = useRef((message?: string) => toast.error(apiError(new Error(message || ''))));
   showError.current = (message?: string) => toast.error(apiError(new Error(message || '')));
+  // "No answer" toast for a ring that timed out; read from listeners/timers, so ref-held too.
+  const showNoAnswer = useRef<(notified: boolean) => void>(() => undefined);
+  showNoAnswer.current = (notified: boolean) => toast.info(notified ? tChat('noAnswerNotified') : tChat('noAnswer'));
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
   const callIdRef = useRef<string | null>(null);
   const pendingOffer = useRef<{ callId: string; sdp: SdpInit } | null>(null);
   const iceRef = useRef<RtcConfig>(ICE_FALLBACK);
+  /** Caller's local ICE candidates gathered before `call:outgoing` hands us the callId. */
+  const pendingIce = useRef<unknown[]>([]);
+  const ringTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Caller side: whether the callee was online, for the "No answer" wording. */
+  const calleeOnlineRef = useRef(false);
+
+  const clearRingTimer = useCallback(() => {
+    if (ringTimer.current) clearTimeout(ringTimer.current);
+    ringTimer.current = null;
+  }, []);
 
   const teardown = useCallback(() => {
+    clearRingTimer();
     pcRef.current?.getSenders().forEach(s => s.track?.stop());
     pcRef.current?.close();
     pcRef.current = null;
@@ -88,8 +115,11 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     localRef.current = null;
     callIdRef.current = null;
     pendingOffer.current = null;
+    pendingIce.current = [];
+    calleeOnlineRef.current = false;
+    setAnswering(false);
     setActive(null);
-  }, []);
+  }, [clearRingTimer]);
 
   // Load STUN/TURN once; keep the STUN fallback on any failure.
   useEffect(() => {
@@ -111,7 +141,10 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     // react-native-webrtc uses the EventTarget API.
     (pc as unknown as Listenable).addEventListener('icecandidate', (e: unknown) => {
       const cand = (e as { candidate?: { toJSON?: () => unknown } }).candidate;
-      if (cand && callIdRef.current) socketRef.current?.emit('call:ice-candidate', { callId: callIdRef.current, candidate: cand.toJSON ? cand.toJSON() : cand });
+      if (!cand) return;
+      const candidate = cand.toJSON ? cand.toJSON() : cand;
+      if (callIdRef.current) socketRef.current?.emit('call:ice-candidate', { callId: callIdRef.current, candidate });
+      else pendingIce.current.push(candidate);
     });
     (pc as unknown as Listenable).addEventListener('track', (e: unknown) => {
       const stream = (e as { streams?: MediaStream[] }).streams?.[0];
@@ -142,17 +175,52 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     });
     socketRef.current = socket;
 
-    socket.on('call:incoming', (p: { callId: string; visitId: string; callerId: string; sdp: SdpInit }) => {
-      if (callIdRef.current) {
+    socket.on('call:incoming', (p: { callId: string; visitId: string; callerId: string; callerName?: string; sdp: SdpInit }) => {
+      // `call:sync` can re-deliver the call that is already ringing here.
+      if (callIdRef.current === p.callId) return;
+      if (callIdRef.current || pcRef.current) {
         socket.emit('call:reject', { callId: p.callId });
         return;
       }
       pendingOffer.current = { callId: p.callId, sdp: p.sdp };
       callIdRef.current = p.callId;
-      setActive({ status: 'incoming', callId: p.callId, peerName: '', muted: false });
+      setActive({ status: 'incoming', callId: p.callId, peerName: p.callerName ?? '', muted: false });
+    });
+
+    // Caller side: the server accepted the invite and is ringing the callee.
+    socket.on('call:outgoing', (p: { callId: string; calleeOnline?: boolean; ringSeconds?: number }) => {
+      if (!pcRef.current) {
+        // We hung up before the server confirmed the invite: stop it ringing the callee.
+        socket.emit('call:end', { callId: p.callId });
+        return;
+      }
+      if (callIdRef.current && callIdRef.current !== p.callId) return;
+      callIdRef.current = p.callId;
+      calleeOnlineRef.current = !!p.calleeOnline;
+      pendingIce.current.forEach(candidate => socket.emit('call:ice-candidate', { callId: p.callId, candidate }));
+      pendingIce.current = [];
+      setActive(a => (a && a.status === 'outgoing' ? { ...a, callId: p.callId, ringing: true, calleeOnline: !!p.calleeOnline } : a));
+      clearRingTimer();
+      // Safety net in case `call:missed` never reaches us (dropped socket, server restart).
+      ringTimer.current = setTimeout(() => {
+        ringTimer.current = null;
+        if (callIdRef.current !== p.callId) return;
+        socket.emit('call:end', { callId: p.callId });
+        showNoAnswer.current(calleeOnlineRef.current === false);
+        teardown();
+      }, (p.ringSeconds || DEFAULT_RING_SECONDS) * 1000 + RING_GRACE_MS);
+    });
+
+    // Nobody answered within the ring window; sent to both sides.
+    socket.on('call:missed', (p: { callId?: string }) => {
+      if (!callIdRef.current || (p?.callId && p.callId !== callIdRef.current)) return;
+      // Caller: peer connection up, no offer pending. Callee: just stop ringing, no toast.
+      if (pcRef.current && !pendingOffer.current) showNoAnswer.current(calleeOnlineRef.current === false);
+      teardown();
     });
 
     socket.on('call:answered', async (p: { callId: string; sdp: SdpInit }) => {
+      clearRingTimer();
       try {
         await pcRef.current?.setRemoteDescription(new RTCSessionDescription(p.sdp as unknown as ConstructorParameters<typeof RTCSessionDescription>[0]));
         setActive(a => (a ? { ...a, status: 'connected' } : a));
@@ -175,6 +243,12 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     socket.on('call:error', (p: { message?: string }) => {
       showError.current(p?.message);
       teardown();
+    });
+
+    // Ask whether a call is still ringing for us — e.g. the app was opened from an
+    // "Incoming call" push. Fires on the first connect and on every reconnect.
+    socket.on('connect', () => {
+      socket.emit('call:sync');
     });
 
     // Keep auth token fresh on background rotation
@@ -222,6 +296,7 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
   const accept = useCallback(async () => {
     const offer = pendingOffer.current;
     if (!offer) return;
+    setAnswering(true);
     if (!(await ensureMicPermission())) {
       socketRef.current?.emit('call:reject', { callId: offer.callId });
       teardown();
@@ -237,6 +312,7 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
       await pc.setLocalDescription(answer);
       socketRef.current?.emit('call:answer', { callId: offer.callId, sdp: answer });
       setActive(a => (a ? { ...a, status: 'connected' } : a));
+      setAnswering(false);
       pendingOffer.current = null;
     } catch {
       socketRef.current?.emit('call:reject', { callId: offer.callId });
@@ -261,11 +337,17 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
     setActive(a => (a ? { ...a, muted: !track.enabled } : a));
   }, []);
 
+  // Phone-style ringing: ringback for the caller once the server is ringing the
+  // callee, ringtone for the callee until they answer. Connecting, teardown and
+  // unmount all change `active`, which unmounts the player and stops the sound.
+  const sound = active?.status === 'outgoing' && active.ringing ? 'ringback' : active?.status === 'incoming' && !answering ? 'ringtone' : null;
+
   const api = useMemo<CallApi>(() => ({ active, startCall, accept, reject, end, toggleMute }), [active, startCall, accept, reject, end, toggleMute]);
 
   return (
     <CallContext.Provider value={api}>
       {children}
+      <CallSounds sound={sound} />
       {active && <CallOverlay call={active} onAccept={accept} onReject={reject} onEnd={end} onToggleMute={toggleMute} />}
     </CallContext.Provider>
   );

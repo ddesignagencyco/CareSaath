@@ -178,6 +178,8 @@
     "calling": "Calling…",
     "ringing": "Ringing…",
     "incomingCall": "Incoming call",
+    "noAnswer": "No answer",
+    "noAnswerNotified": "No answer. They've been notified.",
     "accept": "Accept",
     "decline": "Decline",
     "caller": "Caller",
