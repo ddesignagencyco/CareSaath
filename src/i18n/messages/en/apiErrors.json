@@ -107,5 +107,8 @@
     "reasonNeither": "neither the family nor the caregiver has confirmed the cash",
     "reasonCustomer": "the family hasn't confirmed handing over the cash",
     "reasonCaregiver": "the caregiver hasn't confirmed receiving the cash"
-  }
+  },
+  "The_other_person_is_currently_offline": "The other person isn't online right now. Try again in a moment, or send them a message.",
+  "No_active_visit_shared_with_that_user": "You can call only during an active booking with this person.",
+  "No_active_visit_to_call_on": "You can call only during an active booking with this person."
 }

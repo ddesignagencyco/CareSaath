@@ -15,6 +15,8 @@ import { session as customerSession } from '../api/customer/session';
 import { session as caregiverSession } from '../api/caregiver/session';
 import type { ChatScope } from '../api/chat/types';
 import { CallOverlay } from '../screens/shared/chat/CallScreen';
+import { useToast } from '../components/overlay';
+import { useApiErrorText } from '../lib/query';
 
 /** Socket.IO connects to the API origin, not the `/api/v1` REST base. */
 const ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -66,6 +68,11 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
   const http = scope === 'customer' ? customerHttp : caregiverHttp;
 
   const [active, setActive] = useState<ActiveCall | null>(null);
+  const toast = useToast();
+  const apiError = useApiErrorText();
+  // Read from the socket listeners, which are attached once; a ref keeps them current.
+  const showError = useRef((message?: string) => toast.error(apiError(new Error(message || ''))));
+  showError.current = (message?: string) => toast.error(apiError(new Error(message || '')));
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
@@ -164,7 +171,11 @@ export function CallProvider({ scope, children }: { scope: ChatScope; children: 
 
     socket.on('call:ended', teardown);
     socket.on('call:rejected', teardown);
-    socket.on('call:error', teardown);
+    // Say why the call ended (callee offline, no active booking) instead of closing silently.
+    socket.on('call:error', (p: { message?: string }) => {
+      showError.current(p?.message);
+      teardown();
+    });
 
     // Keep auth token fresh on background rotation
     const unsub = session.subscribe(() => {
