@@ -19,3 +19,12 @@
 -keep class com.imagepicker.** { *; }
 -keep class com.reactnativedocumentpicker.** { *; }
 -dontwarn com.facebook.react.**
+
+# react-native-webrtc: React Native reads each @ReactMethod's signature and
+# annotation at runtime. R8 rewrote them, so loading WebRTCModule failed with
+# "assumes returnType == void iff the method is synchronous" and the app closed
+# on every call. Keep the module and the WebRTC classes its native code calls.
+-keep class com.oney.WebRTCModule.** { *; }
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+-keepattributes *Annotation*
