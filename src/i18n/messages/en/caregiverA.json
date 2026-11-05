@@ -16,9 +16,9 @@
         "text": "Track earnings and withdraw to bank or JazzCash"
       }
     },
-    "heroFooter": "© Care Sath · For verified nurses and physiotherapists",
+    "heroFooter": "© Care Saath · For verified nurses and physiotherapists",
     "phoneTitle": "Sign in or join",
-    "phoneDescription": "Enter your mobile number. New to Care Sath? You'll set up your caregiver profile next.",
+    "phoneDescription": "Enter your mobile number. New to Care Saath? You'll set up your caregiver profile next.",
     "footerNote": "Your number is only shared with families you visit.",
     "adminError": "Admin accounts can't use the caregiver app.",
     "devOtp": "Development server: the sign-in code is printed in the backend console."
@@ -150,11 +150,11 @@
       },
       "disputeRaised": {
         "title": "Dispute raised",
-        "body": "A customer raised a dispute about a visit. Care Sath will contact you."
+        "body": "A customer raised a dispute about a visit. Care Saath will contact you."
       },
       "disputeResolved": {
         "title": "Dispute resolved",
-        "body": "Your dispute has been resolved by Care Sath."
+        "body": "Your dispute has been resolved by Care Saath."
       },
       "payoutProcessing": {
         "title": "Payout approved",

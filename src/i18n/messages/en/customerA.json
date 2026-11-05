@@ -2,7 +2,7 @@
   "login": {
     "product": "Home care",
     "headline": "Trusted nurses and physiotherapists, at home.",
-    "heroFooter": "© Care Sath · Verified home care in Pakistan",
+    "heroFooter": "© Care Saath · Verified home care in Pakistan",
     "phoneTitle": "Sign in or create an account",
     "phoneDescription": "Enter your mobile number. We'll text you a 6-digit code. No password needed.",
     "footerNote": "We never share your number without your permission.",
@@ -78,7 +78,7 @@
   },
   "find": {
     "title": "Find care",
-    "description": "Every caregiver here has a license verified by Care Sath.",
+    "description": "Every caregiver here has a license verified by Care Saath.",
     "all": "All",
     "city": "City",
     "allCities": "All cities",
@@ -90,7 +90,7 @@
   "profile": {
     "back": "Find care",
     "perVisit": "per visit",
-    "licenseVerified": "License verified by Care Sath",
+    "licenseVerified": "License verified by Care Saath",
     "experience": "{years} years of experience",
     "cities": "Visits homes in {cities}",
     "about": "About",
@@ -186,7 +186,7 @@
   },
   "bits": {
     "starsAria": "{value} out of 5 stars",
-    "newOn": "New on Care Sath",
+    "newOn": "New on Care Saath",
     "verified": "Verified",
     "experience": "{n} years experience",
     "perVisit": "per visit"
@@ -235,7 +235,7 @@
       },
       "disputeResolved": {
         "title": "Dispute resolved",
-        "body": "Care Sath has resolved your dispute."
+        "body": "Care Saath has resolved your dispute."
       },
       "safetyUpdated": {
         "title": "Safety report updated",

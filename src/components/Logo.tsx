@@ -26,7 +26,7 @@ function ink(variant: LogoVariant) {
 export function LogoMark({ size = 48, variant = 'tile' }: { size?: number; variant?: LogoVariant }) {
   const c = ink(variant);
   return (
-    <Svg width={size} height={size} viewBox="0 0 48 48" accessibilityRole="image" accessibilityLabel="Care Sath">
+    <Svg width={size} height={size} viewBox="0 0 48 48" accessibilityRole="image" accessibilityLabel="Care Saath">
       {variant === 'tile' && <Rect width={48} height={48} rx={14} fill={brand[700]} />}
       <Path d={LEFT} stroke={c} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
       <Path d={RIGHT} stroke={accent[400]} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -36,14 +36,14 @@ export function LogoMark({ size = 48, variant = 'tile' }: { size?: number; varia
   );
 }
 
-/** "Care Sath" wordmark. Always LTR Latin, in both languages. */
+/** "Care Saath" wordmark. Always LTR Latin, in both languages. */
 export function Wordmark({ size = 22, light }: { size?: number; light?: boolean }) {
   const line = { fontFamily: fonts.extrabold, fontSize: size, lineHeight: Math.round(size * 1.25) };
   return (
     <Text style={[line, styles.wordmark]} color={light ? '#fff' : colors.text} align="left">
       {'Care '}
       <Text style={line} color={light ? accent[400] : brand[600]}>
-        Sath
+        Saath
       </Text>
     </Text>
   );

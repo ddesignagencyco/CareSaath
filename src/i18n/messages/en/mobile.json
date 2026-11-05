@@ -6,7 +6,7 @@
   },
   "welcome": {
     "tagline": "Verified nurses and physiotherapists, at home.",
-    "whoAreYou": "How will you use Care Sath?",
+    "whoAreYou": "How will you use Care Saath?",
     "customerTitle": "I need care",
     "customerText": "Book a nurse or physiotherapist for yourself or family",
     "caregiverTitle": "I give care",
@@ -53,7 +53,7 @@
   "settings": {
     "title": "Settings",
     "language": "Language",
-    "signOutConfirm": "Sign out of Care Sath?",
+    "signOutConfirm": "Sign out of Care Saath?",
     "signOutBody": "You'll need a new code to sign back in.",
     "help": "Emergency help",
     "helpHint": "Free public services, available 24/7.",
@@ -84,11 +84,11 @@
     "mapNote": "Drag-to-adjust map comes with the maps provider. For now the pin is your phone's location or the city centre.",
     "choosePhoto": "Choose from gallery",
     "chooseDocument": "Choose a PDF or file",
-    "locDenied": "Location is off for Care Sath. Allow it in your phone's Settings, then try again.",
+    "locDenied": "Location is off for Care Saath. Allow it in your phone's Settings, then try again.",
     "locTimeout": "Couldn't find your location. Check that Location is on and you have signal, then try again.",
     "locUnavailable": "Location is switched off. Turn it on in the settings that just opened, then try again.",
     "cameraUnavailable": "The camera isn't available on this device.",
-    "pickPermission": "Care Sath needs permission to open your photos or camera. Allow it in Settings.",
+    "pickPermission": "Care Saath needs permission to open your photos or camera. Allow it in Settings.",
     "pickFailed": "Couldn't open that file. Try another one.",
     "fileBadType": "Only JPEG, PNG, WEBP or PDF files are allowed",
     "fileTooBig": "File must be 10 MB or smaller",
@@ -141,7 +141,7 @@
     "recording": "Recording",
     "discardRecording": "Discard recording",
     "sendVoice": "Send voice message",
-    "micPermission": "Allow the microphone for Care Sath in your phone's Settings to record voice messages.",
+    "micPermission": "Allow the microphone for Care Saath in your phone's Settings to record voice messages.",
     "recordFailed": "Couldn't record. Try again.",
     "tooShort": "Hold on a little longer to record a message.",
     "playFailed": "Couldn't play this voice message.",
@@ -204,7 +204,7 @@
     "save": "Save to gallery",
     "saved": "Saved to your gallery",
     "saveFailed": "Couldn't save this. Try again.",
-    "savePermission": "Allow Care Sath to save to your photos in Settings."
+    "savePermission": "Allow Care Saath to save to your photos in Settings."
   },
   "map": {
     "label": "Map",

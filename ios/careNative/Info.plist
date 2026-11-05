@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Care Sath</string>
+	<string>Care Saath</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -35,11 +35,11 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Care Sath uses your location to pin your home address, confirm visit check-in and check-out, and share where you are in an SOS.</string>
+	<string>Care Saath uses your location to pin your home address, confirm visit check-in and check-out, and share where you are in an SOS.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Care Sath uses the camera to photograph prescriptions and professional documents.</string>
+	<string>Care Saath uses the camera to photograph prescriptions and professional documents.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Care Sath lets you attach prescriptions, documents and your profile photo from your photos.</string>
+	<string>Care Saath lets you attach prescriptions, documents and your profile photo from your photos.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

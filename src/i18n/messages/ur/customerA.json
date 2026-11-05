@@ -2,7 +2,7 @@
   "login": {
     "product": "گھر پر دیکھ بھال",
     "headline": "بھروسے مند نرسیں اور فزیوتھراپسٹ، آپ کے گھر پر۔",
-    "heroFooter": "© Care Sath · پاکستان میں تصدیق شدہ گھریلو دیکھ بھال",
+    "heroFooter": "© Care Saath · پاکستان میں تصدیق شدہ گھریلو دیکھ بھال",
     "phoneTitle": "سائن اِن کریں یا نیا اکاؤنٹ بنائیں",
     "phoneDescription": "اپنا موبائل نمبر درج کریں۔ ہم آپ کو 6 ہندسوں کا کوڈ بھیجیں گے۔ پاس ورڈ کی ضرورت نہیں۔",
     "footerNote": "ہم آپ کی اجازت کے بغیر آپ کا نمبر کسی کو نہیں دیتے۔",
@@ -78,7 +78,7 @@
   },
   "find": {
     "title": "کیئرگیور تلاش کریں",
-    "description": "یہاں ہر کیئرگیور کا لائسنس Care Sath نے تصدیق کیا ہے۔",
+    "description": "یہاں ہر کیئرگیور کا لائسنس Care Saath نے تصدیق کیا ہے۔",
     "all": "سب",
     "city": "شہر",
     "allCities": "تمام شہر",
@@ -90,7 +90,7 @@
   "profile": {
     "back": "کیئرگیور تلاش کریں",
     "perVisit": "فی وزٹ",
-    "licenseVerified": "لائسنس Care Sath سے تصدیق شدہ",
+    "licenseVerified": "لائسنس Care Saath سے تصدیق شدہ",
     "experience": "{years} سال کا تجربہ",
     "cities": "{cities} میں گھروں پر آتے ہیں",
     "about": "تعارف",
@@ -186,7 +186,7 @@
   },
   "bits": {
     "starsAria": "5 میں سے {value} ستارے",
-    "newOn": "Care Sath پر نئے",
+    "newOn": "Care Saath پر نئے",
     "verified": "تصدیق شدہ",
     "experience": "{n} سال کا تجربہ",
     "perVisit": "فی وزٹ"
@@ -235,7 +235,7 @@
       },
       "disputeResolved": {
         "title": "تنازع حل ہو گیا",
-        "body": "Care Sath نے آپ کا تنازع حل کر دیا ہے۔"
+        "body": "Care Saath نے آپ کا تنازع حل کر دیا ہے۔"
       },
       "safetyUpdated": {
         "title": "حفاظتی رپورٹ اپ ڈیٹ ہوئی",

@@ -61,7 +61,7 @@
     "off": "Off — you won't get emergency requests",
     "note": "Keep the app open. While this is on we share your live location so nearby families can find you; it turns off on its own if your location stops updating.",
     "loc": {
-      "denied": "Allow location for Care Sath in Settings to go available.",
+      "denied": "Allow location for Care Saath in Settings to go available.",
       "timeout": "Couldn't get your location. Check your signal and try again.",
       "unavailable": "Turn on Location, then try again."
     }

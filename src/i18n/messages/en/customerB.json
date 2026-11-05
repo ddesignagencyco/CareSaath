@@ -90,7 +90,7 @@
     "call1122": "Medical emergency: call 1122",
     "reportConcern": "Report a safety concern",
     "raiseDispute": "Raise a dispute",
-    "sosDescription": "Care Sath's safety team and your emergency contacts are alerted immediately.",
+    "sosDescription": "Care Saath's safety team and your emergency contacts are alerted immediately.",
     "caregiverUnavailable": "Caregiver details aren't available right now.",
     "disputesTitle": "Disputes about this visit"
   },
@@ -162,11 +162,11 @@
   },
   "concern": {
     "title": "Report a safety concern",
-    "description": "Goes straight to Care Sath's safety team. For emergencies, use SOS or call 1122.",
+    "description": "Goes straight to Care Saath's safety team. For emergencies, use SOS or call 1122.",
     "severity": "How serious is it?",
     "whatHappened": "What happened?",
     "send": "Send report",
-    "success": "Concern sent to the Care Sath safety team. We'll contact you.",
+    "success": "Concern sent to the Care Saath safety team. We'll contact you.",
     "priorityHint": {
       "LOW": "Late arrival, minor issue",
       "MEDIUM": "Unprofessional behaviour, poor care",
@@ -179,7 +179,7 @@
     "label": "Describe the problem",
     "hint": "At least 5 characters · {count}/4000",
     "submit": "Raise dispute",
-    "success": "Dispute raised. Care Sath will review it with both sides."
+    "success": "Dispute raised. Care Saath will review it with both sides."
   },
   "patientForm": {
     "addTitle": "Add a patient",
@@ -286,7 +286,7 @@
   "contacts": {
     "back": "Account",
     "title": "Emergency contacts",
-    "description": "If SOS is pressed during a visit, these people get an SMS alert along with Care Sath's safety team.",
+    "description": "If SOS is pressed during a visit, these people get an SMS alert along with Care Saath's safety team.",
     "yours": "Your contacts",
     "empty": "No emergency contacts yet. Add at least one family member.",
     "removeLabel": "Remove {name}",
@@ -314,7 +314,7 @@
       "method": "Method",
       "visitDate": "Visit date",
       "caregiverShare": "Caregiver's share",
-      "commission": "Care Sath commission",
+      "commission": "Care Saath commission",
       "reference": "Payment reference",
       "noReference": "None",
       "paidAt": "Paid on",

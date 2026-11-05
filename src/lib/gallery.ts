@@ -16,7 +16,7 @@ async function ensurePermission() {
 }
 
 /**
- * Saves a chat photo or video to the phone's gallery, in a "Care Sath" album.
+ * Saves a chat photo or video to the phone's gallery, in a "Care Saath" album.
  *
  * TODO(backend): works for local device files. Chat media from the server
  * are https URLs; download those to a cache file first (Android's
@@ -25,7 +25,7 @@ async function ensurePermission() {
 export async function saveToGallery(uri: string, kind: 'image' | 'video'): Promise<void> {
   await ensurePermission();
   try {
-    await CameraRoll.saveAsset(uri, { type: kind === 'video' ? 'video' : 'photo', album: 'Care Sath' });
+    await CameraRoll.saveAsset(uri, { type: kind === 'video' ? 'video' : 'photo', album: 'Care Saath' });
   } catch {
     throw new GalleryError('failed');
   }
