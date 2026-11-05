@@ -32,7 +32,7 @@ export class NativePushService {
   }
 
   /** Best-effort fan-out to every device of the user; dead tokens are pruned. Never throws. */
-  async sendToUser(userId: string, payload: WebPushPayload): Promise<void> {
+  async sendToUser(userId: string, payload: WebPushPayload, opts: { ttlSeconds?: number } = {}): Promise<void> {
     const messaging = this.firebase?.messaging;
     if (!messaging) return;
     try {
@@ -51,7 +51,7 @@ export class NativePushService {
         data,
         android: {
           priority: 'high',
-          ttl: 24 * 3600 * 1000,
+          ttl: (opts.ttlSeconds ?? 24 * 3600) * 1000,
           notification: { channelId: ANDROID_CHANNEL_ID, tag: payload.id },
         },
         apns: { payload: { aps: { sound: 'default' } } },

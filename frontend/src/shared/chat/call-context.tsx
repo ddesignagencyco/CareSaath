@@ -12,8 +12,17 @@ import { CallOverlay } from "./call-overlay";
 const ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
 /** STUN-only fallback used until (and if) the backend's TURN config loads. */
 const ICE_FALLBACK: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-/** Maximum time an outgoing call can ring before auto-cancelling (40s). */
+/** Ceiling on waiting for the server's `call:outgoing` ack before giving up on an invite (40s). */
 const RING_TIMEOUT_MS = 40_000;
+/** Server ring window, used until `call:outgoing` reports the real one. */
+const DEFAULT_RING_SECONDS = 30;
+/** Extra client-side wait past the server ring window before tearing down without a terminal event. */
+const RING_GRACE_MS = 5_000;
+/** Callee-side ceiling on showing an incoming call that never got a terminal event (45s). */
+const INCOMING_TIMEOUT_MS = 45_000;
+/** Caller's "tooooo" while the other side rings, and the callee's ringtone. Both loop cleanly. */
+const RINGBACK_SRC = "/sounds/ringback.wav";
+const RINGTONE_SRC = "/sounds/ringtone.wav";
 /** Grace period for temporary network/signal blips before concluding the call dropped (8s). */
 const RECONNECT_GRACE_MS = 8_000;
 
@@ -38,9 +47,21 @@ function createSilentAudioStream(): MediaStream {
   return new MediaStream();
 }
 
+/** Close the service worker's "Incoming call" notification for `callId` (tagged `call-<id>`), if any. */
+function closeCallNotification(callId: string): void {
+  if (typeof navigator === "undefined" || !navigator.serviceWorker?.getRegistration) return;
+  navigator.serviceWorker
+    .getRegistration()
+    .then((reg) => reg?.getNotifications({ tag: `call-${callId}` }))
+    .then((list) => list?.forEach((n) => n.close()))
+    .catch(() => undefined);
+}
+
 export interface ActiveCall {
   status: "outgoing" | "incoming" | "connected" | "reconnecting";
   callId: string | null;
+  /** Caller side: the server confirmed the callee has the app open and their device is ringing. */
+  ringing?: boolean;
   peerName: string;
   video: boolean;
   localStream: MediaStream | null;
@@ -78,6 +99,10 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ringTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Looping ringback (caller) / ringtone (callee); null when silent.
+  const toneRef = useRef<HTMLAudioElement | null>(null);
+  // Caller side: whether the callee was online when the call started (drives the "No answer" copy).
+  const calleeOnlineRef = useRef(true);
 
   // Sync ref with latest state to prevent stale closures in socket events
   useEffect(() => {
@@ -101,8 +126,37 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     }
   }, []);
 
+  /** Stop the ring sound and release the element so the browser can drop the decoded audio. */
+  const stopTone = useCallback(() => {
+    const audio = toneRef.current;
+    if (!audio) return;
+    toneRef.current = null;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+  }, []);
+
+  /** Loop a ring sound. Autoplay can be blocked without a prior user gesture: the call UI still shows. */
+  const playTone = useCallback(
+    (src: string) => {
+      stopTone();
+      if (typeof Audio === "undefined") return;
+      const audio = new Audio(src);
+      audio.loop = true;
+      toneRef.current = audio;
+      try {
+        const played = audio.play();
+        if (played) played.catch(() => undefined);
+      } catch {
+        /* playback unsupported: stay silent */
+      }
+    },
+    [stopTone],
+  );
+
   const teardown = useCallback(() => {
     clearTimers();
+    stopTone();
     pcRef.current?.getSenders().forEach((s) => s.track?.stop());
     pcRef.current?.close();
     pcRef.current = null;
@@ -111,10 +165,43 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     callIdRef.current = null;
     pendingOffer.current = null;
     pendingCandidates.current = [];
+    calleeOnlineRef.current = true;
     setActive(null);
-  }, [clearTimers]);
+  }, [clearTimers, stopTone]);
+
+  // Ring sound follows the call state: ringback once the server confirms the caller's invite is ringing,
+  // ringtone while an incoming call waits. Any other state (or unmount) silences it.
+  const tone = active?.status === "outgoing" && active.callId ? RINGBACK_SRC : active?.status === "incoming" ? RINGTONE_SRC : null;
+  useEffect(() => {
+    if (!tone) return;
+    playTone(tone);
+    return stopTone;
+  }, [tone, playTone, stopTone]);
+
+  // Once an incoming call is answered, declined or gone, clear its sticky "Incoming call" push notification.
+  const incomingId = active?.status === "incoming" ? active.callId : null;
+  useEffect(() => {
+    if (!incomingId) return;
+    return () => closeCallNotification(incomingId);
+  }, [incomingId]);
 
   const teardownRef = useRef(teardown);
+
+  /** (Re)arm the single ring timer; `onTimeout` runs only if no terminal event arrived first. */
+  const armRingTimer = useCallback((ms: number, onTimeout: () => void) => {
+    if (ringTimerRef.current) clearTimeout(ringTimerRef.current);
+    ringTimerRef.current = setTimeout(() => {
+      ringTimerRef.current = null;
+      onTimeout();
+    }, ms);
+  }, []);
+
+  /** Caller gave up waiting: hang up on the server too, tell the user, and tear down. */
+  const ringTimedOut = useCallback(() => {
+    if (callIdRef.current) socketRef.current?.emit("call:end", { callId: callIdRef.current });
+    toastRef.current.error(tRef.current("callTimeout"));
+    teardownRef.current();
+  }, []);
 
   const flushCandidates = useCallback((callId: string) => {
     callIdRef.current = callId;
@@ -265,15 +352,27 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     });
     socketRef.current = socket;
 
-    socket.on("call:outgoing", (p: { callId: string }) => {
+    socket.on("call:outgoing", (p: { callId: string; calleeOnline?: boolean; ringSeconds?: number }) => {
+      // The caller hung up before the server acknowledged the invite.
+      if (activeRef.current?.status !== "outgoing") {
+        socket.emit("call:end", { callId: p.callId });
+        return;
+      }
+      const calleeOnline = p.calleeOnline ?? true;
+      calleeOnlineRef.current = calleeOnline;
       callIdRef.current = p.callId;
-      setActive((a) => (a ? { ...a, callId: p.callId } : a));
+      setActive((a) => (a ? { ...a, callId: p.callId, ringing: calleeOnline } : a));
       flushCandidatesRef.current(p.callId);
+      // The server rings for ringSeconds then sends call:missed; this is only the safety net.
+      const ringSeconds = p.ringSeconds && p.ringSeconds > 0 ? p.ringSeconds : DEFAULT_RING_SECONDS;
+      armRingTimer(ringSeconds * 1000 + RING_GRACE_MS, ringTimedOut);
     });
 
     socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; callerName?: string; sdp: RTCSessionDescriptionInit }) => {
+      // Already showing this call (e.g. call:sync after a reconnect while it rings): nothing to do.
+      if (p.callId === callIdRef.current) return;
       // Ignore a second incoming call while one is active (callIdRef is always current).
-      if (callIdRef.current) {
+      if (callIdRef.current || activeRef.current) {
         socket.emit("call:reject", { callId: p.callId });
         return;
       }
@@ -281,6 +380,10 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       pendingOffer.current = { callId: p.callId, sdp: p.sdp, video };
       callIdRef.current = p.callId;
       setActive({ status: "incoming", callId: p.callId, peerName: p.callerName || "", video, localStream: null, remoteStream: null });
+      // Safety net if call:missed/ended never reaches this tab (e.g. answered on another device).
+      armRingTimer(INCOMING_TIMEOUT_MS, () => {
+        if (activeRef.current?.status === "incoming") teardownRef.current();
+      });
     });
 
     socket.on("call:answered", async (p: { callId: string; sdp: RTCSessionDescriptionInit }) => {
@@ -306,8 +409,16 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       }
     });
 
-    socket.on("call:ended", () => {
-      if (activeRef.current?.status === "connected") {
+    socket.on("call:ended", (p?: { callId?: string }) => {
+      if (p?.callId && callIdRef.current && p.callId !== callIdRef.current) return;
+      const status = activeRef.current?.status;
+      if (!status) return;
+      if (status === "incoming") {
+        // The caller hung up while it was still ringing here: just dismiss.
+        teardownRef.current();
+        return;
+      }
+      if (status === "connected" || status === "reconnecting") {
         toastRef.current.info(tRef.current("callEnded"));
       } else {
         toastRef.current.error(tRef.current("callDeclined"));
@@ -315,14 +426,34 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       teardownRef.current();
     });
 
-    socket.on("call:rejected", () => {
+    socket.on("call:rejected", (p?: { callId?: string }) => {
+      if (!activeRef.current) return;
+      if (p?.callId && callIdRef.current && p.callId !== callIdRef.current) return;
       toastRef.current.error(tRef.current("callDeclined"));
       teardownRef.current();
     });
 
+    // Nobody answered within the server's ring window.
+    socket.on("call:missed", (p?: { callId?: string }) => {
+      if (p?.callId && callIdRef.current && p.callId !== callIdRef.current) return;
+      const status = activeRef.current?.status;
+      if (status === "outgoing") {
+        toastRef.current.info(tRef.current(calleeOnlineRef.current ? "noAnswer" : "noAnswerNotified"));
+      }
+      if (status === "outgoing" || status === "incoming") teardownRef.current();
+    });
+
     socket.on("call:error", (err: { message?: string }) => {
+      // Errors only matter while a call is on screen (e.g. not for a late call:end after teardown).
+      if (!activeRef.current) return;
       toastRef.current.error(err?.message || tRef.current("userOffline"));
       teardownRef.current();
+    });
+
+    // On every (re)connect, ask for a call still ringing for this user, e.g. the site was just opened
+    // from an "incoming call" push. All call:* listeners above are attached before this can fire.
+    socket.on("connect", () => {
+      socket.emit("call:sync");
     });
 
     return () => {
@@ -331,7 +462,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       socketRef.current = null;
       teardownRef.current();
     };
-  }, [enabled, session]);
+  }, [enabled, session, armRingTimer, ringTimedOut]);
 
   const startCall = useCallback(
     async (opts: { visitId: string; calleeId?: string; peerName: string; video: boolean }) => {
@@ -340,13 +471,8 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
         pendingCandidates.current = [];
         setActive({ status: "outgoing", callId: null, peerName: opts.peerName, video: opts.video, localStream: null, remoteStream: null });
 
-        // Start ring timeout (if not answered in 40 seconds, auto-cancel)
-        if (ringTimerRef.current) clearTimeout(ringTimerRef.current);
-        ringTimerRef.current = setTimeout(() => {
-          if (callIdRef.current) socketRef.current?.emit("call:end", { callId: callIdRef.current });
-          toastRef.current.error(tRef.current("callTimeout"));
-          teardownRef.current();
-        }, RING_TIMEOUT_MS);
+        // Give up if the server never acknowledges the invite; call:outgoing re-arms this for the ring window.
+        armRingTimer(RING_TIMEOUT_MS, ringTimedOut);
 
         const stream = await getMedia(opts.video);
         const pc = newPeer();
@@ -370,12 +496,18 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
         teardownRef.current();
       }
     },
-    [active, getMedia, newPeer],
+    [active, getMedia, newPeer, armRingTimer, ringTimedOut],
   );
 
   const accept = useCallback(async () => {
     const offer = pendingOffer.current;
     if (!offer) return;
+    // Silence the ringtone and drop the incoming safety net while the mic prompt is up.
+    stopTone();
+    if (ringTimerRef.current) {
+      clearTimeout(ringTimerRef.current);
+      ringTimerRef.current = null;
+    }
     try {
       const stream = await getMedia(offer.video);
       const pc = newPeer();
@@ -391,7 +523,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       if (offer.callId) socketRef.current?.emit("call:reject", { callId: offer.callId });
       teardownRef.current();
     }
-  }, [getMedia, newPeer]);
+  }, [getMedia, newPeer, stopTone]);
 
   const reject = useCallback(() => {
     if (callIdRef.current) socketRef.current?.emit("call:reject", { callId: callIdRef.current });

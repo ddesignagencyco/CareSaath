@@ -5,6 +5,8 @@ export interface NotificationEventDefinition {
   audience: UserRole[];
   /** Short heading shown above the message in the in-app feed. */
   title: string;
+  /** In-app and push only: never emailed (e.g. missed calls). */
+  skipEmail?: boolean;
 }
 
 const CUSTOMER = [UserRole.CUSTOMER];
@@ -73,6 +75,11 @@ export const NOTIFICATION_EVENTS: Record<string, NotificationEventDefinition> = 
   'caregiver.strike.recorded': { audience: CAREGIVER, title: 'A strike was recorded on your account' },
   'caregiver.suspended': { audience: CAREGIVER, title: 'Your account has been suspended' },
   'caregiver.suspended.admin': { audience: ADMIN, title: 'Caregiver auto-suspended for repeated strikes' },
+
+  // ---- In-app calls
+  // Push-only (sent straight to devices by CallRingingService, never stored in the feed).
+  'call.incoming': { audience: CUSTOMER_OR_CAREGIVER, title: 'Incoming call', skipEmail: true },
+  'call.missed': { audience: CUSTOMER_OR_CAREGIVER, title: 'Missed call', skipEmail: true },
 
   // ---- Doctor-authored medical orders (diagnosis / medicines / lab tests)
   'medical_order.created': { audience: CUSTOMER, title: 'New prescription from your visit' },

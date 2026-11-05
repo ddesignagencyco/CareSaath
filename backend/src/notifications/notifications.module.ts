@@ -253,7 +253,7 @@ export class NotificationsService {
         ) {
           continue;
         }
-        if (adapter.channel === NotificationChannel.EMAIL && !recipient.email) {
+        if (adapter.channel === NotificationChannel.EMAIL && (!recipient.email || definition.skipEmail)) {
           continue;
         }
         const created = await this.prisma.notification.create({
@@ -567,6 +567,6 @@ export class NotificationsController {
     WebPushService,
     NativePushService,
   ],
-  exports: [NotificationsService],
+  exports: [NotificationsService, WebPushService, NativePushService],
 })
 export class NotificationsModule {}
