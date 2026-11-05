@@ -1,0 +1,20 @@
+diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
+--- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
++++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
+@@ -706,7 +706,7 @@
+     }
+ 
+     @ReactMethod(isBlockingSynchronousMethod = true)
+-    public void transceiverSetCodecPreferences(int id, String senderId, ReadableArray codecPreferences) {
++    public boolean transceiverSetCodecPreferences(int id, String senderId, ReadableArray codecPreferences) {
+         ThreadUtils.runOnExecutor(() -> {
+             WritableMap identifier = Arguments.createMap();
+             WritableMap params = Arguments.createMap();
+@@ -765,6 +765,7 @@
+                 Log.d(TAG, "transceiverSetCodecPreferences(): " + e.getMessage());
+             }
+         });
++        return true;
+     }
+ 
+     @ReactMethod
