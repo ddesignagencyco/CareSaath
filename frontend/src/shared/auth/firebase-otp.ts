@@ -120,7 +120,7 @@ export async function tokensFromOtp<T>(opts: {
 
 /**
  * Wrap a page's existing `requestOtp` so it sends via Firebase when enabled.
- * Returns `{}` in the Firebase path (no backend devCode to echo back).
+ * Returns `{}` in the Firebase path.
  */
 export function makeRequestOtp(
   backendRequest: (phone: string, name?: string, email?: string) => Promise<unknown>,
