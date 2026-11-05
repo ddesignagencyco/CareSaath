@@ -105,12 +105,11 @@ android {
         versionCode 3
         versionName "1.0.0"
     }
-    // Versioned APK filenames: <App>-v<semver>-b<build>-<abi>-<type>.apk,
-    // e.g. CareSaath-v1.0.0-b1-arm64-v8a-release.apk
+    // One APK per build, named only by app and version: CareSaath-v1.0.0.apk.
+    // Debug and release land in separate output folders, so they never collide.
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
-            def abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
-            outputFileName = "CareSaath-v${variant.versionName}-b${variant.versionCode}-${abi}-${variant.buildType.name}.apk"
+            outputFileName = "CareSaath-v${variant.versionName}.apk"
         }
     }
     signingConfigs {
@@ -144,17 +143,11 @@ android {
             // R8 removes unused code; this then drops resources nothing references.
             shrinkResources enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-        }
-    }
-    // One APK per CPU type: each phone gets only its own native libraries.
-    splits {
-        abi {
-            // AAB builds (bundleRelease) can't use ABI splits — Play splits per
-            // device itself — so only split for APK (assemble*) builds.
-            enable !gradle.startParameter.taskNames.any { it.toLowerCase().contains("bundle") }
-            reset()
-            include "arm64-v8a", "armeabi-v7a"
-            universalApk false
+            // One APK that installs on every phone: real devices are ARM, so the
+            // emulator-only x86 libraries are left out. Debug builds keep them.
+            ndk {
+                abiFilters "arm64-v8a", "armeabi-v7a"
+            }
         }
     }
 }
