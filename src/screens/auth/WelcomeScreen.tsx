@@ -1,7 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { USE_MOCKS } from '../../api/config';
 import { FeatureIcon, HeroBand } from '../../components/brand';
 import { HandHeart, Languages, ShieldCheck, Stethoscope, type IconType } from '../../components/icons';
 import { LogoMark, Wordmark } from '../../components/Logo';
@@ -55,12 +54,6 @@ export function WelcomeScreen({ navigation }: AuthScreen<'Welcome'>) {
             {t('language')}
           </Text>
         </Touchable>
-
-        {USE_MOCKS && (
-          <Text variant="caption" color={ink[400]} align="center">
-            {t('mockNote')}
-          </Text>
-        )}
       </ScrollView>
     </View>
   );

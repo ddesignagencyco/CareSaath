@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import * as customerApi from '../../api/customer/api';
-import { USE_MOCKS } from '../../api/config';
-import { MOCK_OTP } from '../../api/customer/mock-handlers';
 import { useAuth } from '../../auth/AuthContext';
 import { OtpInput, PhoneField } from '../../components/form';
 import { HeroBand } from '../../components/brand';
 import { LogoMark } from '../../components/Logo';
 import { Screen } from '../../components/screen';
-import { RichText, Text } from '../../components/Text';
+import { Text } from '../../components/Text';
 import { Button, DirChevron, Touchable, BUTTON_HEIGHT } from '../../components/ui';
 import { useT } from '../../i18n';
 import { formatPkMobile, parsePkMobile } from '../../lib/phone';
@@ -23,12 +21,6 @@ import { accent,
   space, themed, brandFixed } from '../../theme';
 
 const RESEND_SECONDS = 30;
-
-/** Demo accounts with data in the mock DBs. */
-const DEMO_PHONE = {
-  customer: '+923211234567',
-  caregiver: '+923001110011',
-} as const;
 
 /** FR-C1 / FR-CG1: phone number + 6-digit OTP, no password. */
 export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
@@ -215,17 +207,6 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
             onSubmitEditing={sendCode}
             returnKeyType="send"
           />
-          {USE_MOCKS && (
-            <Touchable
-              onPress={() => setPhone(DEMO_PHONE[intent ?? 'customer'].replace('+92', '0'))}
-              accessibilityRole="button"
-              style={styles.hint}
-            >
-              <Text variant="small" color={brand[800]}>
-                {tm('tryNumber', { phone: formatPkMobile(DEMO_PHONE[intent ?? 'customer']) })}
-              </Text>
-            </Touchable>
-          )}
           <Text variant="small" color={ink[400]}>
             {tc('footerNote')}
           </Text>
@@ -297,13 +278,6 @@ export function LoginScreen({ route, navigation }: AuthScreen<'Login'>) {
               {tm('editNumber')}
             </Text>
           </Touchable>
-          {USE_MOCKS && (
-            <View style={styles.hint}>
-              <RichText variant="small" color={brand[800]}>
-                {tm.raw('codeHint', { code: `<b>${MOCK_OTP}</b>` })}
-              </RichText>
-            </View>
-          )}
         </>
       )}
     </Screen>
@@ -334,14 +308,6 @@ const styles = themed(() => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
   stepPillOn: { backgroundColor: accent[400] },
-  hint: {
-    backgroundColor: brand[50],
-    borderRadius: radius.md,
-    padding: space.md,
-    borderWidth: 1,
-    borderColor: brand[100],
-    overflow: 'hidden',
-  },
   resend: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -78,7 +78,7 @@ export function invalidate(prefix: QueryKey) {
   }
 }
 
-/** Drop everything (sign-out, demo reset). */
+/** Drop everything (sign-out). */
 export function clearQueries() {
   cache.clear();
 }

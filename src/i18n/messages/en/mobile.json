@@ -11,15 +11,12 @@
     "customerText": "Book a nurse or physiotherapist for yourself or family",
     "caregiverTitle": "I give care",
     "caregiverText": "Nurses, physiotherapists and attendants",
-    "language": "اردو میں جاری رکھیں",
-    "mockNote": "Demo mode · sample data, nothing is sent"
+    "language": "اردو میں جاری رکھیں"
   },
   "login": {
     "customerTitle": "Sign in to book care",
     "caregiverTitle": "Sign in as a caregiver",
     "changeRole": "Not you? Go back",
-    "codeHint": "Demo code: {code}",
-    "tryNumber": "Try {phone} for an account with bookings",
     "editNumber": "Edit number",
     "switchCustomer": "Are you a caregiver? Switch",
     "switchCaregiver": "Booking care instead? Switch",
@@ -95,7 +92,6 @@
     "pickFailed": "Couldn't open that file. Try another one.",
     "fileBadType": "Only JPEG, PNG, WEBP or PDF files are allowed",
     "fileTooBig": "File must be 10 MB or smaller",
-    "demoSample": "Demo: use a sample file",
     "gpsHint": "Your phone's location is saved with this step.",
     "chatFileTooBig": "Videos and files must be 200 MB or smaller",
     "search": "Search",

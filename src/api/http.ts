@@ -10,11 +10,11 @@
  * logged out due to connection interruptions or sleeping backend instances.
  */
 import type { TokenPair } from "./types";
-import { API_BASE_URL, USE_MOCKS } from "./config";
+import { API_BASE_URL } from "./config";
 import { isTokenExpired, type SessionStore } from "./session";
 import ReactNativeBlobUtil from "react-native-blob-util";
 
-export { API_BASE_URL, USE_MOCKS };
+export { API_BASE_URL };
 
 /** Message used when the API can't be reached at all (translated in apiErrors). */
 export const NETWORK_ERROR = "Cannot reach the server. Check your connection.";

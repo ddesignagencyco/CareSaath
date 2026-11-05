@@ -20,12 +20,9 @@
         "text": "SOS button during visits, alerts your family and our team"
       }
     },
-    "mockCode": "Mock mode: code <b>{code}</b>",
-    "mockNumbers": "{phone} = family with bookings · any other number = new account",
     "roleCaregiver": "This number is registered as a caregiver. Use the caregiver app instead.",
     "roleOther": "This number can't be used for customer bookings.",
-    "devCode": "Dev server: the 6-digit code is printed in the backend console.",
-    "devNumbers": "Demo customers: {ayesha} (Ayesha Khan) · {bilal} (Bilal Ahmed) · any new number creates an account"
+    "devCode": "Dev server: the 6-digit code is printed in the backend console."
   },
   "shell": {
     "product": "Home care",

@@ -2,7 +2,6 @@ import React, { memo, useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { paymentsApi } from '../../api/customer/api';
-import { USE_MOCKS } from '../../api/config';
 import { keys } from '../../api/customer/keys';
 import type { CustomerPaymentWithVisit, PaymentMethod, PaymentStatus } from '../../api/types';
 import { Banknote, CreditCard, Smartphone, type IconType, Download } from '../../components/icons';
@@ -157,7 +156,7 @@ function Receipt({ id, onClose, onViewVisit }: { id: string | null; onClose: () 
       footer={
         p ? (
           <View style={styles.footerButtons}>
-            {p.status === 'PAID' && !USE_MOCKS && <Button label={tr('downloadPdf')} icon={Download} block loading={pdf.isPending} onPress={() => pdf.run(undefined)} />}
+            {p.status === 'PAID' && <Button label={tr('downloadPdf')} icon={Download} block loading={pdf.isPending} onPress={() => pdf.run(undefined)} />}
             <Button label={tr('viewVisit')} variant="secondary" block onPress={() => onViewVisit(p.visitId)} />
           </View>
         ) : undefined

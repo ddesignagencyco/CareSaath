@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { moneyApi } from '../../api/caregiver/api';
 import { keys } from '../../api/caregiver/keys';
-import { ApiError, USE_MOCKS } from '../../api/http';
+import { ApiError } from '../../api/http';
 import type {
   CaregiverPayoutRequest,
   PayoutAccount,
@@ -83,7 +83,7 @@ function PayoutRow({ p }: { p: CaregiverPayoutRequest }) {
   });
   const awaiting = p.status === 'TRANSFERRED' && !p.caregiverConfirmedAt;
   const receipt = useAction(() => moneyApi.openPayoutReceipt(p.id), { success: null });
-  const hasReceipt = !USE_MOCKS && (p.status === 'PAID' || p.status === 'TRANSFERRED');
+  const hasReceipt = p.status === 'PAID' || p.status === 'TRANSFERRED';
   return (
     <View style={styles.payoutBlock}>
       <View style={styles.payout}>

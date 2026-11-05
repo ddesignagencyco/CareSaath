@@ -9,13 +9,12 @@ import { useAuth } from '../../auth/AuthContext';
 import { BadgeCheck, Bell, CalendarDays, CircleUser, ClipboardList, ShieldCheck, Star, Wallet, type IconType } from '../../components/icons';
 import { Screen, Section } from '../../components/screen';
 import { Text } from '../../components/Text';
-import { Card, CountBadge, DirChevron, Divider, ListRow, type TileTone, Touchable } from '../../components/ui';
+import { Avatar, Card, CountBadge, DirChevron, Divider, ListRow, type TileTone, Touchable } from '../../components/ui';
 import { useT } from '../../i18n';
 import { formatPkMobile } from '../../lib/phone';
 import { useQuery } from '../../lib/query';
 import type { CaregiverStack, CaregiverTabs } from '../../navigation/types';
 import { accent, brand, colors, ink, radius, shadow, space, themed } from '../../theme';
-import { PhotoAvatar } from './components/Files';
 import { SettingsSections } from '../shared/SettingsSections';
 import { SignOutButton } from '../shared/SignOutButton';
 
@@ -37,7 +36,7 @@ export function MoreScreen({ navigation }: Props) {
   return (
     <Screen title={tm('title')} largeTitle>
       <Touchable onPress={() => navigation.navigate('CgProfile')} accessibilityRole="button" accessibilityLabel={`${name}, ${tn('profile')}`} style={styles.me} pressScale={false}>
-        <PhotoAvatar name={name} url={photo.data?.url} size={64} />
+        <Avatar name={name} uri={photo.data?.url} size={64} />
         <View style={styles.flex}>
           <Text variant="title" weight="extrabold" numberOfLines={1}>
             {name}

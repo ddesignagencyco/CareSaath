@@ -11,15 +11,12 @@
     "customerText": "اپنے یا گھر والوں کے لیے نرس یا فزیوتھراپسٹ بک کریں",
     "caregiverTitle": "میں دیکھ بھال کرتا/کرتی ہوں",
     "caregiverText": "نرسز، فزیوتھراپسٹ اور اٹینڈنٹ",
-    "language": "Continue in English",
-    "mockNote": "ڈیمو موڈ · فرضی ڈیٹا، کچھ بھی نہیں بھیجا جاتا"
+    "language": "Continue in English"
   },
   "login": {
     "customerTitle": "دیکھ بھال بک کرنے کے لیے سائن اِن کریں",
     "caregiverTitle": "کیئرگیور کے طور پر سائن اِن کریں",
     "changeRole": "واپس جائیں",
-    "codeHint": "ڈیمو کوڈ: {code}",
-    "tryNumber": "بکنگز والے اکاؤنٹ کے لیے {phone} آزمائیں",
     "editNumber": "نمبر تبدیل کریں",
     "switchCustomer": "کیا آپ کیئرگیور ہیں؟ تبدیل کریں",
     "switchCaregiver": "دیکھ بھال بک کرنی ہے؟ تبدیل کریں",
@@ -95,7 +92,6 @@
     "pickFailed": "یہ فائل نہیں کھل سکی۔ کوئی اور فائل آزمائیں۔",
     "fileBadType": "صرف JPEG، PNG، WEBP یا PDF فائلیں قبول ہیں",
     "fileTooBig": "فائل 10 MB یا اس سے کم ہونی چاہیے",
-    "demoSample": "ڈیمو: نمونہ فائل استعمال کریں",
     "gpsHint": "اس مرحلے کے ساتھ آپ کے فون کی لوکیشن محفوظ ہوتی ہے۔",
     "chatFileTooBig": "ویڈیو اور فائلیں 200 MB یا اس سے کم ہونی چاہئیں",
     "search": "تلاش کریں",

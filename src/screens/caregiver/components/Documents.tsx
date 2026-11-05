@@ -63,7 +63,7 @@ export function DocumentUploader({ defaultType = 'LICENSE' }: { defaultType?: Do
         </Text>
       )}
       <Button label={t('uploadButton', { type })} disabled={!file} loading={upload.isPending} onPress={() => upload.run(undefined)} block />
-      <FilePickerSheet visible={picking} onClose={() => setPicking(false)} onPick={pick} sample={{ uri: `mock://${type.toLowerCase()}.pdf`, name: `${type.toLowerCase()}.pdf`, type: 'application/pdf', size: 150_000 }} />
+      <FilePickerSheet visible={picking} onClose={() => setPicking(false)} onPick={pick} />
     </View>
   );
 }

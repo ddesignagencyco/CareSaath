@@ -13,8 +13,7 @@
     "remove": "Remove",
     "view": "View",
     "done": "Done",
-    "signOut": "Sign out",
-    "resetDemo": "Reset demo data"
+    "signOut": "Sign out"
   },
   "states": {
     "loading": "Loading",
@@ -24,8 +23,6 @@
     "noOptions": "No options",
     "select": "Select…",
     "optional": "optional",
-    "demoReset": "Demo data reset",
-    "mockBadge": "Mock data · API not connected",
     "selectDate": "Select date",
     "selectTime": "Select time"
   },

@@ -14,7 +14,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { SvgXml } from 'react-native-svg';
 import { accent, brand, colors, feedback, fonts, ink, radius, shadow, space, TOUCH, themed, brandFixed } from '../theme';
 import { useSettings } from '../i18n';
 import { initials } from '../i18n/format';
@@ -354,26 +353,7 @@ export function ListRow({
 
 /* ---- Avatar -------------------------------------------------------------- */
 
-const SVG_DATA = 'data:image/svg+xml';
-
-/** The mock serves photos as SVG data URLs, which <Image> can't draw. */
-function svgFromDataUrl(url: string): string | null {
-  if (!url.startsWith(SVG_DATA)) return null;
-  try {
-    return decodeURIComponent(url.slice(url.indexOf(',') + 1));
-  } catch {
-    return null;
-  }
-}
-
 export function Avatar({ name, uri, size = 48 }: { name: string; uri?: string | null; size?: number }) {
-  const svg = uri ? svgFromDataUrl(uri) : null;
-  if (svg)
-    return (
-      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}>
-        <SvgXml xml={svg} width={size} height={size} />
-      </View>
-    );
   if (uri) return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: brand[100] }} accessibilityIgnoresInvertColors />;
   return (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>

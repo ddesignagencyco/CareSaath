@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Synchronous key-value cache over AsyncStorage, so code written against
- * localStorage (session store, mock DB) keeps its synchronous reads.
+ * localStorage (session store) keeps its synchronous reads.
  * `hydrateStorage()` must finish before the app renders; writes go to memory
  * immediately and to disk in the background.
  */

@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { visitsApi } from '../../../api/caregiver/api';
 import { keys } from '../../../api/caregiver/keys';
-import { MOCK_OTP } from '../../../api/caregiver/mock-handlers';
-import { USE_MOCKS } from '../../../api/config';
 import type { CaregiverVisitDetail, CheckInInput } from '../../../api/types';
 import { useDeviceErrorText } from '../../../components/FilePickerSheet';
 import { OtpInput, TextField } from '../../../components/form';
@@ -83,7 +81,7 @@ function maskPhone(e164: string) {
 
 /**
  * GPS or the family's code. There is no geolocation module yet, so "GPS"
- * sends the booking address as the device position (demo behaviour).
+ * sends the booking address as the device position.
  */
 function Verify({ visit, invalidate, kind }: { visit: CaregiverVisitDetail; invalidate: QueryKey[]; kind: 'in' | 'out' }) {
   const t = useT('caregiverB.flow');
@@ -181,11 +179,6 @@ function Verify({ visit, invalidate, kind }: { visit: CaregiverVisitDetail; inva
             </Touchable>
             <Button label={kind === 'in' ? t('checkIn') : t('checkOutConfirm')} variant={kind === 'in' ? 'primary' : 'success'} loading={act.isPending} disabled={code.length !== 6} onPress={() => act.run({ method: 'OTP', code })} />
           </View>
-          {USE_MOCKS && (
-            <Text variant="caption" color={accent[700]}>
-              {t('mockCode', { code: MOCK_OTP })}
-            </Text>
-          )}
         </View>
       )}
     </View>

@@ -20,11 +20,8 @@
     "phoneTitle": "Sign in or join",
     "phoneDescription": "Enter your mobile number. New to Care Sath? You'll set up your caregiver profile next.",
     "footerNote": "Your number is only shared with families you visit.",
-    "mockCode": "Mock mode: code <b>{code}</b>",
-    "mockNumbers": "{approved} = approved nurse · {pending} = pending · any other number = new sign-up",
     "adminError": "Admin accounts can't use the caregiver app.",
-    "devOtp": "Development server: the sign-in code is printed in the backend console.",
-    "devNumbers": "Demo caregivers: {approved} = approved · {pending} = pending review · any other number = new sign-up"
+    "devOtp": "Development server: the sign-in code is printed in the backend console."
   },
   "nav": {
     "today": "Today",

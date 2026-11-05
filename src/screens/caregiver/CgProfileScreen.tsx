@@ -12,7 +12,7 @@ import { Sheet } from '../../components/overlay';
 import { TierBadge } from '../../components/TierBadge';
 import { ErrorState, Screen, SkeletonList } from '../../components/screen';
 import { Text } from '../../components/Text';
-import { Button, Chip, Touchable } from '../../components/ui';
+import { Avatar, Button, Chip, Touchable } from '../../components/ui';
 import { useSettings, useT } from '../../i18n';
 import { formatPkMobile } from '../../lib/phone';
 import { useFmt, useLabels } from '../../i18n/format';
@@ -21,7 +21,7 @@ import { accent, brand, colors, feedback, ink, radius, shadow, space, themed } f
 import { DetailRow, Panel } from './components/Bits';
 import { DocumentList, DocumentUploader } from './components/Documents';
 import { ServiceAreasCard } from './components/ServiceAreas';
-import { FilePickerSheet, PhotoAvatar, SAMPLE_PHOTO } from './components/Files';
+import { FilePickerSheet } from './components/Files';
 import { CITIES, digits, SPECIALTIES } from './components/helpers';
 
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -74,7 +74,7 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
         {/* Camera badge sits outside the round, clipped press area. */}
         <View>
           <Touchable onPress={() => setPicking(true)} accessibilityRole="button" accessibilityLabel={p.photoKey ? t('changePhoto') : t('addPhoto')} style={styles.photo}>
-            <PhotoAvatar name={name} url={photo.data?.url} size={96} />
+            <Avatar name={name} uri={photo.data?.url} size={96} />
           </Touchable>
           <View style={styles.camera} pointerEvents="none">
             <Camera size={16} color="#fff" />
@@ -172,7 +172,7 @@ function ProfileBody({ profile: p, me }: { profile: MyCaregiverProfile; me: Me }
       <FilePickerSheet
         visible={picking}
         title={p.photoKey ? t('changePhoto') : t('addPhoto')}
-        sample={SAMPLE_PHOTO}
+        photosOnly
         onClose={() => setPicking(false)}
         onPick={file => {
           if (!PHOTO_TYPES.includes(file.type) || file.size > 10 * 1024 * 1024) return;

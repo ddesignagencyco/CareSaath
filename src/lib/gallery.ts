@@ -18,9 +18,9 @@ async function ensurePermission() {
 /**
  * Saves a chat photo or video to the phone's gallery, in a "Care Sath" album.
  *
- * TODO(backend): works for the device files the mock chat uses. Once chat
- * media come from the server as https URLs, download to a cache file first
- * (Android's saveToCameraRoll copies local files only).
+ * TODO(backend): works for local device files. Chat media from the server
+ * are https URLs; download those to a cache file first (Android's
+ * saveToCameraRoll copies local files only).
  */
 export async function saveToGallery(uri: string, kind: 'image' | 'video'): Promise<void> {
   await ensurePermission();

@@ -1,12 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { USE_MOCKS } from '../api/config';
 import type { UploadFile } from '../api/http';
 import { useT } from '../i18n';
 import { FilePickError, pickDocument, pickPhoto } from '../lib/files';
 import { DeviceLocationError } from '../lib/location';
 import { space } from '../theme';
-import { Camera, FileText, FileImage, Paperclip } from './icons';
+import { Camera, FileText, FileImage } from './icons';
 import { Sheet, useToast } from './overlay';
 import { ListRow, Divider, Card } from './ui';
 
@@ -31,9 +29,7 @@ export function useDeviceErrorText() {
 
 /**
  * Bottom sheet to attach a file: camera, gallery, and (unless `photosOnly`)
- * a PDF from the files app. In demo mode a sample file is offered too, so
- * the flow can be tried without real documents; it never appears against
- * the real API.
+ * a PDF from the files app.
  */
 export function FilePickerSheet({
   visible,
@@ -41,14 +37,12 @@ export function FilePickerSheet({
   onClose,
   onPick,
   photosOnly,
-  sample,
 }: {
   visible: boolean;
   title?: string;
   onClose: () => void;
   onPick: (file: UploadFile) => void;
   photosOnly?: boolean;
-  sample?: UploadFile;
 }) {
   const t = useT('mobile.common');
   const toast = useToast();
@@ -84,15 +78,6 @@ export function FilePickerSheet({
           </>
         )}
       </Card>
-      {USE_MOCKS && sample && (
-        <View style={styles.demo}>
-          <ListRow icon={Paperclip} title={t('demoSample')} chevron={false} onPress={() => run(async () => sample)} />
-        </View>
-      )}
     </Sheet>
   );
 }
-
-const styles = StyleSheet.create({
-  demo: { opacity: 0.85 },
-});

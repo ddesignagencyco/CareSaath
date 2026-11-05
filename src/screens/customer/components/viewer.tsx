@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Linking, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { SvgXml } from 'react-native-svg';
 import { Lock } from '../../../components/icons';
 import { Sheet } from '../../../components/overlay';
 import { ErrorState } from '../../../components/screen';
@@ -10,8 +9,7 @@ import { useT } from '../../../i18n';
 import { brand, colors, ink, radius, space, themed } from '../../../theme';
 
 /**
- * View-only document sheet. Images render inline (SVG via react-native-svg,
- * which the mock returns); PDFs open in the system viewer.
+ * View-only document sheet. Images render inline; PDFs open in the system viewer.
  */
 export function FileViewerSheet({
   visible,
@@ -47,7 +45,6 @@ export function FileViewerSheet({
   }, [visible, attempt]);
 
   const w = width - space.lg * 2;
-  const svg = state?.url.startsWith('data:image/svg+xml') ? decodeURIComponent(state.url.slice(state.url.indexOf(',') + 1)) : null;
 
   return (
     <Sheet visible={visible} onClose={onClose} title={title}>
@@ -62,10 +59,6 @@ export function FileViewerSheet({
       ) : !state ? (
         <View style={[styles.frame, { height: w * 1.3 }]}>
           <ActivityIndicator color={brand[600]} />
-        </View>
-      ) : svg ? (
-        <View style={styles.frame}>
-          <SvgXml xml={svg} width={w} height={w * (1100 / 850)} />
         </View>
       ) : state.mimeType.startsWith('image/') ? (
         <Image source={{ uri: state.url }} style={[styles.frame, { width: w, height: w * 1.3 }]} resizeMode="contain" accessibilityIgnoresInvertColors />

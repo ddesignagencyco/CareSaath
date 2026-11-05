@@ -1,5 +1,5 @@
 {
-  "_comment": "Backend/mock error messages, keyed by the message with non-alphanumerics replaced by _ (see errorKey in use-action). English values are the original text.",
+  "_comment": "Backend error messages, keyed by the message with non-alphanumerics replaced by _ (see errorKey in use-action). English values are the original text.",
   "Invalid_OTP": "Invalid OTP",
   "Invalid_check_in_OTP": "Invalid check-in OTP",
   "Check_in_OTP_expired_or_not_requested": "Check-in OTP expired or not requested",

@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import { http as customerHttp } from '../api/customer/http';
 import { http as caregiverHttp } from '../api/caregiver/http';
-import { USE_MOCKS } from '../api/config';
 import type { AppRole } from '../auth/AuthContext';
 
 /**
@@ -14,7 +13,6 @@ let registered: { role: AppRole; token: string } | null = null;
 const httpFor = (role: AppRole) => (role === 'customer' ? customerHttp : caregiverHttp);
 
 export async function registerPushDevice(role: AppRole, token: string): Promise<void> {
-  if (USE_MOCKS) return;
   if (registered?.role === role && registered.token === token) return;
   await httpFor(role).post('/notifications/devices', {
     token,
@@ -31,7 +29,7 @@ export async function registerPushDevice(role: AppRole, token: string): Promise<
 export async function unregisterPushDevice(timeoutMs = 3000): Promise<void> {
   const current = registered;
   registered = null;
-  if (!current || USE_MOCKS) return;
+  if (!current) return;
   const remove = httpFor(current.role)
     .post('/notifications/devices/remove', { token: current.token })
     .catch(() => undefined);

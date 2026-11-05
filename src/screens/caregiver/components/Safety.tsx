@@ -5,7 +5,6 @@ import { keys } from '../../../api/caregiver/keys';
 import type { CaregiverVisitDetail, IncidentPriority, SosResult } from '../../../api/types';
 import { TextField } from '../../../components/form';
 import { Banknote, Check, Download, Phone, Siren } from '../../../components/icons';
-import { USE_MOCKS } from '../../../api/config';
 import { ConfirmSheet, Sheet, useToast } from '../../../components/overlay';
 import { Text } from '../../../components/Text';
 import { Button, Touchable } from '../../../components/ui';
@@ -250,7 +249,7 @@ export function CashCard({ visit }: { visit: CaregiverVisitDetail }) {
           <Text variant="small" weight="semibold" color={feedback.success700} style={styles.flex}>
             {payment.paidAt ? t('receivedAt', { time: f.dateTime(payment.paidAt) }) : t('received')}
           </Text>
-          {!USE_MOCKS && <Button label={t('receipt')} icon={Download} variant="ghost" loading={receipt.isPending} onPress={() => receipt.run(undefined)} />}
+          <Button label={t('receipt')} icon={Download} variant="ghost" loading={receipt.isPending} onPress={() => receipt.run(undefined)} />
         </View>
       ) : payment.caregiverConfirmedAt ? (
         <Text variant="small" color={colors.textMuted}>

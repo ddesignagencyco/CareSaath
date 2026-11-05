@@ -3,7 +3,6 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { CHAT_USE_MOCKS } from '../../../api/config';
 import { chatApi } from '../../../api/chat/api';
 import { chatKeys } from '../../../api/chat/keys';
 import type { ChatMessage } from '../../../api/chat/types';
@@ -73,7 +72,6 @@ export function ChatScreen({ route }: NativeStackScreenProps<ChatRoutes, 'Chat'>
   // No chat socket on the backend yet: poll while the chat is on screen.
   useFocusEffect(
     useCallback(() => {
-      if (CHAT_USE_MOCKS) return;
       const timer = setInterval(() => invalidate(chatKeys.messages(scope, id)), 5000);
       return () => clearInterval(timer);
     }, [scope, id]),
