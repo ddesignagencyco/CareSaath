@@ -29,7 +29,6 @@ export function usePushNotifications(role: AppRole | null): void {
       const token = await getFcmToken();
       if (!active) return;
       if (token) {
-        if (__DEV__) console.log('[FCM-TOKEN]', token);
         await registerPushDevice(role, token).catch(() => undefined);
       }
 
