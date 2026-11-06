@@ -38,6 +38,8 @@ describe('Auth (e2e)', () => {
 
   it('requests an OTP and stores a hashed code in Redis', async () => {
     const phone = uniquePhone();
+    await prisma.user.create({ data: { phone } });
+    createdPhones.push(phone);
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/otp/request')
       .send({ phone });
@@ -45,6 +47,16 @@ describe('Auth (e2e)', () => {
     expect(res.body.ttlSeconds).toBeGreaterThan(0);
     const stored = await redis.client.get(`otp:LOGIN:${phone}`);
     expect(stored).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('rejects an OTP request for an unregistered number (login is accounts-only)', async () => {
+    const phone = uniquePhone();
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/otp/request')
+      .send({ phone });
+    expect(res.status).toBe(404);
+    const stored = await redis.client.get(`otp:LOGIN:${phone}`);
+    expect(stored).toBeNull();
   });
 
   it('rejects OTP verification with no requested code', async () => {
@@ -57,6 +69,8 @@ describe('Auth (e2e)', () => {
 
   it('rejects an incorrect OTP', async () => {
     const phone = uniquePhone();
+    await prisma.user.create({ data: { phone } });
+    createdPhones.push(phone);
     await request(app.getHttpServer()).post('/api/v1/auth/otp/request').send({ phone });
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/otp/verify')
@@ -66,6 +80,8 @@ describe('Auth (e2e)', () => {
 
   it('rate-limits excessive OTP requests', async () => {
     const phone = uniquePhone();
+    await prisma.user.create({ data: { phone } });
+    createdPhones.push(phone);
     let last = 0;
     for (let i = 0; i < 4; i += 1) {
       const res = await request(app.getHttpServer())
