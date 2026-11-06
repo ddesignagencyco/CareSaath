@@ -50,7 +50,8 @@ describe('AuthService.requestOtp', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('stores a hashed OTP in Redis and sends via SMS', async () => {
-    const { service, redis, sms } = makeService();
+    const { service, redis, prisma, sms } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: null, fullName: 'Test', role: 'CUSTOMER' });
     const result = await service.requestOtp('+923001234567');
     expect(result.ttlSeconds).toBeGreaterThan(0);
     expect(redis.client.set).toHaveBeenCalledWith(
@@ -62,12 +63,21 @@ describe('AuthService.requestOtp', () => {
     expect(sms.sendOtp).toHaveBeenCalledWith(
       '+923001234567',
       expect.stringMatching(/^\d{6}$/),
-      expect.objectContaining({ purpose: 'LOGIN', email: null, userId: null }),
+      expect.objectContaining({ purpose: 'LOGIN', email: null, userId: 'u1' }),
     );
   });
 
+  it('rejects an unregistered number without sending an OTP', async () => {
+    const { service, redis, prisma, sms } = makeService();
+    prisma.user.findUnique.mockResolvedValue(null);
+    await expect(service.requestOtp('+923009999999')).rejects.toBeInstanceOf(NotFoundException);
+    expect(sms.sendOtp).not.toHaveBeenCalled();
+    expect(redis.client.set).not.toHaveBeenCalled();
+  });
+
   it('enforces the request rate limit', async () => {
-    const { service, redis } = makeService();
+    const { service, redis, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: null, fullName: 'Test', role: 'CUSTOMER' });
     redis.client.incr.mockResolvedValue(4);
     await expect(service.requestOtp('+923001234567')).rejects.toBeInstanceOf(ForbiddenException);
   });

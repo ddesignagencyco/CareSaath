@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useHydrated } from "@shared/api/session";
 import { PageHeader } from "@shared/page-header";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { ErrorState, FilterTabs, Skeleton } from "@shared/ui/misc";
@@ -156,6 +157,7 @@ function AttentionRow({
 
 export default function OverviewPage() {
   const t = useTranslations("adminA.dashboard");
+  const hydrated = useHydrated();
   const [range, setRange] = useState<AnalyticsRange>("30d");
   const overview = useQuery({ queryKey: [...keys.analytics, range], queryFn: () => analyticsApi.overview(range) });
   const critical = useQuery({
@@ -175,7 +177,9 @@ export default function OverviewPage() {
     queryFn: () => payoutsApi.list({ status: "REQUESTED", limit: 1 }),
   });
 
-  const d = overview.data;
+  // Withhold data until the reload-time rehydrate settles, so a query that
+  // resolves during streamed hydration can't mismatch the server's loading render.
+  const d = hydrated ? overview.data : undefined;
 
   return (
     <>
@@ -218,11 +222,11 @@ export default function OverviewPage() {
             <Card>
               <CardHeader title={t("attention.title")} description={t("attention.description")} />
               <div className="p-2">
-                <AttentionRow href="/admin/safety" icon={ShieldAlert} label={t("attention.critical")} count={critical.data?.total} tone="danger" />
-                <AttentionRow href="/admin/safety" icon={ShieldAlert} label={t("attention.openIncidents")} count={openIncidents.data?.total} tone="danger" />
+                <AttentionRow href="/admin/safety" icon={ShieldAlert} label={t("attention.critical")} count={hydrated ? critical.data?.total : undefined} tone="danger" />
+                <AttentionRow href="/admin/safety" icon={ShieldAlert} label={t("attention.openIncidents")} count={hydrated ? openIncidents.data?.total : undefined} tone="danger" />
                 <AttentionRow href="/admin/caregivers" icon={UserCheck} label={t("attention.toVerify")} count={d?.caregivers.pendingVerification} tone="accent" />
-                <AttentionRow href="/admin/disputes" icon={Scale} label={t("attention.disputes")} count={disputes.data?.total} tone="accent" />
-                <AttentionRow href="/admin/payouts" icon={Wallet} label={t("attention.payouts")} count={payouts.data?.total} tone="brand" />
+                <AttentionRow href="/admin/disputes" icon={Scale} label={t("attention.disputes")} count={hydrated ? disputes.data?.total : undefined} tone="accent" />
+                <AttentionRow href="/admin/payouts" icon={Wallet} label={t("attention.payouts")} count={hydrated ? payouts.data?.total : undefined} tone="brand" />
               </div>
             </Card>
           </div>

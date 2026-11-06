@@ -1,5 +1,6 @@
 {
   "Invalid_OTP": "کوڈ درست نہیں ہے",
+  "No_account_found_with_this_number_Please_sign_up": "اس نمبر سے کوئی اکاؤنٹ نہیں ملا۔ براہِ کرم سائن اپ کریں۔",
   "Invalid_check_in_OTP": "چیک اِن کوڈ درست نہیں ہے",
   "Check_in_OTP_expired_or_not_requested": "چیک اِن کوڈ کی میعاد ختم ہو گئی یا کوڈ منگوایا نہیں گیا",
   "Too_many_attempts_request_a_new_OTP": "بہت زیادہ کوششیں ہو گئیں، نیا کوڈ منگوائیں",

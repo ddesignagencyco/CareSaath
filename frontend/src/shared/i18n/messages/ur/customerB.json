@@ -120,6 +120,11 @@
     "waiting": "کیئرگیور کے لوکیشن شیئر کرنے کا انتظار…",
     "caregiverHere": "کیئرگیور کی لوکیشن",
     "eta": "تقریباً {min} منٹ کی دوری پر",
+    "arrivingIn": "پہنچنے میں",
+    "minUnit": "منٹ",
+    "onTheWay": "آپ کا کیئرگیور راستے میں ہے",
+    "onTheWayNamed": "{name} راستے میں ہیں",
+    "live": "لائیو",
     "arrivingNow": "پہنچ رہے ہیں"
   },
   "arrivalCode": {

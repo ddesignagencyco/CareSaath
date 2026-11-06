@@ -115,6 +115,14 @@ export class AuthService {
   }
 
   async requestOtp(phone: string): Promise<{ ttlSeconds: number }> {
+    // Login is for existing accounts only — never send a code to an unregistered
+    // number (sign-up has its own OTP flow). This surfaces "no account" at the
+    // number step instead of after the user types a code that could never verify.
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (!existing) {
+      throw new NotFoundException('No account found with this number. Please sign up.');
+    }
+
     const rateKey = `otp:rl:${phone}`;
     const used = await this.redis.client.incr(rateKey);
     if (used === 1) {
@@ -125,7 +133,6 @@ export class AuthService {
     }
 
     const code = randomInt(100000, 999999).toString();
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
     const ttlSeconds = await this.otpTtlSeconds();
     await this.prisma.otpCode.create({
       data: {

@@ -135,7 +135,7 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
     setLocating(true);
     try {
       const pos = await getPosition();
-      checkIn.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng });
+      checkIn.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy });
     } catch (e) {
       setGeoError(geoErrorText(e));
     } finally {
@@ -269,7 +269,7 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
     setLocating(true);
     try {
       const pos = await getPosition();
-      checkOut.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng });
+      checkOut.mutate({ method: "GPS", lat: pos.lat, lng: pos.lng, accuracy: pos.accuracy });
     } catch (e) {
       setGeoError(geoErrorText(e));
     } finally {

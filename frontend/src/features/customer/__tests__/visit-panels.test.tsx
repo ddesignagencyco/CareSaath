@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { messages } from "@shared/i18n/messages";
 import { apiPath, json, mockFetch, renderWithProviders } from "@/test/utils";
-import { PaymentPanel, ReviewPanel } from "../components/visit-panels";
+import { LiveLocationMap, PaymentPanel, ReviewPanel } from "../components/visit-panels";
 import { router, signIn, STORAGE_KEY, visitDetail } from "./fixtures";
 
 const en = messages.en.customerB;
@@ -66,6 +66,38 @@ describe("PaymentPanel", { timeout: 15_000 }, () => {
     expect(f.calls.find((c) => c.method === "POST")!.body).toEqual({ visitId: "v1", method: "CARD" });
     // The redirecting toast only renders on the gateway (checkoutUrl) branch.
     expect(await screen.findByText(en.payment.redirecting)).toBeInTheDocument();
+  });
+});
+
+describe("LiveLocationMap", { timeout: 15_000 }, () => {
+  it("shows a prominent, named ETA from the latest fix", async () => {
+    mockFetch(
+      router({
+        "GET /customer/visits/v1/location": json({ visitId: "v1", lat: 31.5, lng: 74.3, at: new Date().toISOString(), etaMinutes: 5 }),
+      }),
+    );
+    renderWithProviders(<LiveLocationMap visitId="v1" caregiverName="Fatima Noor" />, { storageKey: STORAGE_KEY });
+
+    expect(await screen.findByText(en.liveTrack.arrivingIn)).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText(en.liveTrack.minUnit)).toBeInTheDocument();
+    expect(screen.getByText("Fatima Noor is on the way")).toBeInTheDocument();
+  });
+
+  it("shows 'arriving now' once the ETA reaches zero", async () => {
+    mockFetch(
+      router({
+        "GET /customer/visits/v1/location": json({ visitId: "v1", lat: 31.5, lng: 74.3, at: new Date().toISOString(), etaMinutes: 0 }),
+      }),
+    );
+    renderWithProviders(<LiveLocationMap visitId="v1" />, { storageKey: STORAGE_KEY });
+    expect(await screen.findByText(en.liveTrack.arrivingNow)).toBeInTheDocument();
+  });
+
+  it("waits for a location before showing an ETA", async () => {
+    mockFetch(router({ "GET /customer/visits/v1/location": json(null) }));
+    renderWithProviders(<LiveLocationMap visitId="v1" />, { storageKey: STORAGE_KEY });
+    expect(await screen.findByText(en.liveTrack.waiting)).toBeInTheDocument();
   });
 });
 
