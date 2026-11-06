@@ -404,6 +404,8 @@ export interface CheckInInput {
   method?: CheckMethod;
   lat?: number;
   lng?: number;
+  /** Device-reported GPS accuracy (metres); lets the server forgive drift at the geofence. */
+  accuracy?: number;
   code?: string;
 }
 

@@ -244,6 +244,33 @@ describe('VisitsService transitions', () => {
     expect(prisma.visit.update).not.toHaveBeenCalled();
   });
 
+  it('forgives GPS drift up to the device accuracy, but a capped accuracy cannot defeat a distant fix', async () => {
+    const base = () => {
+      const v = visitFixture({ status: 'EN_ROUTE' });
+      (v.booking as Record<string, unknown>)['address'] = { latitude: 31.5, longitude: 74.3 };
+      return v;
+    };
+    // ~650 m due north of the address (1° latitude ≈ 111_320 m); radius is 600 m.
+    const far = { lat: 31.5 + 650 / 111_320, lng: 74.3 };
+
+    // No accuracy hint → just outside the radius → rejected.
+    prisma.visit.findFirst.mockResolvedValue(base());
+    await expect(service.checkIn(caregiver, 'v-1', far)).rejects.toThrow(/from the visit address/);
+
+    // A 75 m-accurate fix is forgiven and the check-in proceeds.
+    prisma.visit.findFirst.mockResolvedValue(base());
+    prisma.visit.findUnique.mockResolvedValue(base());
+    prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
+    prisma.visitStatusHistory.create.mockResolvedValue({});
+    await expect(service.checkIn(caregiver, 'v-1', { ...far, accuracy: 75 })).resolves.toMatchObject({ status: 'CHECKED_IN' });
+
+    // A genuinely distant fix is still rejected even with an absurd accuracy (cap).
+    prisma.visit.findFirst.mockResolvedValue(base());
+    await expect(
+      service.checkIn(caregiver, 'v-1', { lat: 31.5 + 1000 / 111_320, lng: 74.3, accuracy: 100_000 }),
+    ).rejects.toThrow(/from the visit address/);
+  });
+
   it('does not burn the check-in OTP when the visit is not EN_ROUTE', async () => {
     prisma.visit.findFirst.mockResolvedValue(visitFixture({ status: 'CONFIRMED' }));
     await expect(

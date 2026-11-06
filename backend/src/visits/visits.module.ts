@@ -81,6 +81,14 @@ const VISIT_LOCATION_TTL_SECONDS = Number(process.env['VISIT_LOCATION_TTL_SECOND
 /** Rough average travel speed used only for the ETA estimate shown to the customer. */
 const VISIT_LOCATION_AVERAGE_SPEED_KMH = Number(process.env['VISIT_LOCATION_AVERAGE_SPEED_KMH'] ?? 25);
 
+/**
+ * Max GPS drift (metres) forgiven on a geofenced check-in/out. A phone fix is
+ * only accurate to tens of metres, so a caregiver standing at the door can read
+ * just outside a tight radius. We widen the radius by the device-reported
+ * accuracy, capped here so a wildly inaccurate fix can't defeat the geofence.
+ */
+const GPS_ACCURACY_TOLERANCE_METERS = 75;
+
 /** A booking is complete once none of its visits is in one of these states. */
 const OPEN_VISIT_STATUSES: VisitStatus[] = [
   VisitStatus.REQUESTED,
@@ -171,6 +179,13 @@ export class CheckInDto {
   @Type(() => Number)
   @IsNumber()
   lng?: number;
+
+  @ApiPropertyOptional({ example: 35, description: 'GPS accuracy in metres reported by the device; widens the geofence by up to this (capped) to absorb drift' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  accuracy?: number;
 
   @ApiPropertyOptional({ example: '123456', description: '6-digit OTP code received from customer (required when method is OTP)' })
   @IsOptional()
@@ -345,11 +360,15 @@ export class VisitsService {
     lat: number,
     lng: number,
     action: string,
+    accuracy?: number,
   ) {
     const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
     if (radius <= 0 || !address) return;
     const meters = distanceMeters(lat, lng, Number(address.latitude), Number(address.longitude));
-    if (meters > radius) {
+    // Forgive GPS drift up to the device-reported accuracy (capped), so a fix
+    // that lands just outside the radius but is itself uncertain still passes.
+    const tolerance = Math.min(Math.max(accuracy ?? 0, 0), GPS_ACCURACY_TOLERANCE_METERS);
+    if (meters > radius + tolerance) {
       throw new BadRequestException(
         `You are about ${Math.round(meters)} m from the visit address; ${action} is allowed within ${radius} m`,
       );
@@ -677,7 +696,7 @@ export class VisitsService {
       throw new BadRequestException(`Cannot move visit from ${visit.status} to CHECKED_IN`);
     }
     if (method === CheckMethod.GPS) {
-      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-in');
+      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-in', dto.accuracy);
     } else {
       await this.verifyCheckInOtp(id, dto.code);
     }
@@ -717,7 +736,7 @@ export class VisitsService {
       throw new BadRequestException(`Cannot move visit from ${visit.status} to CHECKED_OUT`);
     }
     if (method === CheckMethod.GPS) {
-      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-out');
+      await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-out', dto.accuracy);
     } else {
       await this.verifyCheckInOtp(id, dto.code);
     }

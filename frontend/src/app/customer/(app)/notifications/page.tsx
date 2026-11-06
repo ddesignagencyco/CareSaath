@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, TableSkeleton } from "@shared/ui/misc";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { notificationsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
+import { useSessionRaw } from "@/features/customer/lib/auth";
 import { getSeenAt, markSeen, useDescribe } from "@/features/customer/lib/labels";
 
 const DOT = {
@@ -26,6 +27,7 @@ export default function NotificationsPage() {
   const t = useTranslations("customerA.notifications");
   const f = useFmt();
   const describe = useDescribe();
+  const { hydrated } = useSessionRaw();
   const list = useQuery({ queryKey: [...keys.notifications, "list"], queryFn: () => notificationsApi.list({ limit: 50 }) });
   // Snapshot of "seen" before this visit, so new items stay highlighted while the page is open.
   const [seenBefore] = useState(() => (typeof window === "undefined" ? "" : getSeenAt()));
@@ -44,7 +46,7 @@ export default function NotificationsPage() {
       <Card>
         {list.isError ? (
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : !list.data ? (
+        ) : !hydrated || !list.data ? (
           <TableSkeleton rows={4} />
         ) : items.length === 0 ? (
           <EmptyState icon={Bell} title={t("empty")} />

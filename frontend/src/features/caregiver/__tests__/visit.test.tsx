@@ -94,7 +94,7 @@ describe("visit flow: next action per status", () => {
       renderPage();
       await user.click(await screen.findByRole("button", { name: "Check in with my location" }));
       await vi.waitFor(() => expect(posts(f)).toHaveLength(1));
-      expect(posts(f)[0].body).toEqual({ method: "GPS", lat: 31.5163, lng: 74.3435 });
+      expect(posts(f)[0].body).toEqual({ method: "GPS", lat: 31.5163, lng: 74.3435, accuracy: 10 });
     });
 
     it("without geolocation shows a message and offers the family code; nothing is sent", async () => {

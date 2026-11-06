@@ -6,6 +6,7 @@ import { Bell, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { useHydrated } from "@shared/api/session";
 import { PageHeader } from "@shared/page-header";
 import { Card } from "@shared/ui/card";
 import { EmptyState, ErrorState, TableSkeleton } from "@shared/ui/misc";
@@ -26,6 +27,7 @@ export default function NotificationsPage() {
   const t = useTranslations("caregiverA.notifications");
   const f = useFmt();
   const describe = useDescribe();
+  const hydrated = useHydrated();
   const list = useQuery({ queryKey: [...keys.notifications, "list"], queryFn: () => notificationsApi.list({ limit: 50 }) });
   // Snapshot of "seen" before this visit, so new items stay highlighted while the page is open.
   const [seenBefore] = useState(() => (typeof window === "undefined" ? "" : getSeenAt()));
@@ -44,7 +46,7 @@ export default function NotificationsPage() {
       <Card>
         {list.isError ? (
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : !list.data ? (
+        ) : !hydrated || !list.data ? (
           <TableSkeleton rows={4} />
         ) : items.length === 0 ? (
           <EmptyState icon={Bell} title={t("empty")} />

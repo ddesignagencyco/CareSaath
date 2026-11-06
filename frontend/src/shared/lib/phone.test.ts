@@ -46,10 +46,24 @@ describe("parsePkMobile", () => {
 });
 
 describe("sanitizePhoneInput", () => {
-  it("keeps digits, spaces, dashes and one leading plus, capped at 17 chars", () => {
+  it("keeps digits, spaces, dashes and one leading plus", () => {
     expect(sanitizePhoneInput("+92 (300) abc-123")).toBe("+92 300 -123");
     expect(sanitizePhoneInput("92+300+1")).toBe("923001");
-    expect(sanitizePhoneInput("1".repeat(30))).toHaveLength(17);
+  });
+
+  it("stops accepting extra digits once the number is complete for its prefix", () => {
+    // bare national: 10 digits max
+    expect(sanitizePhoneInput("3001234567890")).toBe("3001234567");
+    expect(sanitizePhoneInput("300 1234567 890")).toBe("300 1234567 ");
+    // leading 0: 11 digits
+    expect(sanitizePhoneInput("030012345679999")).toBe("03001234567");
+    // 92 / +92: 12 digits
+    expect(sanitizePhoneInput("923001234567890")).toBe("923001234567");
+    expect(sanitizePhoneInput("+923001234567890")).toBe("+923001234567");
+    // 0092: 14 digits
+    expect(sanitizePhoneInput("009230012345670000")).toBe("00923001234567");
+    // a bare run of digits is capped to the national length, not 17
+    expect(sanitizePhoneInput("1".repeat(30))).toBe("1111111111");
   });
 });
 

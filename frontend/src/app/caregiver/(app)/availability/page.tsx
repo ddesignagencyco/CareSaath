@@ -20,6 +20,7 @@ import { keys } from "@/features/caregiver/lib/api/keys";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { localDayKey } from "@shared/lib/visit";
 import { AvailableNowCard } from "@/features/caregiver/components/available-now-card";
+import { useHydrated } from "@shared/api/session";
 import { useMe } from "@/features/caregiver/lib/auth";
 
 /** Display Monday-first; the API uses 0 = Sunday … 6 = Saturday. */
@@ -234,8 +235,11 @@ export default function AvailabilityPage() {
   const t = useTranslations("caregiverB.availability");
   const f = useFmt();
   const me = useMe();
+  const hydrated = useHydrated();
   const availability = useQuery({ queryKey: keys.availability, queryFn: availabilityApi.get });
-  const a = availability.data;
+  // Withhold until the reload-time rehydrate settles, so a query that resolves
+  // during streamed hydration can't mismatch the server's loading render.
+  const a = hydrated ? availability.data : undefined;
   const summary = a
     ? DAYS.filter((d) => a.rules.some((r) => r.dayOfWeek === d.dow))
         .map((d) => f.dayOfWeek(d.dow))

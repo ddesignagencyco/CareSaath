@@ -25,6 +25,20 @@ export function visitStart(dateOnly: string, hhmm: string): number {
 export const mapsUrl = (a: Pick<Address, "latitude" | "longitude">) =>
   `https://www.google.com/maps/dir/?api=1&destination=${a.latitude},${a.longitude}`;
 
+/**
+ * inDrive-style live ETA. The backend sends `etaMinutes` computed at the moment
+ * of a GPS fix (`at`); this anchors that value to the clock so the countdown
+ * keeps falling minute-by-minute between fixes, and re-syncs whenever a fresh
+ * fix arrives. `now = 0` (server prerender) returns the raw server value so
+ * hydration matches. Never returns a negative number.
+ */
+export function effectiveEta(etaMinutes: number, at: string, now: number): number {
+  const base = Math.max(0, Math.round(etaMinutes));
+  if (!now) return base;
+  const elapsedMin = Math.floor((now - new Date(at).getTime()) / 60_000);
+  return Math.max(0, base - Math.max(0, elapsedMin));
+}
+
 export const VISIT_TONE: Record<VisitStatus, Tone> = {
   REQUESTED: "accent",
   CONFIRMED: "brand",

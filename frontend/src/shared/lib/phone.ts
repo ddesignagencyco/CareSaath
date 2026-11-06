@@ -58,9 +58,35 @@ export function parsePkMobile(input: string): PhoneResult {
   return { ok: true, e164: `+92${national}` };
 }
 
-/** Keep only what a phone number can contain while typing. */
+/**
+ * Keep only what a phone number can contain while typing, and stop accepting
+ * extra digits once the number is complete for its detected prefix — so after a
+ * valid number (green check) the field no longer swallows stray trailing digits.
+ * Every accepted shape still fits: bare national (10), leading 0 (11), 92 (12),
+ * 0092 (14).
+ */
 export function sanitizePhoneInput(input: string): string {
-  return input.replace(/[^\d+\s-]/g, "").replace(/(?!^)\+/g, "").slice(0, 17);
+  const s = input.replace(/[^\d+\s-]/g, "").replace(/(?!^)\+/g, "");
+  const digits = s.replace(/\D/g, "");
+  const maxDigits = digits.startsWith("0092")
+    ? 14
+    : s.startsWith("+") || digits.startsWith("92")
+      ? 12
+      : digits.startsWith("0")
+        ? 11
+        : 10;
+  if (digits.length <= maxDigits) return s.slice(0, 17);
+  // Drop surplus trailing digits, keeping any spaces/dashes already typed.
+  let kept = 0;
+  let out = "";
+  for (const ch of s) {
+    if (ch >= "0" && ch <= "9") {
+      if (kept >= maxDigits) continue;
+      kept++;
+    }
+    out += ch;
+  }
+  return out.slice(0, 17);
 }
 
 /**

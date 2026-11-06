@@ -18,7 +18,7 @@ import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { useMe } from "@/features/customer/lib/auth";
+import { useMe, useSessionRaw } from "@/features/customer/lib/auth";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
@@ -86,6 +86,12 @@ export default function AccountPage() {
   const tc = useTranslations("common");
   const f = useFmt();
   const me = useMe();
+  // Until the reload-time session rehydrate finishes, `hydrated` is false on both
+  // the server render and the first client render, so gating user data on it keeps
+  // the two in sync (a query that resolves during streamed hydration would otherwise
+  // make the client paint a name the server rendered as the "you" fallback).
+  const { hydrated } = useSessionRaw();
+  const profile = hydrated ? me.data : undefined;
 
   return (
     <>
@@ -95,15 +101,15 @@ export default function AccountPage() {
           <Card>
             <div className="p-5 sm:p-6">
               <div className="flex items-center gap-4 border-b border-ink-100 pb-5">
-                <Avatar name={me.data?.fullName || t("you")} size="lg" />
+                <Avatar name={profile?.fullName || t("you")} size="lg" />
                 <div className="min-w-0">
-                  <p className="truncate text-lg font-extrabold text-ink-900">{me.data?.fullName || t("addName")}</p>
-                  <p className="tabular text-sm text-ink-500">{me.data ? formatPkMobile(me.data.phone) : " "}</p>
-                  {me.data && <p className="mt-0.5 text-xs text-ink-400">{t("memberSince", { date: f.date(me.data.createdAt) })}</p>}
+                  <p className="truncate text-lg font-extrabold text-ink-900">{profile?.fullName || t("addName")}</p>
+                  <p className="tabular text-sm text-ink-500">{profile ? formatPkMobile(profile.phone) : " "}</p>
+                  {profile && <p className="mt-0.5 text-xs text-ink-400">{t("memberSince", { date: f.date(profile.createdAt) })}</p>}
                 </div>
               </div>
               <div className="pt-5">
-                {me.data ? <ProfileForm key={`${me.data.fullName}-${me.data.preferredLanguage}`} me={me.data} /> : <Skeleton className="h-48" />}
+                {profile ? <ProfileForm key={`${profile.fullName}-${profile.preferredLanguage}`} me={profile} /> : <Skeleton className="h-48" />}
               </div>
             </div>
           </Card>

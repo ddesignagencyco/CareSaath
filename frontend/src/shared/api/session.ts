@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import type { AccessTokenPayload } from "../types";
 
 /**
@@ -89,6 +90,16 @@ export function sessionReady(): boolean {
 export function subscribeBootstrap(cb: () => void): () => void {
   bootListeners.add(cb);
   return () => bootListeners.delete(cb);
+}
+
+/**
+ * True once the reload-time session rehydrate has settled. False on the server
+ * render and on the first client render, so gating query data on it keeps SSR
+ * and hydration in step — a query that resolves during streamed hydration can't
+ * paint data the server rendered as a loading/fallback state.
+ */
+export function useHydrated(): boolean {
+  return useSyncExternalStore(subscribeBootstrap, sessionReady, () => false);
 }
 
 /** Test-only: clear all in-memory session state between tests. */

@@ -52,8 +52,13 @@ export async function refreshTokens() {
 }
 
 export function useMe() {
-  const { raw } = useSessionRaw();
-  return useQuery<Me>({ queryKey: keys.me, queryFn: meApi.get, enabled: !!raw, staleTime: 60_000 });
+  const { raw, hydrated } = useSessionRaw();
+  const q = useQuery<Me>({ queryKey: keys.me, queryFn: meApi.get, enabled: !!raw, staleTime: 60_000 });
+  // Withhold the result until the reload-time session rehydrate finishes. `hydrated`
+  // is false on both the server render and the first client render, so a query that
+  // resolves during streamed hydration can't make the client paint data the server
+  // rendered as a fallback (which would trip a hydration mismatch).
+  return hydrated ? q : ({ ...q, data: undefined } as typeof q);
 }
 
 /** Where a signed-in user belongs, based on GET /customer/me. */

@@ -120,6 +120,11 @@
     "waiting": "Waiting for the caregiver to start sharing their location…",
     "caregiverHere": "Caregiver's location",
     "eta": "About {min} min away",
+    "arrivingIn": "Arriving in",
+    "minUnit": "min",
+    "onTheWay": "Your caregiver is on the way",
+    "onTheWayNamed": "{name} is on the way",
+    "live": "Live",
     "arrivingNow": "Arriving now"
   },
   "arrivalCode": {
