@@ -98,7 +98,7 @@ export default function CustomerVisitPage() {
                 {f.timeWindow(v.timeWindowStart, v.timeWindowEnd)} · {t("serviceFor", { service: L.specialty(v.booking.serviceType), patient: v.booking.patient.name })}
               </p>
             </div>
-            <Badge tone={VISIT_TONE[v.status]} dot className="text-sm">
+            <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
               {L.visitCustomer(v.status)}
             </Badge>
           </header>

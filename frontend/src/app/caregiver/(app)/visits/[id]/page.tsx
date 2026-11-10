@@ -115,7 +115,7 @@ export default function VisitDetailPage() {
                 </span>
               )}
             </div>
-            <Badge tone={VISIT_TONE[v.status]} dot className="text-sm">
+            <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
               {L.visitCaregiver(v.status)}
             </Badge>
           </header>
