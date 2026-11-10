@@ -87,7 +87,9 @@ export function useVisitLocationStream(visitId: string, active: boolean) {
           if (!stopped) visitsApi.postLocation(visitId, pos.coords.latitude, pos.coords.longitude).catch(() => undefined);
         },
         () => undefined,
-        { enableHighAccuracy: true, maximumAge: 10_000, timeout: 10_000 },
+        // Low accuracy (network/WiFi) so the fix actually resolves on desktops without a GPS
+        // chip; the customer only sees an ETA, not a precise position, so this is enough.
+        { enableHighAccuracy: false, maximumAge: 10_000, timeout: 10_000 },
       );
     };
     push();

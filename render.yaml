@@ -78,6 +78,10 @@ services:
       # per-visit stream starts. Raised to 45 for easier testing (code default is 15).
       - key: VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES
         value: 45
+      # Default travel estimate shown while the caregiver is EN_ROUTE but no GPS fix has
+      # arrived yet. Counts down from enRouteAt; replaced by a real ETA once GPS streams in.
+      - key: VISIT_DEFAULT_ETA_MINUTES
+        value: 25
       # Test-data seeding on deploy (prisma/seed.mjs). Set SEED_ALLOW_PRODUCTION=false
       # once this is a real production environment.
       - key: SEED_ALLOW_PRODUCTION
