@@ -98,7 +98,16 @@ const escapeHtml = (s: string): string =>
   );
 
 function signInPage(next: string, failed: boolean): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>CareSaath API - Private access</title><style>body{font-family:system-ui,sans-serif;background:#f5f7fa;display:grid;place-items:center;min-height:100vh;margin:0}form{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:min(92vw,360px)}h1{font-size:1.2rem;margin:0 0 .5rem}p{color:#555;font-size:.9rem}input,button{width:100%;box-sizing:border-box;padding:.7rem;margin-top:.75rem;border-radius:8px;font-size:1rem}input{border:1px solid #ccd}button{border:0;background:#0f766e;color:#fff;cursor:pointer}.err{color:#b91c1c}</style></head><body><form method="post" action="${SIGN_IN_PATH}"><h1>Private access</h1><p>Enter the access key to continue.</p>${failed ? '<p class="err">That key was not accepted.</p>' : ''}<input type="hidden" name="next" value="${escapeHtml(next)}"><input type="password" name="key" autocomplete="current-password" placeholder="Access key" required autofocus><button type="submit">Continue</button></form></body></html>`;
+  const css =
+    ':root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:#171f1d;color:#eef3f1;font-family:Ubuntu,system-ui,-apple-system,"Segoe UI",sans-serif}' +
+    '.card{width:min(100%,650px);background:#1c2926;border:1px solid #2c3d39;border-radius:20px;padding:36px}' +
+    'h1{margin:0 0 12px;font-size:2rem}.lead{margin:0 0 28px;color:#9db0aa;font-size:1.1rem;line-height:1.6}' +
+    'h2{margin:0 0 12px;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:#9db0aa}' +
+    '.box{border:1px solid #2c3d39;border-radius:14px;padding:14px 16px;margin-bottom:12px;line-height:1.5}.box b{display:block}' +
+    'label{display:block;font-weight:700;margin:24px 0 10px}input{width:100%;height:62px;border-radius:14px;border:1px solid #2c3d39;background:#1a2523;color:inherit;font-size:1rem;padding:0 16px}input:focus{outline:2px solid #4fb69b}' +
+    'button{width:100%;margin-top:14px;height:60px;border:0;border-radius:14px;background:#4fb69b;color:#fff;font-size:1.1rem;font-weight:700;cursor:pointer}button:hover{background:#45a48b}' +
+    '.err{margin:16px 0 0;padding:12px 14px;border-radius:12px;background:#3a1f21;color:#ffb4b4}.foot{margin:18px 0 0;color:#9db0aa;font-size:.9rem}';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>CareSaath API - Private access</title><style>${css}</style></head><body><main class="card"><h1>CareSaath API</h1><p class="lead">Private access. This server powers the CareSaath home nursing and physiotherapy platform and is open to authorised users and the CareSaath apps only.</p><h2>Who needs this</h2><div class="box"><b>Developers &amp; CareSaath tech staff</b>API documentation (Swagger), service status and integration access for bookings, caregivers, visits, payments and notifications.</div><div class="box"><b>Patients, families &amp; caregivers</b>You do not need this page. Use the CareSaath website or app; it connects to this server for you.</div><form method="post" action="${SIGN_IN_PATH}"><h2 style="margin-top:28px">Enter the access key</h2><input type="hidden" name="next" value="${escapeHtml(next)}"><label for="key">Access key</label><input id="key" type="password" name="key" autocomplete="current-password" required autofocus>${failed ? '<p class="err" role="alert">That key was not accepted. Please try again.</p>' : ''}<button type="submit">Continue</button></form><p class="foot">Don't have a key? Contact the CareSaath team.</p></main></body></html>`;
 }
 
 function sendSignIn(
@@ -180,13 +189,11 @@ export function apiAccessKeyMiddleware(rawKey: string | undefined) {
       sendSignIn(res, safeRedirectTarget(req.originalUrl), false, 401);
       return;
     }
-    res
-      .status(401)
-      .json({
-        statusCode: 401,
-        error: 'Unauthorized',
-        message: 'Missing or invalid API access key',
-      });
+    res.status(401).json({
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'Missing or invalid API access key',
+    });
   };
 }
 
