@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Injectable,
@@ -67,6 +68,14 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** A caregiver actively engaged with a patient right now; a future CONFIRMED visit is fine. */
 const ACTIVE_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.EN_ROUTE,
+  VisitStatus.CHECKED_IN,
+  VisitStatus.IN_PROGRESS,
+];
+
+/** A visit the caregiver has already committed to; a new overlapping slot must not be accepted. */
+const COMMITTED_VISIT_STATUSES: VisitStatus[] = [
+  VisitStatus.CONFIRMED,
   VisitStatus.EN_ROUTE,
   VisitStatus.CHECKED_IN,
   VisitStatus.IN_PROGRESS,
@@ -866,16 +875,43 @@ export class BookingsService {
         'You are currently on a visit; complete it before accepting another booking',
       );
     }
-    await this.prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id },
+    // Prevent double-booking: refuse if confirming this would overlap a visit the caregiver
+    // has already committed to (from another booking) on the same date and time window.
+    const clash = await this.prisma.visit.findMany({
+      where: {
+        status: { in: COMMITTED_VISIT_STATUSES },
+        booking: { caregiverId, id: { not: id } },
+        scheduledDate: { gte: booking.startDate, lte: booking.endDate },
+        timeWindowStart: { lt: booking.timeWindowEnd },
+        timeWindowEnd: { gt: booking.timeWindowStart },
+      },
+      take: 1,
+      select: { id: true },
+    });
+    if (clash.length > 0) {
+      throw new ConflictException(
+        'This booking overlaps a visit you have already confirmed for that time',
+      );
+    }
+    // Confirm only if the booking is STILL requested, so an in-flight expiry sweep that
+    // already declined it cannot be silently overwritten (and vice-versa).
+    const confirmed = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.booking.updateMany({
+        where: { id, status: BookingStatus.REQUESTED },
         data: { status: BookingStatus.CONFIRMED },
       });
+      if (res?.count === 0) {
+        return false;
+      }
       await tx.visit.updateMany({
         where: { bookingId: id, status: 'REQUESTED' },
         data: { status: 'CONFIRMED' },
       });
+      return true;
     });
+    if (!confirmed) {
+      throw new ConflictException('This booking is no longer open to accept');
+    }
     await this.audit.log({
       actorId: user.sub,
       action: 'booking.accepted',
@@ -898,9 +934,9 @@ export class BookingsService {
     if (booking.status !== BookingStatus.REQUESTED) {
       throw new BadRequestException('Only requested bookings can be declined');
     }
-    await this.prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id },
+    const declined = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.booking.updateMany({
+        where: { id, status: BookingStatus.REQUESTED },
         data: {
           status: BookingStatus.DECLINED,
           cancelledAt: new Date(),
@@ -908,11 +944,25 @@ export class BookingsService {
           cancelReason: dto.reason ?? null,
         },
       });
+      if (res?.count === 0) {
+        return false;
+      }
       await tx.visit.updateMany({
         where: { bookingId: id, status: { in: ['REQUESTED', 'CONFIRMED'] } },
         data: { status: 'DECLINED' },
       });
+      // No visit will happen — return the one-time promo redemption.
+      if (booking.promoCodeId) {
+        await tx.promoCode.updateMany({
+          where: { id: booking.promoCodeId, usesCount: { gt: 0 } },
+          data: { usesCount: { decrement: 1 } },
+        });
+      }
+      return true;
     });
+    if (!declined) {
+      throw new ConflictException('This booking is no longer open to decline');
+    }
     await this.audit.log({
       actorId: user.sub,
       action: 'booking.declined',
@@ -937,9 +987,9 @@ export class BookingsService {
     if (booking.status !== BookingStatus.REQUESTED && booking.status !== BookingStatus.CONFIRMED) {
       throw new BadRequestException('Only requested or confirmed bookings can be cancelled');
     }
-    await this.prisma.$transaction(async (tx) => {
-      await tx.booking.update({
-        where: { id },
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      const res = await tx.booking.updateMany({
+        where: { id, status: { in: [BookingStatus.REQUESTED, BookingStatus.CONFIRMED] } },
         data: {
           status: BookingStatus.CANCELLED,
           cancelledAt: new Date(),
@@ -947,11 +997,25 @@ export class BookingsService {
           cancelReason: dto.reason ?? null,
         },
       });
+      if (res?.count === 0) {
+        return false;
+      }
       await tx.visit.updateMany({
         where: { bookingId: id, status: { in: ['REQUESTED', 'CONFIRMED'] } },
         data: { status: 'CANCELLED' },
       });
+      // No visit will happen — return the one-time promo redemption.
+      if (booking.promoCodeId) {
+        await tx.promoCode.updateMany({
+          where: { id: booking.promoCodeId, usesCount: { gt: 0 } },
+          data: { usesCount: { decrement: 1 } },
+        });
+      }
+      return true;
     });
+    if (!cancelled) {
+      throw new ConflictException('This booking can no longer be cancelled');
+    }
     await this.audit.log({
       actorId: user.sub,
       action: 'booking.cancelled',
@@ -1002,6 +1066,31 @@ export class BookingsService {
     const reschedulable = ['REQUESTED', 'CONFIRMED'] as const;
     if (!reschedulable.includes(visit.status as (typeof reschedulable)[number])) {
       throw new BadRequestException('Only requested or confirmed visits can be rescheduled');
+    }
+    // Hold the new date/time to the same guarantees as a fresh booking: the caregiver's
+    // weekly schedule and blackout dates must allow it (the create path enforces this; the
+    // reschedule path previously skipped it, letting a visit land on a blacked-out day).
+    await this.assertCaregiverAvailable(
+      booking.caregiver.id,
+      [toDateOnly(dto.newDate)],
+      dto.timeWindowStart,
+      dto.timeWindowEnd,
+    );
+    // And don't let the replacement overlap another visit the caregiver has committed to.
+    const clash = await this.prisma.visit.findMany({
+      where: {
+        status: { in: COMMITTED_VISIT_STATUSES },
+        id: { not: visit.id },
+        booking: { caregiverId: booking.caregiver.id },
+        scheduledDate: toDateOnly(dto.newDate),
+        timeWindowStart: { lt: dto.timeWindowEnd },
+        timeWindowEnd: { gt: dto.timeWindowStart },
+      },
+      take: 1,
+      select: { id: true },
+    });
+    if (clash.length > 0) {
+      throw new ConflictException('That time overlaps another visit the caregiver has confirmed');
     }
 
     const replacement = await this.prisma.$transaction(async (tx) => {

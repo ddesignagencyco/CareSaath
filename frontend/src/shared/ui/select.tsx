@@ -159,10 +159,13 @@ export function MultiSelect<T extends string>({
   isSearchable = true,
   isDisabled,
   className,
+  closeMenuOnSelect = false,
   "aria-label": ariaLabel,
 }: BaseProps<T> & {
   value: T[];
   onChange: (value: T[]) => void;
+  /** Close the menu after each pick. Default false so several options can be chosen in a row. */
+  closeMenuOnSelect?: boolean;
 }) {
   const instanceId = useId();
   const t = useTranslations("common.states");
@@ -170,7 +173,7 @@ export function MultiSelect<T extends string>({
     <ReactSelect<Opt, true>
       {...common}
       isMulti
-      closeMenuOnSelect={false}
+      closeMenuOnSelect={closeMenuOnSelect}
       hideSelectedOptions={false}
       instanceId={instanceId}
       inputId={inputId}

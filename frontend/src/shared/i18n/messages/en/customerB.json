@@ -125,6 +125,7 @@
     "onTheWay": "Your caregiver is on the way",
     "onTheWayNamed": "{name} is on the way",
     "live": "Live",
+    "estimated": "Estimate",
     "arrivingNow": "Arriving now"
   },
   "arrivalCode": {

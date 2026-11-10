@@ -49,23 +49,46 @@ export class BookingExpiryService implements OnModuleInit, OnModuleDestroy {
   async run(now = new Date()): Promise<BookingExpiryResult> {
     const expired = await this.prisma.booking.findMany({
       where: { status: BookingStatus.REQUESTED, respondBy: { lt: now } },
-      select: { id: true, customerId: true, caregiverId: true, caregiver: { select: { userId: true } } },
+      select: {
+        id: true,
+        customerId: true,
+        caregiverId: true,
+        promoCodeId: true,
+        caregiver: { select: { userId: true } },
+      },
     });
     for (const booking of expired) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.booking.update({
-          where: { id: booking.id },
+      // Decline only if the booking is STILL requested. Guarding on status (an atomic
+      // updateMany, not a blind update) prevents the sweep from clobbering a booking the
+      // caregiver accepted in the instant between the read above and this write.
+      const declined = await this.prisma.$transaction(async (tx) => {
+        const res = await tx.booking.updateMany({
+          where: { id: booking.id, status: BookingStatus.REQUESTED },
           data: {
             status: BookingStatus.DECLINED,
             cancelledAt: now,
             cancelReason: 'Expired: the caregiver did not respond in time',
           },
         });
+        if (res?.count === 0) {
+          return false;
+        }
         await tx.visit.updateMany({
           where: { bookingId: booking.id, status: { in: [VisitStatus.REQUESTED, VisitStatus.CONFIRMED] } },
           data: { status: VisitStatus.DECLINED },
         });
+        // No visit will happen, so give the one-time promo redemption back.
+        if (booking.promoCodeId) {
+          await tx.promoCode.updateMany({
+            where: { id: booking.promoCodeId, usesCount: { gt: 0 } },
+            data: { usesCount: { decrement: 1 } },
+          });
+        }
+        return true;
       });
+      if (!declined) {
+        continue;
+      }
       await this.audit.log({
         actorId: null,
         action: 'booking.expired',

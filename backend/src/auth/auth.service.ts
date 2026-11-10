@@ -520,7 +520,13 @@ export class AuthService {
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Account is not active');
     }
-    await this.redis.client.set(denyKey, '1', 'EX', REFRESH_TOKEN_TTL_SECONDS);
+    // Claim the token atomically: SET NX only succeeds for the first caller, so two
+    // concurrent requests presenting the same (possibly stolen) token cannot both
+    // rotate into fresh valid sessions — the loser is rejected, preserving reuse detection.
+    const claimed = await this.redis.client.set(denyKey, '1', 'EX', REFRESH_TOKEN_TTL_SECONDS, 'NX');
+    if (claimed === null) {
+      throw new UnauthorizedException('Refresh token already used');
+    }
     return this.issueTokens(user.id, user.role, user.phone);
   }
 

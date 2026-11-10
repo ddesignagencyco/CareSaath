@@ -98,18 +98,21 @@ export default function CustomerVisitPage() {
                 {f.timeWindow(v.timeWindowStart, v.timeWindowEnd)} · {t("serviceFor", { service: L.specialty(v.booking.serviceType), patient: v.booking.patient.name })}
               </p>
             </div>
-            <Badge tone={VISIT_TONE[v.status]} dot className="text-sm">
+            <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
               {L.visitCustomer(v.status)}
             </Badge>
           </header>
 
           {active && (
-            <button
-              onClick={() => setDialog("sos")}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-danger-600 bg-danger-50 py-3 text-sm font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
-            >
-              <Siren className="size-5" /> {ts("sos.button")}
-            </button>
+            // Full-width on mobile for fast emergency access; compact and right-aligned on larger screens.
+            <div className="flex sm:justify-end">
+              <button
+                onClick={() => setDialog("sos")}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-danger-600 bg-danger-50 px-6 py-3 text-sm font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white sm:w-auto"
+              >
+                <Siren className="size-5" /> {ts("sos.button")}
+              </button>
+            </div>
           )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">

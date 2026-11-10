@@ -61,6 +61,9 @@ export function createPrismaMock() {
     deviceToken: model(),
     // $transaction supports both array form and callback form.
     $transaction: vi.fn(),
+    // Raw helpers (advisory locks etc.) are no-ops in unit tests.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockResolvedValue([]),
   };
 }
 

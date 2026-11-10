@@ -300,16 +300,6 @@ export class PaymentsService {
   async initiate(user: AuthUser, dto: InitiatePaymentDto) {
     const visit = await this.loadPayableVisit(user, dto.visitId);
     await this.expireStaleGatewayPayments(visit.id);
-    const existing = await this.prisma.payment.findFirst({
-      where: { visitId: visit.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID] } },
-    });
-    if (existing) {
-      throw new BadRequestException(
-        existing.status === PaymentStatus.PAID
-          ? 'This visit has already been paid'
-          : 'A payment for this visit is already in progress',
-      );
-    }
     const amount = visit.booking.rateSnapshot - visit.booking.discountAmount;
     if (amount <= 0) {
       throw new BadRequestException('Payment amount must be positive');
@@ -326,16 +316,32 @@ export class PaymentsService {
     const { caregiverAmount } = splitCommission(visit.booking.rateSnapshot, percentage);
     const commissionAmount = amount - caregiverAmount;
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        visitId: visit.id,
-        method: dto.method,
-        status: PaymentStatus.PENDING,
-        amount,
-        commissionAmount,
-        caregiverAmount,
-        gatewayRef: null,
-      },
+    // Guard against a double-submit opening two payments (and two Stripe sessions)
+    // for the same visit: a per-visit advisory lock serializes the check-and-create,
+    // so the duplicate request sees the first PENDING payment and is rejected.
+    const payment = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`visit-payment:${visit.id}`}))`;
+      const existing = await tx.payment.findFirst({
+        where: { visitId: visit.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID] } },
+      });
+      if (existing) {
+        throw new BadRequestException(
+          existing.status === PaymentStatus.PAID
+            ? 'This visit has already been paid'
+            : 'A payment for this visit is already in progress',
+        );
+      }
+      return tx.payment.create({
+        data: {
+          visitId: visit.id,
+          method: dto.method,
+          status: PaymentStatus.PENDING,
+          amount,
+          commissionAmount,
+          caregiverAmount,
+          gatewayRef: null,
+        },
+      });
     });
     await this.audit.log({
       actorId: user.sub,
@@ -449,10 +455,28 @@ export class PaymentsService {
     if (payment.status !== PaymentStatus.PENDING) {
       throw new BadRequestException(`Cannot settle a payment in ${payment.status} state`);
     }
-    const updated = await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: PaymentStatus.PAID, paidAt: new Date() },
+    // Settle atomically. A per-payment advisory lock serializes concurrent settles
+    // (duplicate Stripe webhook, webhook racing the reconcile sweep, cash dual-confirm):
+    // only the first transaction flips PENDING→PAID; the rest observe PAID and bail,
+    // so the notifications/audit/realtime side effects below fire exactly once.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`payment:${paymentId}`}))`;
+      const fresh = await tx.payment.findUnique({
+        where: { id: paymentId },
+        select: { status: true },
+      });
+      if (fresh && fresh.status !== PaymentStatus.PENDING) {
+        return null;
+      }
+      return tx.payment.update({
+        where: { id: paymentId },
+        data: { status: PaymentStatus.PAID, paidAt: new Date() },
+      });
     });
+    if (!updated) {
+      // A concurrent settle already handled this payment and fired its side effects.
+      return this.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    }
     await this.audit.log({
       actorId: null,
       action: 'payment.paid',
@@ -733,6 +757,22 @@ export class PaymentsService {
    * webhook never arrived (and the return-page fallback never ran, e.g. the customer closed the tab).
    */
   async adminMarkPaid(user: AuthUser, paymentId: string) {
+    // This rescue is only for a gateway payment the processor actually settled but whose
+    // webhook was lost. Cash must never be force-settled here: that would credit the
+    // caregiver's earnings and close the visit without either side confirming the cash
+    // changed hands, bypassing the two-sided confirmation recordCashConfirmation enforces.
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { method: true },
+    });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.method === PaymentMethod.CASH) {
+      throw new BadRequestException(
+        'Cash payments settle only through two-sided confirmation, not the operator rescue',
+      );
+    }
     return this.markPaid(paymentId, `admin:${user.sub}`);
   }
 

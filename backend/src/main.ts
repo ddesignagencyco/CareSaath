@@ -2,12 +2,25 @@ import './config/load-env.js';
 import { NestFactory } from '@nestjs/core';
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  // Behind Render's load balancer: trust the first proxy hop so req.ip (used by the
+  // rate limiter) is the real client, not the proxy.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  // Security headers (HSTS, nosniff, frameguard, referrer-policy, …). CSP/COEP are left
+  // off: this host serves a cross-origin JSON API plus the Swagger UI and status page,
+  // which load fonts/icons from CDNs that a strict default CSP would break.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   app.setGlobalPrefix('api/v1', {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
@@ -26,9 +39,15 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
+  // Allowed browser origins. Set CORS_ORIGINS (comma-separated) to your real production
+  // domain(s); it defaults to the Vercel app. localhost is permitted only outside production.
+  const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'https://caresaath-ui.vercel.app')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const isProduction = process.env['NODE_ENV'] === 'production';
   app.enableCors({
-    // Production Vercel origin + any localhost port for local dev (frontend runs on :3001).
-    origin: ['https://caresaath-ui.vercel.app', /^http:\/\/localhost:\d+$/],
+    origin: isProduction ? allowedOrigins : [...allowedOrigins, /^http:\/\/localhost:\d+$/],
     exposedHeaders: ['Content-Disposition', 'X-Cache'],
     // Required so the browser sends/receives the httpOnly session cookies cross-origin.
     credentials: true,

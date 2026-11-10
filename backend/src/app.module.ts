@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuditModule } from './common/audit/audit.module.js';
@@ -44,9 +45,23 @@ import { RealtimeModule } from './realtime/realtime.module.js';
 import { EmailModule } from './email/email.module.js';
 import { FirebaseModule } from './firebase/firebase.module.js';
 
+/**
+ * Global request throttle (a blanket DoS/abuse guard, in addition to the stricter
+ * per-phone OTP throttling in AuthService). Kept generous by default because
+ * Pakistani mobile carriers heavily share IPs via CGNAT, so a low per-IP cap would
+ * punish many legitimate users on one address; tune with THROTTLE_LIMIT / THROTTLE_TTL_MS.
+ */
+const THROTTLE_TTL_MS = Number(process.env['THROTTLE_TTL_MS'] ?? 60_000);
+const THROTTLE_LIMIT = Number(process.env['THROTTLE_LIMIT'] ?? 600);
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../.env', '.env'] }),
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: THROTTLE_TTL_MS, limit: THROTTLE_LIMIT }],
+      // Don't rate-limit automated test runs (e2e hammers endpoints in a tight loop).
+      skipIf: () => process.env['NODE_ENV'] === 'test',
+    }),
     PrismaModule,
     RedisModule,
     AuditModule,
@@ -86,6 +101,8 @@ import { FirebaseModule } from './firebase/firebase.module.js';
   controllers: [AppController],
   providers: [
     AppService,
+    // Throttle first, so floods are shed before auth/role work runs.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
