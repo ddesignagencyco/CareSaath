@@ -130,11 +130,20 @@ export function LiveLocationMap({ visitId, caregiverName }: { visitId: string; c
             </p>
           </div>
           <span className="flex shrink-0 items-center gap-1.5 self-start rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-accent-300 uppercase">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
-              <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
-            </span>
-            {t("live")}
+            {loc.data.estimate ? (
+              <>
+                <Navigation className="size-2.5" />
+                {t("estimated")}
+              </>
+            ) : (
+              <>
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
+                </span>
+                {t("live")}
+              </>
+            )}
         </span>
       </div>
     </div>

@@ -27,6 +27,7 @@ function makeService(overrides: Record<string, unknown> = {}) {
     visit: {
       updateMany: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
       create: vi.fn(),
       count: vi.fn().mockResolvedValue(0),
@@ -77,7 +78,7 @@ describe('BookingsService.accept', () => {
       customerId: 'cust-1',
     });
     prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
+      cb({ booking: { updateMany: vi.fn() }, visit: { updateMany: vi.fn() } }),
     );
     prisma.booking.findUnique.mockResolvedValue({
       id: 'b-1',
@@ -110,7 +111,7 @@ describe('BookingsService.accept', () => {
     const { service, prisma } = makeService();
     prisma.booking.findFirst.mockResolvedValue({ id: 'b-1', status: BookingStatus.REQUESTED, customerId: 'cust-1' });
     prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
+      cb({ booking: { updateMany: vi.fn() }, visit: { updateMany: vi.fn() } }),
     );
     prisma.booking.findUnique.mockResolvedValue({
       id: 'b-1',
@@ -140,7 +141,7 @@ describe('BookingsService.decline', () => {
     const { service, prisma, caregivers } = makeService();
     prisma.booking.findFirst.mockResolvedValue({ id: 'b-1', status: BookingStatus.REQUESTED, customerId: 'cust-1' });
     prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({ booking: { update: vi.fn() }, visit: { updateMany: vi.fn() } }),
+      cb({ booking: { updateMany: vi.fn() }, visit: { updateMany: vi.fn() } }),
     );
     prisma.booking.findUnique.mockResolvedValue({
       id: 'b-1',

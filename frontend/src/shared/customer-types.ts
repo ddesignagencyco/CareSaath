@@ -121,6 +121,8 @@ export interface VisitLocation {
   at: string;
   /** Rough minutes to the visit address at an average speed. */
   etaMinutes: number;
+  /** True when this is a pre-stream fallback ETA (caregiver's last ambient fix), not a live per-visit fix. */
+  estimate?: boolean;
 }
 
 /**

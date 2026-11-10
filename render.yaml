@@ -64,6 +64,16 @@ services:
         value: true
       - key: WHATSAPP_ENABLED
         value: false
+      # Browser origins allowed to call the API (comma-separated). Set this to the real
+      # production web domain(s); localhost is auto-allowed only when NODE_ENV != production.
+      - key: CORS_ORIGINS
+        value: https://caresaath-ui.vercel.app
+      # Global request rate limit (blanket DoS guard; OTP has its own stricter throttle).
+      # Kept generous because mobile carriers share IPs via CGNAT.
+      - key: THROTTLE_LIMIT
+        value: 600
+      - key: THROTTLE_TTL_MS
+        value: 60000
       # Test-data seeding on deploy (prisma/seed.mjs). Set SEED_ALLOW_PRODUCTION=false
       # once this is a real production environment.
       - key: SEED_ALLOW_PRODUCTION

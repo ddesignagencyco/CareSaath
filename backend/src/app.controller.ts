@@ -1,9 +1,12 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from './common/decorators/public.decorator.js';
 
 @ApiTags('System & Health')
 @Controller()
+// The status page and health probe are hit frequently (Render liveness checks); never rate-limit them.
+@SkipThrottle()
 export class AppController {
   @Public()
   @Get()

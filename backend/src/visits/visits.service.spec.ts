@@ -124,6 +124,51 @@ describe('VisitsService transitions', () => {
       await expect(service.getLocation(customer, 'v-1')).resolves.toBeNull();
     });
 
+    it('seeds a fallback ETA from the caregiver last-known fix while EN_ROUTE', async () => {
+      prisma.visit.findFirst.mockResolvedValue({
+        id: 'v-1',
+        status: 'EN_ROUTE',
+        booking: {
+          address: { latitude: 31.5, longitude: 74.3 },
+          caregiver: { currentLat: 31.52, currentLng: 74.33, locationUpdatedAt: new Date() },
+        },
+      });
+      redis.client.get.mockResolvedValue(null);
+      const res = await service.getLocation(customer, 'v-1');
+      expect(res).toMatchObject({ visitId: 'v-1', estimate: true });
+      expect(res?.etaMinutes).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not fall back to a stale ambient fix', async () => {
+      prisma.visit.findFirst.mockResolvedValue({
+        id: 'v-1',
+        status: 'EN_ROUTE',
+        booking: {
+          address: { latitude: 31.5, longitude: 74.3 },
+          caregiver: {
+            currentLat: 31.52,
+            currentLng: 74.33,
+            locationUpdatedAt: new Date(Date.now() - 60 * 60_000),
+          },
+        },
+      });
+      redis.client.get.mockResolvedValue(null);
+      await expect(service.getLocation(customer, 'v-1')).resolves.toBeNull();
+    });
+
+    it('does not fall back before the caregiver is EN_ROUTE', async () => {
+      prisma.visit.findFirst.mockResolvedValue({
+        id: 'v-1',
+        status: 'CONFIRMED',
+        booking: {
+          address: { latitude: 31.5, longitude: 74.3 },
+          caregiver: { currentLat: 31.52, currentLng: 74.33, locationUpdatedAt: new Date() },
+        },
+      });
+      redis.client.get.mockResolvedValue(null);
+      await expect(service.getLocation(customer, 'v-1')).resolves.toBeNull();
+    });
+
     it('404s getLocation for a visit the customer does not own', async () => {
       prisma.visit.findFirst.mockResolvedValue(null);
       await expect(service.getLocation(customer, 'v-1')).rejects.toBeInstanceOf(NotFoundException);

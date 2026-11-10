@@ -20,9 +20,11 @@ export class CsrfMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction): void {
     if (SAFE_METHODS.has(req.method)) return next();
 
-    // Authentication endpoints (request OTP, verify, signup, refresh, logout) are exempt from CSRF
-    const url = req.originalUrl || req.baseUrl || req.path || '';
-    if (url.includes('/auth/')) return next();
+    // Authentication endpoints (request OTP, verify, signup, refresh, logout) are exempt from CSRF.
+    // Match the PATH only — never req.originalUrl, which carries the query string and could be
+    // spoofed as `/api/v1/users/me?x=/auth/` to skip the check on a real mutating route.
+    const path = (req.path || req.baseUrl || '').toLowerCase();
+    if (path.startsWith('/api/v1/auth/') || path.startsWith('/auth/')) return next();
 
     const isBearer = req.headers.authorization?.startsWith('Bearer ') ?? false;
     const hasCookieSession = Boolean(readCookie(req, COOKIE.session));

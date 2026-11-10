@@ -80,6 +80,35 @@ const VISIT_OTP_STATUSES: VisitStatus[] = [
 const VISIT_LOCATION_TTL_SECONDS = Number(process.env['VISIT_LOCATION_TTL_SECONDS'] ?? 60);
 /** Rough average travel speed used only for the ETA estimate shown to the customer. */
 const VISIT_LOCATION_AVERAGE_SPEED_KMH = Number(process.env['VISIT_LOCATION_AVERAGE_SPEED_KMH'] ?? 25);
+/**
+ * How old the caregiver's background GPS fix (CaregiverProfile.currentLat/Lng, refreshed
+ * by the app's ambient location sharing) may be and still seed a *fallback* ETA before the
+ * first per-visit fix streams in. Keeps the customer's timer from sitting on "waiting…".
+ */
+const VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES = Number(
+  process.env['VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES'] ?? 15,
+);
+
+/** Shape returned to the customer's live visit tracker. `estimate` marks a pre-stream fallback ETA. */
+export type VisitLocationFix = {
+  visitId: string;
+  lat: number;
+  lng: number;
+  at: string;
+  etaMinutes: number;
+  estimate?: boolean;
+};
+
+/** Straight-line ETA (minutes) from a point to the visit address, at the configured travel speed. */
+function estimateEtaMinutes(
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number,
+): number {
+  const meters = distanceMeters(fromLat, fromLng, toLat, toLng);
+  return Math.max(0, Math.round(((meters / 1000) * 60) / VISIT_LOCATION_AVERAGE_SPEED_KMH));
+}
 
 /**
  * Max GPS drift (metres) forgiven on a geofenced check-in/out. A phone fix is
@@ -600,20 +629,59 @@ export class VisitsService {
     return { ok: true as const };
   }
 
-  /** Last-known fix for the customer's own visit tracker (e.g. on reconnect); null once stale or not EN_ROUTE yet. */
-  async getLocation(user: AuthUser, id: string) {
+  /**
+   * Live fix for the customer's own visit tracker. Prefers the streamed per-visit fix;
+   * if none has arrived yet, falls back to an ETA seeded from the caregiver's most recent
+   * ambient GPS (when EN_ROUTE and fresh) so the timer shows immediately. Null otherwise.
+   */
+  async getLocation(user: AuthUser, id: string): Promise<VisitLocationFix | null> {
     const visit = await this.prisma.visit.findFirst({
       where: { id, booking: { customerId: user.sub } },
-      select: { id: true },
+      select: {
+        id: true,
+        status: true,
+        booking: {
+          select: {
+            address: { select: { latitude: true, longitude: true } },
+            caregiver: { select: { currentLat: true, currentLng: true, locationUpdatedAt: true } },
+          },
+        },
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
     }
     const cached = await this.redis.client.get(this.visitLocationKey(id));
-    if (!cached) {
-      return null;
+    if (cached) {
+      return JSON.parse(cached) as VisitLocationFix;
     }
-    return JSON.parse(cached) as { visitId: string; lat: number; lng: number; at: string; etaMinutes: number };
+    // No per-visit fix yet. While EN_ROUTE, seed a fallback ETA from the caregiver's most
+    // recent ambient GPS fix (if fresh) so the customer sees an estimate right away instead
+    // of an indefinite "waiting for the caregiver to share their location".
+    const cg = visit.booking?.caregiver;
+    const addr = visit.booking?.address;
+    if (
+      visit.status === VisitStatus.EN_ROUTE &&
+      cg?.currentLat != null &&
+      cg.currentLng != null &&
+      cg.locationUpdatedAt != null &&
+      addr
+    ) {
+      const ageMs = Date.now() - new Date(cg.locationUpdatedAt).getTime();
+      if (ageMs <= VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES * 60_000) {
+        const lat = Number(cg.currentLat);
+        const lng = Number(cg.currentLng);
+        return {
+          visitId: id,
+          lat,
+          lng,
+          at: new Date(cg.locationUpdatedAt).toISOString(),
+          etaMinutes: estimateEtaMinutes(lat, lng, Number(addr.latitude), Number(addr.longitude)),
+          estimate: true,
+        };
+      }
+    }
+    return null;
   }
 
   /**

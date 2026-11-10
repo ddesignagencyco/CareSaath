@@ -397,48 +397,58 @@ export class PayoutsService {
     if (!account) {
       throw new NotFoundException('Payout account not found');
     }
-    const eligible = await this.prisma.payment.findMany({
-      where: {
-        visit: { booking: { caregiverId } },
-        status: PaymentStatus.PAID,
-        payoutRequestId: null,
-      },
-      select: { id: true, caregiverAmount: true },
-      orderBy: { paidAt: 'asc' },
-    });
-    const available = eligible.reduce((sum, p) => sum + p.caregiverAmount, 0);
-    if (dto.amount > available) {
-      throw new BadRequestException(`Requested amount exceeds available earnings (${available})`);
-    }
+    // Select the eligible payments, create the request, and attach them in ONE
+    // transaction. The attach is conditional on `payoutRequestId: null` and its
+    // affected-count is validated, so two concurrent requests (e.g. a double-click)
+    // cannot both lock the same earnings — the loser's attach matches 0 rows for the
+    // already-claimed payment and rolls the whole payout back.
+    const { payout, lockedAmount, chosen } = await this.prisma.$transaction(async (tx) => {
+      const eligible = await tx.payment.findMany({
+        where: {
+          visit: { booking: { caregiverId } },
+          status: PaymentStatus.PAID,
+          payoutRequestId: null,
+        },
+        select: { id: true, caregiverAmount: true },
+        orderBy: { paidAt: 'asc' },
+      });
+      const available = eligible.reduce((sum, p) => sum + p.caregiverAmount, 0);
+      if (dto.amount > available) {
+        throw new BadRequestException(`Requested amount exceeds available earnings (${available})`);
+      }
 
-    // Greedily attach whole settled payments until the requested amount is
-    // covered. Payments are never split, so the last one can overshoot the
-    // requested amount; the payout is locked (and will settle) for exactly what
-    // it attaches, never for less, so no money is ever forfeited.
-    const chosen: string[] = [];
-    let lockedAmount = 0;
-    for (const payment of eligible) {
-      if (lockedAmount >= dto.amount) break;
-      chosen.push(payment.id);
-      lockedAmount += payment.caregiverAmount;
-    }
+      // Greedily attach whole settled payments until the requested amount is
+      // covered. Payments are never split, so the last one can overshoot the
+      // requested amount; the payout is locked (and will settle) for exactly what
+      // it attaches, never for less, so no money is ever forfeited.
+      const picked: string[] = [];
+      let locked = 0;
+      for (const payment of eligible) {
+        if (locked >= dto.amount) break;
+        picked.push(payment.id);
+        locked += payment.caregiverAmount;
+      }
 
-    const payout = await this.prisma.$transaction(async (tx) => {
       const created = await tx.payoutRequest.create({
         data: {
           caregiverId,
           payoutAccountId: dto.payoutAccountId,
-          amount: lockedAmount,
+          amount: locked,
           status: PayoutStatus.REQUESTED,
         },
       });
-      if (chosen.length > 0) {
-        await tx.payment.updateMany({
-          where: { id: { in: chosen } },
+      if (picked.length > 0) {
+        const attached = await tx.payment.updateMany({
+          where: { id: { in: picked }, payoutRequestId: null },
           data: { payoutRequestId: created.id },
         });
+        if (attached.count !== picked.length) {
+          throw new ConflictException(
+            'Your earnings changed while the payout was being created; please try again',
+          );
+        }
       }
-      return created;
+      return { payout: created, lockedAmount: locked, chosen: picked };
     });
     await this.audit.log({
       actorId: user.sub,

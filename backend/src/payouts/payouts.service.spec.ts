@@ -133,7 +133,7 @@ describe('PayoutsService', () => {
 
     expect(result).toMatchObject({ id: 'pr-1' });
     expect(prisma.payment.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['pay-1', 'pay-2'] } },
+      where: { id: { in: ['pay-1', 'pay-2'] }, payoutRequestId: null },
       data: { payoutRequestId: 'pr-1' },
     });
   });
@@ -161,7 +161,7 @@ describe('PayoutsService', () => {
 
     expect(result).toMatchObject({ amount: 80000 });
     expect(prisma.payment.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['pay-1', 'pay-2'] } },
+      where: { id: { in: ['pay-1', 'pay-2'] }, payoutRequestId: null },
       data: { payoutRequestId: 'pr-1' },
     });
   });

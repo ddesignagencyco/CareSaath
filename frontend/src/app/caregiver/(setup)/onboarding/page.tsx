@@ -12,15 +12,26 @@ import { Card } from "@shared/ui/card";
 import { Field, Input, Textarea } from "@shared/ui/field";
 import { Skeleton } from "@shared/ui/misc";
 import { MultiSelect, Select } from "@shared/ui/select";
+import { TimePicker } from "@shared/ui/time-picker";
 import { formatMoney } from "@shared/lib/format";
 import type { LicenseBody, Specialty } from "@shared/types";
+import type { AvailabilityRuleInput, ServiceAreaInput } from "@shared/caregiver-types";
 import { useLabels } from "@shared/i18n/use-labels";
+import { useFmt } from "@shared/i18n/use-fmt";
 import { DocumentList, DocumentUploader } from "@/features/caregiver/components/documents-panel";
 import { ApiError } from "@/features/caregiver/lib/api/http";
-import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { availabilityApi, meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { refreshTokens, useMe } from "@/features/caregiver/lib/auth";
-import { CITY_OPTIONS, CNIC_PATTERN, formatCnic, LICENSE_BODY_OPTIONS, SPECIALTY_OPTIONS } from "@shared/lib/options";
+import {
+  CITY_OPTIONS,
+  CNIC_PATTERN,
+  formatCnic,
+  LAHORE_AREAS,
+  LICENSE_BODY_OPTIONS,
+  SERVICE_RADIUS_OPTIONS,
+  SPECIALTY_OPTIONS,
+} from "@shared/lib/options";
 
 const STEPS = ["about", "credentials", "services", "documents"] as const;
 
@@ -61,6 +72,13 @@ const DEFAULT_BODY: Record<Specialty, LicenseBody> = {
   DOCTOR: "PMDC",
 };
 
+/** Monday-first display order; the API uses 0 = Sunday … 6 = Saturday. */
+const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 0] as const;
+type DayWindow = { start: string; end: string } | null;
+type WeekHours = Record<number, DayWindow>;
+const EMPTY_WEEK: WeekHours = { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
+const AREA_OPTIONS = LAHORE_AREAS.map((a) => ({ value: a.value, label: a.label }));
+
 export default function OnboardingPage() {
   const me = useMe();
   if (!me.data) return <Skeleton className="h-96 rounded-2xl" />;
@@ -71,6 +89,7 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
   const t = useTranslations("caregiverB.onboarding");
   const tc = useTranslations("common.actions");
   const L = useLabels();
+  const f = useFmt();
   const router = useRouter();
   const client = useQueryClient();
   const [step, setStep] = useState(initialStep);
@@ -84,10 +103,18 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
   const [licenseExpiry, setLicenseExpiry] = useState("");
   const [years, setYears] = useState("");
   const [cities, setCities] = useState<string[]>([]);
+  const [areas, setAreas] = useState<string[]>([]);
+  const [radius, setRadius] = useState("5000");
+  const [week, setWeek] = useState<WeekHours>(EMPTY_WEEK);
   const [rate, setRate] = useState("");
   const [minRate, setMinRate] = useState("");
   const [maxRate, setMaxRate] = useState("");
   const [bio, setBio] = useState("");
+
+  const toggleDay = (dow: number) =>
+    setWeek((w) => ({ ...w, [dow]: w[dow] ? null : { start: "09:00", end: "17:00" } }));
+  const setDayTime = (dow: number, part: "start" | "end", value: string) =>
+    setWeek((w) => (w[dow] ? { ...w, [dow]: { ...w[dow]!, [part]: value } } : w));
 
   const yearsNum = years === "" ? undefined : Number(years);
   const rateNum = Number(rate);
@@ -142,6 +169,25 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
       }
       // The access token still says CUSTOMER until refreshed.
       await refreshTokens();
+      // Now a CAREGIVER: persist the sub-city areas and weekly hours they filled in.
+      // Best-effort — both can be refined later on their dedicated pages, so a failure
+      // here must not block finishing onboarding.
+      const serviceAreas: ServiceAreaInput[] = cities.includes("Lahore")
+        ? areas.map((v) => {
+            const a = LAHORE_AREAS.find((x) => x.value === v)!;
+            return { city: "Lahore", label: a.label, lat: a.lat, lng: a.lng, radiusMeters: Number(radius) };
+          })
+        : [];
+      const rules: AvailabilityRuleInput[] = WEEK_DAYS.flatMap((dow) => {
+        const win = week[dow];
+        return win ? [{ dayOfWeek: dow, startTime: win.start, endTime: win.end }] : [];
+      });
+      try {
+        if (serviceAreas.length > 0) await profileApi.setServiceAreas(serviceAreas);
+        if (rules.length > 0) await availabilityApi.put(rules);
+      } catch {
+        // ignore — refine later under Availability / Service areas
+      }
     },
     {
       invalidate: [keys.me, keys.profile],
@@ -265,8 +311,26 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
         {step === 2 && (
           <div className="space-y-4">
             <Field label={t("cities")} required error={err(2, "cities")}>
-              {(id) => <MultiSelect inputId={id} value={cities} onChange={setCities} options={CITY_OPTIONS} placeholder={t("chooseCities")} />}
+              {(id) => (
+                <MultiSelect inputId={id} value={cities} onChange={setCities} options={CITY_OPTIONS} placeholder={t("chooseCities")} closeMenuOnSelect />
+              )}
             </Field>
+            {cities.includes("Lahore") && (
+              <>
+                <Field label={t("areas")} hint={t("areasHint")}>
+                  {(id) => (
+                    <MultiSelect inputId={id} value={areas} onChange={setAreas} options={AREA_OPTIONS} placeholder={t("areasPlaceholder")} />
+                  )}
+                </Field>
+                {areas.length > 0 && (
+                  <Field label={t("radius")} hint={t("radiusHint")}>
+                    {(id) => (
+                      <Select<string> inputId={id} value={radius} isSearchable={false} onChange={(v) => v && setRadius(v)} options={SERVICE_RADIUS_OPTIONS} />
+                    )}
+                  </Field>
+                )}
+              </>
+            )}
             <Field
               label={t("rate")}
               required
@@ -283,6 +347,41 @@ function Wizard({ initialStep, initialName }: { initialStep: number; initialName
             </Field>
             <Field label={t("about")} hint={t("aboutHint", { count: bio.length })}>
               {(id) => <Textarea id={id} value={bio} maxLength={2000} rows={4} onChange={(e) => setBio(e.target.value)} />}
+            </Field>
+            <Field label={t("hours")} hint={t("hoursHint")}>
+              {() => (
+                <ul className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-200">
+                  {WEEK_DAYS.map((dow) => {
+                    const win = week[dow];
+                    const on = !!win;
+                    const day = f.dayOfWeekLong(dow);
+                    return (
+                      <li key={dow} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={on}
+                          aria-label={t("dayToggle", { day })}
+                          onClick={() => toggleDay(dow)}
+                          className={clsx("relative h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-brand-600" : "bg-ink-200")}
+                        >
+                          <span className={clsx("absolute top-0.5 start-0.5 size-5 rounded-full bg-white shadow transition-transform", on && "translate-x-5 rtl:-translate-x-5")} />
+                        </button>
+                        <span className={clsx("w-24 shrink-0 text-sm font-semibold", on ? "text-ink-900" : "text-ink-400")}>{day}</span>
+                        {on ? (
+                          <div className="flex items-center gap-2">
+                            <TimePicker aria-label={t("startFor", { day })} value={win!.start} className="w-28" onChange={(v) => setDayTime(dow, "start", v)} />
+                            <span className="text-ink-400">–</span>
+                            <TimePicker aria-label={t("endFor", { day })} value={win!.end} min={win!.start || undefined} className="w-28" onChange={(v) => setDayTime(dow, "end", v)} />
+                          </div>
+                        ) : (
+                          <span className="text-sm text-ink-400">{t("dayOff")}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Field>
           </div>
         )}
