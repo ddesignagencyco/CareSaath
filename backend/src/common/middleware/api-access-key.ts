@@ -98,16 +98,36 @@ const escapeHtml = (s: string): string =>
   );
 
 function signInPage(next: string, failed: boolean): string {
-  const css =
-    ':root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:#171f1d;color:#eef3f1;font-family:Ubuntu,system-ui,-apple-system,"Segoe UI",sans-serif}' +
-    '.card{width:min(100%,650px);background:#1c2926;border:1px solid #2c3d39;border-radius:20px;padding:36px}' +
-    'h1{margin:0 0 12px;font-size:2rem}.lead{margin:0 0 28px;color:#9db0aa;font-size:1.1rem;line-height:1.6}' +
-    'h2{margin:0 0 12px;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:#9db0aa}' +
-    '.box{border:1px solid #2c3d39;border-radius:14px;padding:14px 16px;margin-bottom:12px;line-height:1.5}.box b{display:block}' +
-    'label{display:block;font-weight:700;margin:24px 0 10px}input{width:100%;height:62px;border-radius:14px;border:1px solid #2c3d39;background:#1a2523;color:inherit;font-size:1rem;padding:0 16px}input:focus{outline:2px solid #4fb69b}' +
-    'button{width:100%;margin-top:14px;height:60px;border:0;border-radius:14px;background:#4fb69b;color:#fff;font-size:1.1rem;font-weight:700;cursor:pointer}button:hover{background:#45a48b}' +
-    '.err{margin:16px 0 0;padding:12px 14px;border-radius:12px;background:#3a1f21;color:#ffb4b4}.foot{margin:18px 0 0;color:#9db0aa;font-size:.9rem}';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>CareSaath API - Private access</title><style>${css}</style></head><body><main class="card"><h1>CareSaath API</h1><p class="lead">Private access. This server powers the CareSaath home nursing and physiotherapy platform and is open to authorised users and the CareSaath apps only.</p><h2>Who needs this</h2><div class="box"><b>Developers &amp; CareSaath tech staff</b>API documentation (Swagger), service status and integration access for bookings, caregivers, visits, payments and notifications.</div><div class="box"><b>Patients, families &amp; caregivers</b>You do not need this page. Use the CareSaath website or app; it connects to this server for you.</div><form method="post" action="${SIGN_IN_PATH}"><h2 style="margin-top:28px">Enter the access key</h2><input type="hidden" name="next" value="${escapeHtml(next)}"><label for="key">Access key</label><input id="key" type="password" name="key" autocomplete="current-password" required autofocus>${failed ? '<p class="err" role="alert">That key was not accepted. Please try again.</p>' : ''}<button type="submit">Continue</button></form><p class="foot">Don't have a key? Contact the CareSaath team.</p></main></body></html>`;
+  // Mirrors the CareSaath API status page (app.controller.ts): navy gradient, Inter, glass cards.
+  const css = `
+:root{--bg:radial-gradient(1200px 800px at 50% 0%,#1a2142 0%,#0b1026 55%,#070b1a 100%);--border:rgba(138,180,255,.25);--text:#f8fafc;--text2:#cbd5f5;--text3:#94a3b8;--accent:#22c55e;--link:#8ab4ff}
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Inter",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);line-height:1.6;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;position:relative;overflow:hidden}
+body::before,body::after{content:"";position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(140px);opacity:.4;pointer-events:none}
+body::before{top:-160px;left:-160px;background:radial-gradient(circle,rgba(138,180,255,.28),transparent)}
+body::after{bottom:-220px;right:-180px;background:radial-gradient(circle,rgba(34,197,94,.18),transparent)}
+main{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;width:min(680px,100%)}
+.badge{display:inline-flex;align-items:center;gap:10px;padding:8px 18px;border-radius:999px;border:1px solid rgba(34,197,94,.45);background:radial-gradient(circle,rgba(34,197,94,.18) 0%,transparent 70%);text-transform:uppercase;letter-spacing:.28em;font-size:11px;font-weight:600;color:var(--text2)}
+.pulse{width:9px;height:9px;border-radius:50%;background:var(--accent);animation:pulse 2.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+h1{font-size:clamp(2.8rem,6vw,4.5rem);font-weight:700;letter-spacing:-.08em;line-height:1.1}
+.sub{margin:12px auto 0;max-width:540px;color:var(--text3);font-size:1.05rem}
+.card{position:relative;width:min(640px,100%);border-radius:18px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));backdrop-filter:blur(18px);box-shadow:0 60px 120px -80px rgba(138,180,255,.45);overflow:hidden;text-align:left}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 200px at 50% 0%,rgba(138,180,255,.12),transparent);pointer-events:none}
+.sec{position:relative;padding:clamp(20px,4vw,28px)}.sec+.sec{border-top:1px solid rgba(138,180,255,.15)}
+.eyebrow{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);font-weight:600;margin-bottom:14px}
+.row{display:flex;gap:14px;align-items:flex-start}.row+.row{margin-top:16px}
+.icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;border:1px solid rgba(138,180,255,.4);background:radial-gradient(circle,rgba(138,180,255,.18),transparent);color:var(--link)}
+.row b{display:block;font-weight:600}.row span{color:var(--text3);font-size:.95rem}
+label{display:block;font-weight:600;margin-bottom:8px}
+input{width:100%;height:54px;border-radius:12px;border:1px solid var(--border);background:rgba(7,11,26,.6);color:var(--text);font-size:1rem;padding:0 16px}
+input:focus{outline:2px solid var(--link);outline-offset:1px}
+button{width:100%;margin-top:14px;height:54px;border:1px solid rgba(138,180,255,.5);border-radius:12px;background:radial-gradient(circle,rgba(138,180,255,.28),rgba(138,180,255,.12));color:var(--text);font-size:1rem;font-weight:600;cursor:pointer;transition:all 180ms ease}
+button:hover{border-color:var(--link);background:radial-gradient(circle,rgba(138,180,255,.4),rgba(138,180,255,.18))}
+.err{margin-bottom:14px;padding:12px 14px;border-radius:12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);color:#fecaca;font-size:.95rem}
+footer{position:relative;z-index:1;margin-top:28px;text-align:center;color:var(--text3);font-size:.95rem}
+`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>CareSaath API | Private access</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"><style>${css}</style></head><body><main><div class="badge"><span class="pulse"></span><span>Private access</span></div><div><h1>CareSaath API</h1><p class="sub">Secure backend powering the CareSaath home nursing &amp; physiotherapy marketplace. This server is open to authorised users and the CareSaath apps only.</p></div><div class="card"><div class="sec"><p class="eyebrow">Who needs this</p><div class="row"><div class="icon"><i class="bi bi-code-slash"></i></div><div><b>Developers &amp; CareSaath tech staff</b><span>Swagger API reference, service health, and integration access for bookings, caregivers, visits, payments and notifications.</span></div></div><div class="row"><div class="icon"><i class="bi bi-heart-pulse"></i></div><div><b>Patients, families &amp; caregivers</b><span>You do not need this page. Use the CareSaath website or app; it connects to this server for you.</span></div></div></div><form class="sec" method="post" action="${SIGN_IN_PATH}"><p class="eyebrow">Enter the access key</p>${failed ? '<p class="err" role="alert">That key was not accepted. Please try again.</p>' : ''}<input type="hidden" name="next" value="${escapeHtml(next)}"><label for="key">Access key</label><input id="key" type="password" name="key" autocomplete="current-password" required autofocus><button type="submit">Continue</button></form></div></main><footer>CareSaath &bull; Backend Infrastructure<br>Don't have a key? Contact the CareSaath team.</footer></body></html>`;
 }
 
 function sendSignIn(
@@ -120,7 +140,7 @@ function sendSignIn(
     .status(status)
     .setHeader(
       'Content-Security-Policy',
-      "default-src 'none'; form-action 'self'; style-src 'unsafe-inline'; base-uri 'none'",
+      "default-src 'none'; form-action 'self'; base-uri 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com https://cdn.jsdelivr.net",
     )
     .type('html')
     .send(signInPage(next, failed));
