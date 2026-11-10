@@ -74,6 +74,10 @@ services:
         value: 600
       - key: THROTTLE_TTL_MS
         value: 60000
+      # How fresh the caregiver's ambient GPS fix must be to seed a fallback ETA before the
+      # per-visit stream starts. Raised to 45 for easier testing (code default is 15).
+      - key: VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES
+        value: 45
       # Test-data seeding on deploy (prisma/seed.mjs). Set SEED_ALLOW_PRODUCTION=false
       # once this is a real production environment.
       - key: SEED_ALLOW_PRODUCTION
