@@ -156,6 +156,21 @@ describe('VisitsService transitions', () => {
       await expect(service.getLocation(customer, 'v-1')).resolves.toBeNull();
     });
 
+    it('shows a default travel estimate while EN_ROUTE when no GPS has arrived at all', async () => {
+      prisma.visit.findFirst.mockResolvedValue({
+        id: 'v-1',
+        status: 'EN_ROUTE',
+        enRouteAt: new Date(),
+        booking: {
+          address: { latitude: 31.5, longitude: 74.3 },
+          caregiver: { currentLat: null, currentLng: null, locationUpdatedAt: null },
+        },
+      });
+      redis.client.get.mockResolvedValue(null);
+      const res = await service.getLocation(customer, 'v-1');
+      expect(res).toMatchObject({ visitId: 'v-1', estimate: true, etaMinutes: 25 });
+    });
+
     it('does not fall back before the caregiver is EN_ROUTE', async () => {
       prisma.visit.findFirst.mockResolvedValue({
         id: 'v-1',

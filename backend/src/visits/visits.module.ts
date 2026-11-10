@@ -88,6 +88,11 @@ const VISIT_LOCATION_AVERAGE_SPEED_KMH = Number(process.env['VISIT_LOCATION_AVER
 const VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES = Number(
   process.env['VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES'] ?? 15,
 );
+/**
+ * Default travel estimate (minutes) shown while the caregiver is EN_ROUTE but no GPS fix has
+ * arrived at all. The ETA counts down from enRouteAt and is replaced the moment a real fix streams in.
+ */
+const VISIT_DEFAULT_ETA_MINUTES = Number(process.env['VISIT_DEFAULT_ETA_MINUTES'] ?? 25);
 
 /** Shape returned to the customer's live visit tracker. `estimate` marks a pre-stream fallback ETA. */
 export type VisitLocationFix = {
@@ -630,9 +635,10 @@ export class VisitsService {
   }
 
   /**
-   * Live fix for the customer's own visit tracker. Prefers the streamed per-visit fix;
-   * if none has arrived yet, falls back to an ETA seeded from the caregiver's most recent
-   * ambient GPS (when EN_ROUTE and fresh) so the timer shows immediately. Null otherwise.
+   * Live fix for the customer's own visit tracker. Prefers the streamed per-visit fix; if none
+   * has arrived, falls back to an ETA from the caregiver's recent ambient GPS, and finally — while
+   * EN_ROUTE — to a default travel estimate counting down from enRouteAt, so the customer always
+   * sees a time. Returns null only when the caregiver isn't on the way.
    */
   async getLocation(user: AuthUser, id: string): Promise<VisitLocationFix | null> {
     const visit = await this.prisma.visit.findFirst({
@@ -640,6 +646,7 @@ export class VisitsService {
       select: {
         id: true,
         status: true,
+        enRouteAt: true,
         booking: {
           select: {
             address: { select: { latitude: true, longitude: true } },
@@ -680,6 +687,19 @@ export class VisitsService {
           estimate: true,
         };
       }
+    }
+    // Last resort: the caregiver is on the way but no GPS has arrived (common on desktop,
+    // where high-accuracy geolocation fails). Show a default travel estimate that counts
+    // down from the moment they set off (enRouteAt), so the customer always sees a time.
+    if (visit.status === VisitStatus.EN_ROUTE && visit.enRouteAt && addr) {
+      return {
+        visitId: id,
+        lat: Number(addr.latitude),
+        lng: Number(addr.longitude),
+        at: new Date(visit.enRouteAt).toISOString(),
+        etaMinutes: VISIT_DEFAULT_ETA_MINUTES,
+        estimate: true,
+      };
     }
     return null;
   }
