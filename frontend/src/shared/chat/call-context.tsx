@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { io, type Socket } from "socket.io-client";
-import { API_BASE_URL, createHttp } from "@shared/api/http";
+import { API_ACCESS_KEY, API_BASE_URL, createHttp } from "@shared/api/http";
 import type { SessionStore } from "@shared/api/session";
 import { useToast } from "@shared/ui/toast";
 import { CallOverlay } from "./call-overlay";
@@ -346,6 +346,8 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     const socket = io(ORIGIN, {
       transports: ["websocket", "polling"],
       withCredentials: true,
+      // API access gate: browsers cannot set headers on a WebSocket, so the key rides in the query.
+      ...(API_ACCESS_KEY ? { query: { apiKey: API_ACCESS_KEY } } : {}),
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,

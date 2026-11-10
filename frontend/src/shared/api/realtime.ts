@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { io } from "socket.io-client";
 import type { SessionStore } from "./session";
-import { API_BASE_URL } from "./http";
+import { API_ACCESS_KEY, API_BASE_URL } from "./http";
 
 /** Socket.IO connects to the API origin, not the `/api/v1` REST base. */
 const ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
@@ -37,6 +37,8 @@ export function useRealtime(opts: {
       transports: ["websocket"],
       // Re-read the token on every (re)connect so a refreshed token is used.
       withCredentials: true,
+      // API access gate: browsers cannot set headers on a WebSocket, so the key rides in the query.
+      ...(API_ACCESS_KEY ? { query: { apiKey: API_ACCESS_KEY } } : {}),
     });
     const refetchAll = () => void queryClient.invalidateQueries();
     const refetchNotifs = () => void queryClient.invalidateQueries({ queryKey: notifKeyRef.current });

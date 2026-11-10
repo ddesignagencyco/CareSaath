@@ -9,6 +9,12 @@
  */
 import type { SessionStore } from "./session";
 
+/**
+ * Shared secret for the API's access gate (backend API_ACCESS_KEY). NEXT_PUBLIC_ means it is
+ * readable in the bundle: it deters bots/crawlers only, it is not a login. Empty = gate off.
+ */
+export const API_ACCESS_KEY = process.env.NEXT_PUBLIC_API_ACCESS_KEY ?? "";
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000/api/v1";
 
 /** Message used when the API can't be reached at all (translated in apiErrors). */
@@ -61,6 +67,7 @@ function readCsrfCookie(): string | undefined {
 async function send(method: string, url: string, body?: unknown): Promise<Response> {
   const isForm = body instanceof FormData;
   const headers: Record<string, string> = {
+    ...(API_ACCESS_KEY ? { "x-api-key": API_ACCESS_KEY } : {}),
     // Let the browser set the multipart boundary for FormData.
     ...(isForm || body === undefined ? {} : { "Content-Type": "application/json" }),
   };
