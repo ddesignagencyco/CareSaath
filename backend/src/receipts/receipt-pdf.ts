@@ -1,4 +1,7 @@
 import PDFDocument from 'pdfkit';
+import { LOGO_PNG_BASE64 } from '../email/logo.js';
+
+const LOGO_BUFFER = Buffer.from(LOGO_PNG_BASE64, 'base64');
 
 export interface ReceiptLine {
   label: string;
@@ -88,35 +91,49 @@ export function buildReceiptPdf(
     pdf.on('end', () => resolve(Buffer.concat(chunks)));
     pdf.on('error', reject);
 
+    // Footer is drawn in the bottom margin at absolute coordinates. `lineBreak: false` is
+    // essential: without it pdfkit treats text past the bottom margin as overflow and spills
+    // each line onto a brand-new page (which produced the stray blank pages).
     const drawFooter = () => {
+      // Drawing in the bottom margin otherwise makes pdfkit spill each line onto a new page.
+      // Zeroing the bottom margin lets the footer sit at the page bottom without pagination.
+      pdf.page.margins.bottom = 0;
       pdf.moveTo(LEFT, FOOTER_Y).lineTo(RIGHT, FOOTER_Y).strokeColor(BORDER).lineWidth(1).stroke();
       pdf
         .font('Helvetica-Bold')
         .fontSize(8.5)
         .fillColor(BRAND)
-        .text('CareSaath', LEFT, FOOTER_Y + 10, { width: RIGHT - LEFT, align: 'center' });
+        .text('CareSaath  ·  Home healthcare, at your doorstep', LEFT, FOOTER_Y + 11, {
+          width: RIGHT - LEFT,
+          align: 'center',
+          lineBreak: false,
+        });
       pdf
         .font('Helvetica')
         .fontSize(8.5)
         .fillColor(MUTED)
-        .text('Questions about this receipt? info@caresaath.com', LEFT, FOOTER_Y + 22, {
-          width: RIGHT - LEFT,
-          align: 'center',
-        })
         .text(
-          pdfSafe(receipt.footer ?? 'This is a computer-generated receipt and needs no signature.'),
+          `Questions about this receipt? info@caresaath.com   ·   ${pdfSafe(
+            receipt.footer ?? 'Computer-generated receipt; no signature required.',
+          )}`,
           LEFT,
-          FOOTER_Y + 34,
-          { width: RIGHT - LEFT, align: 'center' },
+          FOOTER_Y + 24,
+          { width: RIGHT - LEFT, align: 'center', lineBreak: false },
         );
     };
 
     // Header — brand accent bar, logo mark + wordmark, and the document meta on the right.
     pdf.rect(0, 0, PAGE_W, 6).fill(BRAND);
-    const markTop = 46;
-    pdf.roundedRect(LEFT, markTop, 36, 36, 9).fill(BRAND);
-    pdf.font('Helvetica-Bold').fontSize(16).fillColor(WHITE).text('CS', LEFT, markTop + 10, { width: 36, align: 'center' });
-    const wordX = LEFT + 48;
+    const markTop = 44;
+    try {
+      // The real CareSaath logo mark (shared with the email templates).
+      pdf.image(LOGO_BUFFER, LEFT, markTop, { width: 40, height: 40 });
+    } catch {
+      // Fall back to a drawn mark if the logo bytes ever fail to decode.
+      pdf.roundedRect(LEFT, markTop, 38, 38, 9).fill(BRAND);
+      pdf.font('Helvetica-Bold').fontSize(16).fillColor(WHITE).text('CS', LEFT, markTop + 11, { width: 38, align: 'center' });
+    }
+    const wordX = LEFT + 52;
     pdf.font('Helvetica-Bold').fontSize(20).fillColor(BRAND).text('CareSaath', wordX, markTop - 1);
     pdf.font('Helvetica').fontSize(9.5).fillColor(MUTED).text('Home nursing & physiotherapy', wordX, markTop + 23);
     pdf
