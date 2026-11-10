@@ -2,6 +2,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Redis } from 'ioredis';
 import type { ServerOptions } from 'socket.io';
+import { socketAccessCheck } from '../common/middleware/api-access-key.js';
 
 /**
  * Socket.IO adapter backed by Redis pub/sub, so an event emitted by one API
@@ -22,7 +23,7 @@ export class RedisIoAdapter extends IoAdapter {
   }
 
   override createIOServer(port: number, options?: ServerOptions) {
-    const server = super.createIOServer(port, options) as import('socket.io').Server;
+    const server = super.createIOServer(port, { ...options, allowRequest: socketAccessCheck(process.env['API_ACCESS_KEY']) } as ServerOptions) as import('socket.io').Server;
     if (this.adapterConstructor) {
       server.adapter(this.adapterConstructor);
     }

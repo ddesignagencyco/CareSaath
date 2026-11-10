@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
+import { apiAccessKeyMiddleware } from './common/middleware/api-access-key.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 async function bootstrap() {
@@ -52,6 +53,9 @@ async function bootstrap() {
     // Required so the browser sends/receives the httpOnly session cookies cross-origin.
     credentials: true,
   });
+  // Shared-secret gate (off when API_ACCESS_KEY is unset). After CORS so preflights and 401s
+  // still carry CORS headers; Socket.IO is gated separately via RedisIoAdapter's allowRequest.
+  app.use(apiAccessKeyMiddleware(process.env['API_ACCESS_KEY']));
 
   const swaggerDescription = [
     '## Welcome to CareSaath API Documentation',
