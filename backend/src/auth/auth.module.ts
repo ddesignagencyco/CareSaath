@@ -6,9 +6,16 @@ import { SmsService } from './sms.service.js';
 import { PlatformConfigModule } from '../config/platform-config.module.js';
 import { EmailModule } from '../email/email.module.js';
 import { FirebaseModule } from '../firebase/firebase.module.js';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module.js';
 
 @Module({
-  imports: [JwtModule.register({ global: true }), PlatformConfigModule, EmailModule, FirebaseModule],
+  imports: [
+    JwtModule.register({ global: true }),
+    PlatformConfigModule,
+    EmailModule,
+    FirebaseModule,
+    WhatsAppModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, SmsService],
   exports: [AuthService],

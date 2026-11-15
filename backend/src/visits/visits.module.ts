@@ -57,6 +57,7 @@ import { StorageService, withFileUrl } from '../common/storage/storage.module.js
 import { RealtimeEvents, RealtimeService } from '../realtime/realtime.service.js';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module.js';
 import { EmailModule } from '../email/email.module.js';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module.js';
 import { SmsService } from '../auth/sms.service.js';
 import { PlatformConfigModule, ConfigService } from '../config/platform-config.module.js';
 import { CaregiversModule, CaregiversService } from '../caregivers/caregivers.module.js';
@@ -1031,7 +1032,7 @@ export class CustomerVisitsController {
 }
 
 @Module({
-  imports: [NotificationsModule, PlatformConfigModule, CaregiversModule, EmailModule],
+  imports: [NotificationsModule, PlatformConfigModule, CaregiversModule, EmailModule, WhatsAppModule],
   controllers: [CaregiverVisitsController, CustomerVisitsController],
   providers: [VisitsService, SmsService],
   exports: [VisitsService],

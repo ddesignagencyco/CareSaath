@@ -63,6 +63,7 @@ import {
 import { WebPushService } from './web-push.service.js';
 import { NativePushService } from './native-push.service.js';
 import { FirebaseModule } from '../firebase/firebase.module.js';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module.js';
 
 export interface NotifyInput {
   userId: string;
@@ -556,7 +557,7 @@ export class NotificationsController {
 }
 
 @Module({
-  imports: [EmailModule, FirebaseModule],
+  imports: [EmailModule, FirebaseModule, WhatsAppModule],
   controllers: [NotificationsController],
   providers: [
     NotificationsService,
