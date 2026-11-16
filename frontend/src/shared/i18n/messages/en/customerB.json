@@ -122,6 +122,8 @@
     "eta": "About {min} min away",
     "arrivingIn": "Arriving in",
     "minUnit": "min",
+    "hrUnit": "hr",
+    "dayUnit": "d",
     "onTheWay": "Your caregiver is on the way",
     "onTheWayNamed": "{name} is on the way",
     "live": "Live",

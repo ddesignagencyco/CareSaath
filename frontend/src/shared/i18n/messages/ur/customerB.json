@@ -122,6 +122,8 @@
     "eta": "تقریباً {min} منٹ کی دوری پر",
     "arrivingIn": "پہنچنے میں",
     "minUnit": "منٹ",
+    "hrUnit": "گھنٹے",
+    "dayUnit": "دن",
     "onTheWay": "آپ کا کیئرگیور راستے میں ہے",
     "onTheWayNamed": "{name} راستے میں ہیں",
     "live": "لائیو",

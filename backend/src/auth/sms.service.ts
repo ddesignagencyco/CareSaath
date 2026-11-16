@@ -37,11 +37,11 @@ export class SmsService {
   ) {}
 
   async sendOtp(phone: string, code: string, context?: OtpMirrorContext): Promise<void> {
+    this.logger.log(`[DEV-SMS] OTP for ${phone}: ${code}`);
+
     // If WhatsApp Cloud API is configured, dispatch OTP over WhatsApp
     if (this.whatsapp?.isConfigured) {
       await this.whatsapp.sendOtp(phone, code);
-    } else {
-      this.logger.log(`[DEV-SMS] OTP for ${phone}: ${code}`);
     }
 
     if (!this.email?.isConfigured) return;

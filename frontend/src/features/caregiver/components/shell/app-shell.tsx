@@ -16,14 +16,14 @@ import { usePermissionPrime } from "@shared/hooks/use-permission-prime";
 import { usePushNotifications } from "@shared/hooks/use-push-notifications";
 import { ProfileMenu } from "@shared/ui/profile-menu";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
-import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { meApi, notificationsApi, profileApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { getSeenAt, markSeen, SEEN_EVENT, useDescribe } from "@/features/caregiver/lib/notifications";
 import { NotificationBell } from "@shared/ui/notification-bell";
 import { ApiError, http } from "@/features/caregiver/lib/api/http";
 import { session } from "@/features/caregiver/lib/api/session";
 import { useRealtime } from "@shared/api/realtime";
-import { useLiveLocation } from "@/features/caregiver/lib/use-live-location";
+import { useLiveLocation, useVisitLocationStream } from "@/features/caregiver/lib/use-live-location";
 import { CallProvider } from "@shared/chat/call-context";
 import { homeFor, refreshTokens, tokenRole, useMe, useSessionRaw, useSignOut } from "@/features/caregiver/lib/auth";
 import { useRequestCount, useUnreadCount } from "./counts";
@@ -59,6 +59,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useRealtime({ session, queryClient: client, notificationsKey: keys.notifications, refresh: () => http.refreshSession(), enabled: !!me.data });
   // Share live location (for immediate/ASAP bookings) while an approved caregiver has the app open.
   useLiveLocation(approved);
+  // Also keep streaming GPS fixes whenever a visit is EN_ROUTE, even if the caregiver switches tabs/views.
+  const enRouteVisits = useQuery({
+    queryKey: [...keys.visits, "active-en-route"],
+    queryFn: () => visitsApi.list({ status: "EN_ROUTE", limit: 1 }),
+    enabled: approved,
+    refetchInterval: 30_000,
+  });
+  const activeEnRouteId = enRouteVisits.data?.items?.[0]?.id;
+  useVisitLocationStream(activeEnRouteId ?? "", !!activeEnRouteId);
   // Ask for notification + location permission up front (on first tap) so visits + alerts work live.
   usePermissionPrime({ warmLocation: approved });
   // Subscribe this browser to Web Push so request/visit alerts arrive while the app is closed.

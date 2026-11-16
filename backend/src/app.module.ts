@@ -60,8 +60,9 @@ const THROTTLE_LIMIT = Number(process.env['THROTTLE_LIMIT'] ?? 600);
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../.env', '.env'] }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: THROTTLE_TTL_MS, limit: THROTTLE_LIMIT }],
-      // Don't rate-limit automated test runs (e2e hammers endpoints in a tight loop).
-      skipIf: () => process.env['NODE_ENV'] === 'test',
+      // Don't rate-limit automated test runs (e2e hammers endpoints in a tight loop)
+      // or non-HTTP contexts (WebSockets/microservices have no HTTP response headers).
+      skipIf: (context) => process.env['NODE_ENV'] === 'test' || context.getType() !== 'http',
     }),
     PrismaModule,
     RedisModule,
