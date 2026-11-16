@@ -6,13 +6,14 @@ import { CalendarRange } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import clsx from "clsx";
 import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
+import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { DatePicker } from "@shared/ui/date-picker";
 import { EmptyState, ErrorState } from "@shared/ui/misc";
-import { Select } from "@shared/ui/select";
 import type { CaregiverVisitListItem } from "@shared/caregiver-types";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -97,47 +98,93 @@ export default function VisitsPage() {
   return (
     <>
       <PageHeader title={t("title")} description={t("description")} />
-      {(onDate ? dated.isError : list.isError) ? (
-        <Card>
-          <ErrorState error={(onDate ? dated.error : list.error) as Error} onRetry={() => (onDate ? dated.refetch() : list.refetch())} />
-        </Card>
-      ) : !loading && data.length === 0 ? (
-        <Card>
-          <EmptyState icon={CalendarRange} title={onDate ? t("noOnDate") : tab === "upcoming" ? t("noUpcoming") : t("noPast")} />
-        </Card>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={data}
-          loading={loading}
-          searchPlaceholder={t("searchPlaceholder")}
-          emptyText={t("noResults")}
-          onRowClick={(v) => router.push(`/caregiver/visits/${v.id}`)}
-          toolbar={() => (
-            <>
-              {!onDate && (
-                <Select<Tab>
-                  className="w-40"
-                  value={tab}
-                  isSearchable={false}
-                  onChange={(v) => v && setTab(v)}
-                  options={[
-                    { value: "all", label: t("all") },
-                    { value: "upcoming", label: t("upcoming") },
-                    { value: "past", label: t("past") },
-                  ]}
-                />
-              )}
-              <DatePicker aria-label={t("onDate")} placeholder={t("onDate")} value={onDate} onChange={setOnDate} className="w-44" />
-              {onDate && (
-                <button type="button" onClick={() => setOnDate("")} className="text-sm font-semibold text-brand-700 hover:underline">
-                  {t("clearDate")}
-                </button>
-              )}
-            </>
-          )}
-        />
-      )}
+      <div className="space-y-4">
+        {/* Permanent filters bar: always available so the caregiver is never trapped in an empty state */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {!onDate && (
+              <div className="flex rounded-lg border border-ink-200 bg-white p-1 shadow-2xs">
+                {(
+                  [
+                    ["all", t("all"), allSorted.length],
+                    ["upcoming", t("upcoming"), upcoming.length],
+                    ["past", t("past"), past.length],
+                  ] as const
+                ).map(([val, label, count]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setTab(val)}
+                    className={clsx(
+                      "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                      tab === val
+                        ? "bg-brand-50 text-brand-700 shadow-2xs font-bold"
+                        : "text-ink-600 hover:text-ink-900 hover:bg-ink-50",
+                    )}
+                  >
+                    <span>{label}</span>
+                    <span
+                      className={clsx(
+                        "rounded-full px-1.5 py-0.2 text-[10px]",
+                        tab === val ? "bg-brand-100 text-brand-800" : "bg-ink-100 text-ink-500",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <DatePicker
+              aria-label={t("onDate")}
+              placeholder={t("onDate")}
+              value={onDate}
+              onChange={setOnDate}
+              className="w-44"
+            />
+            {onDate && (
+              <button
+                type="button"
+                onClick={() => setOnDate("")}
+                className="text-xs font-semibold text-brand-700 hover:underline"
+              >
+                {t("clearDate")}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {(onDate ? dated.isError : list.isError) ? (
+          <Card>
+            <ErrorState error={(onDate ? dated.error : list.error) as Error} onRetry={() => (onDate ? dated.refetch() : list.refetch())} />
+          </Card>
+        ) : !loading && data.length === 0 ? (
+          <Card className="flex flex-col items-center pb-8">
+            <EmptyState
+              icon={CalendarRange}
+              title={onDate ? t("noOnDate") : tab === "upcoming" ? t("noUpcoming") : t("noPast")}
+            />
+            {onDate ? (
+              <Button size="sm" variant="secondary" onClick={() => setOnDate("")}>
+                {t("clearDate")}
+              </Button>
+            ) : tab !== "all" ? (
+              <Button size="sm" variant="secondary" onClick={() => setTab("all")}>
+                {t("all")}
+              </Button>
+            ) : null}
+          </Card>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={data}
+            loading={loading}
+            searchPlaceholder={t("searchPlaceholder")}
+            emptyText={t("noResults")}
+            onRowClick={(v) => router.push(`/caregiver/visits/${v.id}`)}
+          />
+        )}
+      </div>
     </>
   );
 }

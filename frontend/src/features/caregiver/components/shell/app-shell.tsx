@@ -265,7 +265,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <span className={clsx("flex h-7 w-12 items-center justify-center rounded-full transition-colors", active && "bg-brand-50")}>
                     <Icon className="size-5" />
                   </span>
-                  {t(`nav.${item.labelKey}`)}
+                  <span className="truncate max-w-[68px] px-0.5 text-center leading-tight">{t(`nav.${item.labelKey}`)}</span>
                   {item.href === "/caregiver/requests" && <CountBadge count={requests} className="absolute top-1.5 start-1/2 ms-2" />}
                 </Link>
               </li>
