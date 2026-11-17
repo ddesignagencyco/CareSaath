@@ -258,7 +258,7 @@ export default function BookingDetailPage() {
                 <CardBody>
                   {c ? (
                     <Link href={`/customer/caregivers/${c.id}`} className="flex items-center gap-3">
-                      <Avatar name={c.user.fullName} />
+                      <Avatar name={c.user.fullName} src={c.photoUrl} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-bold text-ink-900">{c.user.fullName}</p>
                         <Rating average={c.ratingAverage} count={c.ratingCount} />

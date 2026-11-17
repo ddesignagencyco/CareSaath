@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import {
@@ -20,11 +20,20 @@ function authServiceMock() {
   };
 }
 
+function storageServiceMock() {
+  return {
+    presignedGet: vi.fn().mockResolvedValue('https://cdn.example.com/photo.jpg'),
+    validateImageUpload: vi.fn(),
+    put: vi.fn().mockResolvedValue({ fileKey: 'users/u-1/photo', mimeType: 'image/png', sizeBytes: 10 }),
+  };
+}
+
 describe('UsersService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let audit: ReturnType<typeof createAuditMock>;
   let email: ReturnType<typeof emailServiceMock>;
   let auth: ReturnType<typeof authServiceMock>;
+  let storage: ReturnType<typeof storageServiceMock>;
   let service: UsersService;
 
   beforeEach(() => {
@@ -32,7 +41,8 @@ describe('UsersService', () => {
     audit = createAuditMock();
     email = emailServiceMock();
     auth = authServiceMock();
-    service = new UsersService(prisma as never, audit as never, auth as never, email as never);
+    storage = storageServiceMock();
+    service = new UsersService(prisma as never, audit as never, auth as never, storage as never, email as never);
   });
 
   it('throws when the user record is missing', async () => {
@@ -127,5 +137,83 @@ describe('UsersService', () => {
     prisma.emergencyContact.findFirst.mockResolvedValue({ id: 'ec-1' });
     prisma.emergencyContact.delete.mockResolvedValue({ id: 'ec-1' });
     await expect(service.removeEmergencyContact(user, 'ec-1')).resolves.toEqual({ ok: true });
+  });
+
+  describe('profile photos', () => {
+    it('returns photoUrl in getMe when photoKey is present', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u-1',
+        phone: '+923001234567',
+        photoKey: 'users/u-1/photo',
+      });
+      const res = await service.getMe(user);
+      expect(res.photoUrl).toBe('https://cdn.example.com/photo.jpg');
+      expect(storage.presignedGet).toHaveBeenCalledWith('users/u-1/photo');
+    });
+
+    it('throws BadRequestException when no file is provided', async () => {
+      await expect(service.uploadPhoto(user, undefined as never)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('uploads a photo, syncing user and caregiver profile, and records an audit log', async () => {
+      prisma.$transaction.mockResolvedValue([{}, {}]);
+      const file = {
+        originalname: 'portrait.png',
+        mimetype: 'image/png',
+        buffer: Buffer.from('fake-data'),
+      };
+      const res = await service.uploadPhoto(user, file);
+      expect(storage.validateImageUpload).toHaveBeenCalledWith('image/png', file.buffer.length);
+      expect(storage.put).toHaveBeenCalledWith(
+        'users/u-1/photo',
+        'portrait.png',
+        file.buffer,
+        'image/png',
+      );
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'user.photo.updated', entityId: 'u-1' }),
+      );
+      expect(res).toEqual({
+        photoKey: 'users/u-1/photo',
+        photoUrl: 'https://cdn.example.com/photo.jpg',
+      });
+    });
+
+    it('removes a photo and records an audit log', async () => {
+      prisma.$transaction.mockResolvedValue([{}, {}]);
+      const res = await service.removePhoto(user);
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'user.photo.removed', entityId: 'u-1' }),
+      );
+      expect(res).toEqual({ ok: true });
+    });
+
+    it('throws NotFoundException when retrieving photo url for user without photo', async () => {
+      prisma.user.findUnique.mockResolvedValue({ photoKey: null, caregiverProfile: null });
+      await expect(service.photoUrl(user)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('returns photo url when photo key exists on user or caregiverProfile', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        photoKey: null,
+        caregiverProfile: { photoKey: 'caregivers/cg-1/portrait' },
+      });
+      const res = await service.photoUrl(user);
+      expect(res).toEqual({ url: 'https://cdn.example.com/photo.jpg' });
+      expect(storage.presignedGet).toHaveBeenCalledWith('caregivers/cg-1/portrait');
+    });
+
+    it('returns public photo url or null', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce({
+        photoKey: 'users/u-2/photo',
+        caregiverProfile: null,
+      });
+      expect(await service.publicPhotoUrl('u-2')).toBe('https://cdn.example.com/photo.jpg');
+
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      expect(await service.publicPhotoUrl('u-unknown')).toBeNull();
+    });
   });
 });

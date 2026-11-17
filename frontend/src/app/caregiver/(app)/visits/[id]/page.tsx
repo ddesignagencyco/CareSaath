@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { FileViewer } from "@shared/ui/file-viewer";
 import { LocationMap } from "@shared/ui/location-map";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { formatBytes } from "@shared/lib/format";
 import type { PrescriptionDocument } from "@shared/caregiver-types";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -220,7 +221,7 @@ export default function VisitDetailPage() {
                   <CardHeader title={t("family")} />
                   <CardBody>
                     <div className="flex items-center gap-3">
-                      <Avatar name={customer.fullName || t("family")} />
+                      <UserAvatar userId={customer.id} name={customer.fullName || t("family")} />
                       <div>
                         <p className="font-bold text-ink-900">{customer.fullName || t("bookedByUnnamed")}</p>
                         <p className="text-xs text-ink-500">

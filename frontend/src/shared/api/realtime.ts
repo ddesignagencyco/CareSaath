@@ -56,10 +56,23 @@ export function useRealtime(opts: {
     socket.on("visit.location", (p?: { visitId?: string }) => {
       if (p?.visitId) queryClient.setQueryData(["visit-location", p.visitId], p);
     });
-    // Bad/inactive token: don't loop — stop here.
-    socket.on("auth.error", () => socket.close());
-    // Token expired: refresh; the auto-reconnect's auth callback picks up the new one.
-    socket.on("auth.expired", () => void refreshRef.current());
+    // Bad/inactive token: attempt one refresh before closing permanently
+    socket.on("auth.error", async () => {
+      const refreshed = await refreshRef.current().catch(() => false);
+      if (refreshed) {
+        socket.connect();
+      } else {
+        socket.close();
+      }
+    });
+    // Token expired: refresh first, then reconnect with the new access cookie.
+    socket.on("auth.expired", async () => {
+      const refreshed = await refreshRef.current().catch(() => false);
+      if (refreshed) {
+        socket.disconnect();
+        socket.connect();
+      }
+    });
     socket.io.on("reconnect", refetchAll);
 
     return () => {

@@ -44,6 +44,7 @@ import { RetentionModule } from './common/retention/retention.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
 import { EmailModule } from './email/email.module.js';
 import { FirebaseModule } from './firebase/firebase.module.js';
+import { WhatsAppModule } from './whatsapp/whatsapp.module.js';
 
 /**
  * Global request throttle (a blanket DoS/abuse guard, in addition to the stricter
@@ -59,8 +60,9 @@ const THROTTLE_LIMIT = Number(process.env['THROTTLE_LIMIT'] ?? 600);
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../.env', '.env'] }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: THROTTLE_TTL_MS, limit: THROTTLE_LIMIT }],
-      // Don't rate-limit automated test runs (e2e hammers endpoints in a tight loop).
-      skipIf: () => process.env['NODE_ENV'] === 'test',
+      // Don't rate-limit automated test runs (e2e hammers endpoints in a tight loop)
+      // or non-HTTP contexts (WebSockets/microservices have no HTTP response headers).
+      skipIf: (context) => process.env['NODE_ENV'] === 'test' || context.getType() !== 'http',
     }),
     PrismaModule,
     RedisModule,
@@ -97,6 +99,7 @@ const THROTTLE_LIMIT = Number(process.env['THROTTLE_LIMIT'] ?? 600);
     RetentionModule,
     EmailModule,
     FirebaseModule,
+    WhatsAppModule,
   ],
   controllers: [AppController],
   providers: [

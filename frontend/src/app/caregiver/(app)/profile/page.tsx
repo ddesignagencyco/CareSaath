@@ -22,6 +22,7 @@ import type { Me, MyCaregiverProfile } from "@shared/caregiver-types";
 import type { Specialty } from "@shared/types";
 import { DocumentList, DocumentUploader } from "@/features/caregiver/components/documents-panel";
 import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
+import { PhotoCropModal } from "@shared/ui/photo-crop-modal";
 import { ServiceAreasCard } from "@/features/caregiver/components/service-areas-card";
 import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
@@ -44,36 +45,49 @@ function PhotoButton({ name, photoKey }: { name: string; photoKey: string | null
   const t = useTranslations("caregiverB.profile");
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const upload = useAction((file: File) => profileApi.uploadPhoto(file), { invalidate: [keys.profile], success: t("photoUpdated") });
   const hasPhoto = !!photoKey;
   return (
-    <div className="relative">
-      <PhotoAvatar name={name} photoKey={photoKey} size="lg" />
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        disabled={upload.isPending}
-        aria-label={hasPhoto ? t("changePhoto") : t("addPhoto")}
-        className="absolute -end-1 -bottom-1 flex size-7 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-white hover:bg-brand-700"
-      >
-        <Camera className="size-3.5" />
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="user"
-        className="sr-only"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f) return;
-          // The API also accepts PDFs here; a portrait must be an image.
-          if (!PHOTO_TYPES.includes(f.type) || f.size > PHOTO_MAX_BYTES) toast.error(t("photoInvalid"));
-          else upload.mutate(f);
+    <>
+      <div className="relative">
+        <PhotoAvatar name={name} photoKey={photoKey} size="lg" />
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          disabled={upload.isPending}
+          aria-label={hasPhoto ? t("changePhoto") : t("addPhoto")}
+          className="absolute -end-1 -bottom-1 flex size-7 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-white hover:bg-brand-700"
+        >
+          <Camera className="size-3.5" />
+        </button>
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="user"
+          className="sr-only"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            // The API also accepts PDFs here; a portrait must be an image.
+            if (!PHOTO_TYPES.includes(f.type) || f.size > PHOTO_MAX_BYTES) toast.error(t("photoInvalid"));
+            else setPendingFile(f);
+          }}
+        />
+      </div>
+
+      <PhotoCropModal
+        open={!!pendingFile}
+        file={pendingFile}
+        onClose={() => setPendingFile(null)}
+        onCrop={(croppedFile) => {
+          setPendingFile(null);
+          upload.mutate(croppedFile);
         }}
       />
-    </div>
+    </>
   );
 }
 

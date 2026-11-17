@@ -59,7 +59,7 @@ export default function BookingsPage() {
       accessorFn: (b) => caregivers[b.caregiverId]?.user.fullName ?? tc("caregiverFallback"),
       cell: ({ row, getValue }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={getValue() as string} size="sm" />
+          <Avatar name={getValue() as string} src={caregivers[row.original.caregiverId]?.photoUrl} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{getValue() as string}</p>
             <p className="truncate text-xs text-ink-500 sm:hidden">{L.specialty(row.original.serviceType)}</p>

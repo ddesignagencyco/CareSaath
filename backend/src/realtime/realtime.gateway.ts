@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   ConnectedSocket,
   MessageBody,
@@ -39,6 +40,7 @@ interface SocketData {
  * access token expires (event `auth.expired`), so the client refreshes its token
  * and reconnects; a revoked or deactivated account cannot stay subscribed.
  */
+@SkipThrottle()
 @WebSocketGateway({ cors: { origin: true, credentials: true } })
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
@@ -185,6 +187,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       await this.calls.markConnected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:answered', { callId: call.id, sdp: body.sdp });
+      client.broadcast.to(userRoom(userId)).emit('call:ended', { callId: call.id });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
@@ -245,6 +248,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       await this.calls.markRejected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:rejected', { callId: call.id });
+      client.broadcast.to(userRoom(userId)).emit('call:rejected', { callId: call.id });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }

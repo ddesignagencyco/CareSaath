@@ -74,4 +74,15 @@ describe('email templates', () => {
     expect(renderWelcomeEmail({ name: 'Ali', role: 'CAREGIVER' })).toContain('Open your dashboard');
     expect(renderWelcomeEmail({ name: 'Ali', role: 'CUSTOMER' })).toContain('Find care');
   });
+
+  it('includes mobile responsive styles, viewport tags, and fixed table layout', () => {
+    const html = renderOtpEmail({ code: '123456', purpose: 'login', ttlMinutes: 5 });
+    expect(html).toContain('name="viewport" content="width=device-width, initial-scale=1.0"');
+    expect(html).toContain('name="x-apple-disable-message-reformatting"');
+    expect(html).toContain('@media only screen and (max-width: 600px)');
+    expect(html).toContain('table-layout:fixed');
+    expect(html).toContain('card-cell');
+    expect(html).toContain('email-container');
+    expect(html).toContain('otp-code-text');
+  });
 });

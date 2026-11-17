@@ -10,7 +10,8 @@ import { Badge, type Tone } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
-import { Avatar, EmptyState, ErrorState } from "@shared/ui/misc";
+import { EmptyState, ErrorState } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { CAN_ADMIN_PAYMENTS, paymentsApi } from "@/features/admin/lib/api/admin";
 import { useAction } from "@/features/admin/lib/api/hooks";
@@ -55,7 +56,7 @@ export default function AdminPaymentsPage() {
         const b = row.original.visit.booking;
         return (
           <div className="flex items-center gap-3">
-            <Avatar name={b.customer.fullName} size="sm" />
+            <UserAvatar userId={b.customer.id} name={b.customer.fullName} size="sm" />
             <div className="min-w-0">
               <p className="truncate font-semibold text-ink-900">{b.customer.fullName}</p>
               <p className="text-xs text-ink-500">{t("forPatient", { name: b.patient.name })}</p>

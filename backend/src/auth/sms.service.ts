@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
+import { WhatsAppService } from '../whatsapp/whatsapp.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
 import { otpMirrorSubject, renderOtpMirrorEmail } from '../email/templates.js';
 
@@ -30,11 +31,18 @@ export interface OtpMirrorContext {
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
-  constructor(private readonly email?: EmailService) {}
+  constructor(
+    @Optional() private readonly email?: EmailService,
+    @Optional() private readonly whatsapp?: WhatsAppService,
+  ) {}
 
   async sendOtp(phone: string, code: string, context?: OtpMirrorContext): Promise<void> {
-    // In production this calls the SMS gateway (TBD vendor).
     this.logger.log(`[DEV-SMS] OTP for ${phone}: ${code}`);
+
+    // If WhatsApp Cloud API is configured, dispatch OTP over WhatsApp
+    if (this.whatsapp?.isConfigured) {
+      await this.whatsapp.sendOtp(phone, code);
+    }
 
     if (!this.email?.isConfigured) return;
 
@@ -68,6 +76,10 @@ export class SmsService {
   }
 
   async sendVisitAlert(phone: string, message: string): Promise<void> {
-    this.logger.log(`[DEV-SMS] Visit alert for ${phone}: ${message}`);
+    if (this.whatsapp?.isConfigured) {
+      await this.whatsapp.sendTextMessage(phone, message);
+    } else {
+      this.logger.log(`[DEV-SMS] Visit alert for ${phone}: ${message}`);
+    }
   }
 }

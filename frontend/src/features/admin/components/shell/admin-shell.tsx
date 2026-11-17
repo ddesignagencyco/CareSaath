@@ -15,6 +15,7 @@ import { session } from "@/features/admin/lib/api/session";
 import { sessionReady, sessionRole, subscribeBootstrap } from "@shared/api/session";
 import { formatPkMobile } from "@shared/lib/phone";
 import { ProfileMenu } from "@shared/ui/profile-menu";
+import { Avatar } from "@shared/ui/misc";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
 import { Sidebar } from "./sidebar";
 
@@ -122,6 +123,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             role={t("role")}
             items={[{ href: "/admin/settings", label: t("platformSettings"), icon: Settings2 }]}
             onSignOut={logout}
+            renderAvatar={(size) => <Avatar name={me.data?.fullName || t("adminName")} src={me.data?.photoUrl} size={size} />}
           />
         </div>
       </header>

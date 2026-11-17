@@ -62,6 +62,8 @@
   "Redis_unavailable": "Redis دستیاب نہیں",
   "Deactivating_a_caregiver_is_not_supported_by_the_API_yet": "کیئرگیور کو غیر فعال کرنا ابھی API میں دستیاب نہیں",
   "No_photo_uploaded": "کوئی تصویر اپ لوڈ نہیں کی گئی",
+  "Only_JPEG_PNG_or_WEBP_images_are_allowed": "صرف JPEG، PNG یا WEBP تصاویر کی اجازت ہے",
+  "File_must_be_10MB_or_smaller": "فائل 10MB یا اس سے کم ہونی چاہیے",
   "Payment_not_found": "ادائیگی نہیں ملی",
   "Only_cash_payments_are_confirmed_this_way": "اس طریقے سے صرف نقد ادائیگی کی تصدیق ہوتی ہے",
   "Emergency_contact_not_found": "ایمرجنسی رابطہ نہیں ملا",

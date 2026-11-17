@@ -94,6 +94,37 @@ describe("LiveLocationMap", { timeout: 15_000 }, () => {
     expect(await screen.findByText(en.liveTrack.arrivingNow)).toBeInTheDocument();
   });
 
+  it("converts ETA exceeding 60 minutes into hours and minutes", async () => {
+    mockFetch(
+      router({
+        "GET /customer/visits/v1/location": json({ visitId: "v1", lat: 31.5, lng: 74.3, at: new Date().toISOString(), etaMinutes: 125 }),
+      }),
+    );
+    renderWithProviders(<LiveLocationMap visitId="v1" caregiverName="Fatima Noor" />, { storageKey: STORAGE_KEY });
+
+    expect(await screen.findByText(en.liveTrack.arrivingIn)).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText(en.liveTrack.hrUnit)).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText(en.liveTrack.minUnit)).toBeInTheDocument();
+  });
+
+  it("converts ETA exceeding 24 hours into days and hours", async () => {
+    mockFetch(
+      router({
+        "GET /customer/visits/v1/location": json({ visitId: "v1", lat: 31.5, lng: 74.3, at: new Date().toISOString(), etaMinutes: 2476 }),
+      }),
+    );
+    renderWithProviders(<LiveLocationMap visitId="v1" caregiverName="Dr. Usman Tariq" />, { storageKey: STORAGE_KEY });
+
+    expect(await screen.findByText(en.liveTrack.arrivingIn)).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText(en.liveTrack.dayUnit)).toBeInTheDocument();
+    expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByText(en.liveTrack.hrUnit)).toBeInTheDocument();
+    expect(screen.getByText("Dr. Usman Tariq is on the way")).toBeInTheDocument();
+  });
+
   it("waits for a location before showing an ETA", async () => {
     mockFetch(router({ "GET /customer/visits/v1/location": json(null) }));
     renderWithProviders(<LiveLocationMap visitId="v1" />, { storageKey: STORAGE_KEY });

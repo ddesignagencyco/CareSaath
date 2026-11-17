@@ -9,6 +9,7 @@ const me = (caregiverProfile: Me["caregiverProfile"]): Me => ({
   phone: "+923001110011",
   role: caregiverProfile ? "CAREGIVER" : "CUSTOMER",
   fullName: "Fatima",
+  photoUrl: null,
   preferredLanguage: "EN",
   status: "ACTIVE",
   lastLoginAt: null,

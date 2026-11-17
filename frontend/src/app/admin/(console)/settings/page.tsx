@@ -10,8 +10,10 @@ import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card, CardHeader } from "@shared/ui/card";
 import { Input } from "@shared/ui/field";
-import { ErrorState, TableSkeleton } from "@shared/ui/misc";
-import { configApi } from "@/features/admin/lib/api/admin";
+import { Avatar, ErrorState, TableSkeleton } from "@shared/ui/misc";
+import { PhotoPicker } from "@shared/ui/photo-picker";
+import { formatPkMobile } from "@shared/lib/phone";
+import { configApi, meApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import type { PlatformConfigItem } from "@shared/types";
 
@@ -151,6 +153,7 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
 
 export default function SettingsPage() {
   const config = useQuery({ queryKey: keys.config, queryFn: configApi.list });
+  const me = useQuery({ queryKey: ["a-me"], queryFn: meApi.get, staleTime: 300_000 });
   const t = useTranslations("adminB.settings");
 
   const groups = new Map<Group, PlatformConfigItem[]>();
@@ -165,6 +168,26 @@ export default function SettingsPage() {
         title={t("title")}
         description={t("description")}
       />
+      <Card className="mb-5">
+        <CardHeader title={t("profileTitle")} description={t("profileHint")} />
+        <div className="flex items-center gap-4 px-5 pb-5">
+          {me.data ? (
+            <PhotoPicker
+              name={me.data.fullName || t("profileFallback")}
+              photoUrl={me.data.photoUrl}
+              upload={meApi.uploadPhoto}
+              remove={meApi.removePhoto}
+              invalidate={[["a-me"]]}
+            />
+          ) : (
+            <Avatar name={t("profileFallback")} size="lg" />
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-bold text-ink-900">{me.data?.fullName || t("profileFallback")}</p>
+            {me.data?.phone && <p className="tabular text-sm text-ink-500">{formatPkMobile(me.data.phone)}</p>}
+          </div>
+        </div>
+      </Card>
       {config.isError ? (
         <Card>
           <ErrorState error={config.error} onRetry={() => config.refetch()} />

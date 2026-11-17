@@ -10,7 +10,8 @@ import { PageHeader } from "@shared/page-header";
 import { Badge } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
-import { Avatar, EmptyState, ErrorState } from "@shared/ui/misc";
+import { EmptyState, ErrorState } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { caregiversApi } from "@/features/admin/lib/api/admin";
 import { keys } from "@/features/admin/lib/api/hooks";
@@ -72,7 +73,7 @@ export default function ReverificationPage() {
       accessorFn: (c) => c.user.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.user.fullName} size="sm" />
+          <UserAvatar userId={row.original.user.id} name={row.original.user.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.user.fullName}</p>
             <p className="text-xs text-ink-500">{L.specialty(row.original.specialty)}</p>

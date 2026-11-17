@@ -13,6 +13,7 @@ import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
 import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { ProfileMenu } from "@shared/ui/profile-menu";
+import { Avatar } from "@shared/ui/misc";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { ApiError, http } from "@/features/customer/lib/api/http";
 import { session } from "@/features/customer/lib/api/session";
@@ -261,6 +262,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
               { href: "/customer/account/payments", label: t("items.payments"), icon: Wallet },
             ]}
             onSignOut={signOut}
+            renderAvatar={(size) => <Avatar name={name} src={me.data?.photoUrl} size={size} />}
           />
         </div>
       </header>

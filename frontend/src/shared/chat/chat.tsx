@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { formatBytes } from "@shared/lib/format";
-import { Avatar } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import type { ChatConversation, ChatMessage, SendInput } from "./types";
 import { useCallOptional } from "./call-context";
 
@@ -147,7 +147,7 @@ export function ConversationList({
               className={clsx("flex w-full items-center gap-3 px-4 py-3 text-start transition-colors", c.id === selectedId ? "bg-brand-50" : "hover:bg-ink-50")}
             >
               <span className="relative shrink-0">
-                <Avatar name={c.name} />
+                <UserAvatar userId={c.id} name={c.name} />
                 {c.online && <span className="absolute end-0 bottom-0 size-3 rounded-full bg-success-600 ring-2 ring-white" />}
               </span>
               <span className="min-w-0 flex-1">
@@ -895,7 +895,7 @@ export function ChatThread({
         )}
         <button type="button" onClick={() => setGalleryOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-start hover:bg-ink-50">
           <span className="relative shrink-0">
-            <Avatar name={conversation.name} />
+            <UserAvatar userId={conversation.id} name={conversation.name} />
             {conversation.online && <span className="absolute end-0 bottom-0 size-3 rounded-full bg-success-600 ring-2 ring-white" />}
           </span>
           <span className="min-w-0">

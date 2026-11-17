@@ -500,9 +500,24 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<TokenPair> {
     // Rotating refresh tokens with a Redis deny-list for used tokens.
+    // A brief grace period (30s) allows concurrent in-flight requests from the same
+    // client or across tabs to receive the newly rotated tokens instead of tripping reuse detection.
     const denyKey = `jwt:deny:${refreshToken}`;
+    const rotatedKey = `jwt:rotated:${refreshToken}`;
+
     const denied = await this.redis.client.get(denyKey);
     if (denied) {
+      const graceCached = await this.redis.client.get(rotatedKey);
+      if (graceCached) {
+        try {
+          const parsed = JSON.parse(graceCached) as TokenPair;
+          if (parsed && typeof parsed === 'object' && parsed.accessToken && parsed.refreshToken) {
+            return parsed;
+          }
+        } catch {
+          // invalid cached json, fall through
+        }
+      }
       throw new UnauthorizedException('Refresh token already used');
     }
     let payload: { sub: string; role: UserRole; phone: string; type?: string };
@@ -520,18 +535,31 @@ export class AuthService {
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Account is not active');
     }
-    // Claim the token atomically: SET NX only succeeds for the first caller, so two
-    // concurrent requests presenting the same (possibly stolen) token cannot both
-    // rotate into fresh valid sessions — the loser is rejected, preserving reuse detection.
+    // Claim the token atomically: SET NX only succeeds for the first caller.
+    // If another concurrent request just claimed it, check if rotated tokens are in the grace window.
     const claimed = await this.redis.client.set(denyKey, '1', 'EX', REFRESH_TOKEN_TTL_SECONDS, 'NX');
     if (claimed === null) {
+      const graceCached = await this.redis.client.get(rotatedKey);
+      if (graceCached) {
+        try {
+          const parsed = JSON.parse(graceCached) as TokenPair;
+          if (parsed && typeof parsed === 'object' && parsed.accessToken && parsed.refreshToken) {
+            return parsed;
+          }
+        } catch {
+          // fall through
+        }
+      }
       throw new UnauthorizedException('Refresh token already used');
     }
-    return this.issueTokens(user.id, user.role, user.phone);
+    const newTokens = await this.issueTokens(user.id, user.role, user.phone);
+    await this.redis.client.set(rotatedKey, JSON.stringify(newTokens), 'EX', 30);
+    return newTokens;
   }
 
   async logout(refreshToken: string): Promise<{ ok: true }> {
     if (refreshToken) {
+      await this.redis.client.del(`jwt:rotated:${refreshToken}`);
       await this.redis.client.set(
         `jwt:deny:${refreshToken}`,
         '1',

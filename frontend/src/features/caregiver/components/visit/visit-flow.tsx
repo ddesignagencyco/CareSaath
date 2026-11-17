@@ -83,7 +83,7 @@ function Stepper({ current }: { current: number }) {
               </span>
               <span className={clsx("h-0.5 flex-1", i === STEPS.length - 1 ? "invisible" : done ? "bg-brand-400" : "bg-ink-200")} />
             </span>
-            <span className={clsx("text-[11px] font-semibold sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{t(`steps.${key}`)}</span>
+            <span className={clsx("text-[11px] font-semibold leading-tight break-words max-w-full sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{t(`steps.${key}`)}</span>
           </li>
         );
       })}

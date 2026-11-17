@@ -11,7 +11,8 @@ import { UserStatusBadge, VerificationBadge } from "@shared/status";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { Input } from "@shared/ui/field";
-import { Avatar, ErrorState } from "@shared/ui/misc";
+import { ErrorState } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { caregiversApi } from "@/features/admin/lib/api/admin";
 import { keys } from "@/features/admin/lib/api/hooks";
@@ -57,7 +58,7 @@ export default function CaregiversPage() {
         const c = row.original;
         return (
           <div className="flex items-center gap-3">
-            <Avatar name={c.user.fullName} />
+            <UserAvatar userId={c.user.id} name={c.user.fullName} />
             <div className="min-w-0">
               <p className="truncate font-semibold text-ink-900">{c.user.fullName || t("unnamed")}</p>
               <p className="text-xs text-ink-500">{t("registered", { cities: f.list(c.serviceArea.cities), when: f.relativeTime(c.createdAt) })}</p>

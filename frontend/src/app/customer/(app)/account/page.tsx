@@ -13,6 +13,7 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
 import { Avatar, Skeleton } from "@shared/ui/misc";
+import { PhotoPicker } from "@shared/ui/photo-picker";
 import { Select } from "@shared/ui/select";
 import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
@@ -101,7 +102,17 @@ export default function AccountPage() {
           <Card>
             <div className="p-5 sm:p-6">
               <div className="flex items-center gap-4 border-b border-ink-100 pb-5">
-                <Avatar name={profile?.fullName || t("you")} size="lg" />
+                {profile ? (
+                  <PhotoPicker
+                    name={profile.fullName || t("you")}
+                    photoUrl={profile.photoUrl}
+                    upload={meApi.uploadPhoto}
+                    remove={meApi.removePhoto}
+                    invalidate={[keys.me]}
+                  />
+                ) : (
+                  <Avatar name={t("you")} size="lg" />
+                )}
                 <div className="min-w-0">
                   <p className="truncate text-lg font-extrabold text-ink-900">{profile?.fullName || t("addName")}</p>
                   <p className="tabular text-sm text-ink-500">{profile ? formatPkMobile(profile.phone) : " "}</p>

@@ -11,7 +11,8 @@ import { Badge, type Tone } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { DatePicker } from "@shared/ui/date-picker";
-import { Avatar, ErrorState, FilterTabs } from "@shared/ui/misc";
+import { ErrorState, FilterTabs } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { adminBookingsApi } from "@/features/admin/lib/api/admin";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -43,7 +44,7 @@ function BookingsTab() {
       accessorFn: (b) => b.customer.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.customer.fullName} size="sm" />
+          <UserAvatar userId={row.original.customer.id} name={row.original.customer.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.customer.fullName}</p>
             <p className="text-xs text-ink-500">{t("forPatient", { name: row.original.patient.name })}</p>
@@ -152,7 +153,7 @@ function VisitsTab() {
       accessorFn: (v) => v.booking.customer.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.booking.customer.fullName} size="sm" />
+          <UserAvatar userId={row.original.booking.customer.id} name={row.original.booking.customer.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.booking.customer.fullName}</p>
             <p dir="auto" className="truncate text-xs text-ink-500">{row.original.booking.address.city}</p>

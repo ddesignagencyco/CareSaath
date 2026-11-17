@@ -280,7 +280,7 @@ export default function BookPage() {
         <Skeleton className="h-20 rounded-2xl" />
       ) : (
         <Card className="flex items-center gap-3 p-4">
-          <Avatar name={c.user.fullName} />
+          <Avatar name={c.user.fullName} src={c.photoUrl} />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-ink-900">{t("title", { name: c.user.fullName })}</p>
             <div className="flex flex-wrap items-center gap-x-3 text-sm text-ink-500">
