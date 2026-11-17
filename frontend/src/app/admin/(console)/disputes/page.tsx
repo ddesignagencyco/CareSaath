@@ -10,7 +10,8 @@ import { DisputeStatusBadge, PriorityBadge, VisitStatusBadge } from "@shared/sta
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
-import { Avatar, EmptyState, ErrorState, FilterTabs, Pagination, TableSkeleton } from "@shared/ui/misc";
+import { EmptyState, ErrorState, FilterTabs, Pagination, TableSkeleton } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { disputesApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
@@ -25,7 +26,7 @@ function Party({ label, user }: { label: string; user: Dispute["raisedBy"] }) {
   const tl = useTranslations("labels");
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <Avatar name={user.fullName} size="sm" />
+      <UserAvatar userId={user.id} name={user.fullName} size="sm" />
       <div className="min-w-0">
         <p className="text-[11px] font-bold tracking-wide text-ink-400 uppercase">{label}</p>
         <p className="truncate text-sm font-semibold text-ink-900">

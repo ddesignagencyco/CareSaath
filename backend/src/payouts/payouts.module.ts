@@ -516,7 +516,7 @@ export class PayoutsService {
         take: query.limit,
         include: {
           caregiver: {
-            select: { id: true, specialty: true, user: { select: { fullName: true, phone: true } } },
+            select: { id: true, specialty: true, user: { select: { id: true, fullName: true, phone: true } } },
           },
           payoutAccount: { select: PAYOUT_ACCOUNT_SELECT },
         },

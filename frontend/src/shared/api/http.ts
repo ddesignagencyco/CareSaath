@@ -103,21 +103,35 @@ async function parse<T>(res: Response): Promise<T> {
   return text as T;
 }
 
-export function createHttp(store: SessionStore) {
-  // One refresh at a time per section; concurrent 401s share it.
-  let refreshing: Promise<boolean> | null = null;
+// Shared refresh promise across all HTTP instances and bootstrap calls in this tab.
+let sharedRefreshing: Promise<boolean> | null = null;
 
-  async function refresh(): Promise<boolean> {
-    // The refresh token is an httpOnly cookie; the backend reads it and sets a
-    // fresh access cookie. The browser swaps the cookies for us — nothing to store,
-    // but it returns a rotated CSRF token which we capture for subsequent requests.
-    const res = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
-    if (!res?.ok) {
-      store.clear();
-      return false;
+async function executeRefresh(store?: SessionStore): Promise<boolean> {
+  // The refresh token is an httpOnly cookie; the backend reads it and sets a
+  // fresh access cookie. The browser swaps the cookies for us — nothing to store,
+  // but it returns a rotated CSRF token which we capture for subsequent requests.
+  const res = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
+  if (!res) {
+    // Network failure (offline, timeout) — keep session intact, do not log out.
+    return false;
+  }
+  if (!res.ok) {
+    // Only clear the session if the refresh token was explicitly rejected.
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      store?.clear();
     }
-    captureCsrf(await res.json().catch(() => null));
-    return true;
+    return false;
+  }
+  captureCsrf(await res.json().catch(() => null));
+  return true;
+}
+
+export function createHttp(store: SessionStore) {
+  function refresh(): Promise<boolean> {
+    sharedRefreshing ??= executeRefresh(store).finally(() => {
+      sharedRefreshing = null;
+    });
+    return sharedRefreshing;
   }
 
   async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
@@ -131,10 +145,7 @@ export function createHttp(store: SessionStore) {
       // errors (e.g. "Invalid check-in OTP"): retrying would resend the same
       // input and burn another attempt.
       if (!TOKEN_ERRORS.has(err.message)) throw err;
-      refreshing ??= refresh().finally(() => {
-        refreshing = null;
-      });
-      if (!(await refreshing)) throw err;
+      if (!(await refresh())) throw err;
       res = await send(method, url, body);
     }
 
@@ -165,10 +176,7 @@ export function createHttp(store: SessionStore) {
       if (res.status === 401 && loggedIn && !path.startsWith("/auth/")) {
         const err = await toError(res);
         if (!TOKEN_ERRORS.has(err.message)) throw err;
-        refreshing ??= refresh().finally(() => {
-          refreshing = null;
-        });
-        if (!(await refreshing)) throw err;
+        if (!(await refresh())) throw err;
         res = await send("GET", url);
       }
       if (!res.ok) throw await toError(res);
@@ -179,10 +187,7 @@ export function createHttp(store: SessionStore) {
     /** Force a token refresh (used by the realtime socket on `auth.expired`). Returns false if there's no session. */
     refreshSession: (): Promise<boolean> => {
       if (!store.get()) return Promise.resolve(false);
-      refreshing ??= refresh().finally(() => {
-        refreshing = null;
-      });
-      return refreshing;
+      return refresh();
     },
   };
 }
@@ -203,9 +208,10 @@ export async function bootstrapSession(): Promise<{ phone: string; role: string 
   };
   let d = await read();
   if (!d) {
-    const r = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
-    if (r?.ok) {
-      captureCsrf(await r.json().catch(() => null));
+    const ok = await (sharedRefreshing ??= executeRefresh().finally(() => {
+      sharedRefreshing = null;
+    }));
+    if (ok) {
       d = await read();
     }
   }

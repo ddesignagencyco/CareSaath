@@ -932,8 +932,11 @@ export class CaregiversService {
 
   async uploadPhoto(
     user: AuthUser,
-    file: { originalname: string; mimetype: string; buffer: Buffer },
+    file?: { originalname: string; mimetype: string; buffer: Buffer },
   ) {
+    if (!file?.buffer) {
+      throw new BadRequestException('No photo uploaded');
+    }
     const profile = await this.prisma.caregiverProfile.findUnique({
       where: { userId: user.sub },
     });
@@ -947,10 +950,17 @@ export class CaregiversService {
       file.buffer,
       file.mimetype,
     );
-    await this.prisma.caregiverProfile.update({
-      where: { id: profile.id },
-      data: { photoKey: stored.fileKey },
-    });
+    await this.prisma.$transaction([
+      this.prisma.caregiverProfile.update({
+        where: { id: profile.id },
+        data: { photoKey: stored.fileKey },
+      }),
+      // Mirror the portrait on the user row so generic avatar URLs show it for every role.
+      this.prisma.user.update({
+        where: { id: user.sub },
+        data: { photoKey: stored.fileKey },
+      }),
+    ]);
     return { photoKey: stored.fileKey };
   }
 

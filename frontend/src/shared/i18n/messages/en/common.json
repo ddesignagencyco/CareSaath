@@ -38,6 +38,22 @@
   "toast": {
     "dismiss": "Dismiss"
   },
+  "photo": {
+    "add": "Add photo",
+    "change": "Change photo",
+    "remove": "Remove photo",
+    "updated": "Photo updated",
+    "removed": "Photo removed",
+    "invalid": "Choose a JPEG, PNG or WEBP image under 10MB",
+    "cropTitle": "Adjust photo",
+    "cropDescription": "Drag to position, zoom, or rotate your photo before saving.",
+    "zoom": "Zoom",
+    "rotate": "Rotate",
+    "reset": "Reset",
+    "apply": "Save & upload",
+    "cancel": "Cancel",
+    "cropFailed": "Failed to process photo"
+  },
   "language": {
     "label": "Language",
     "appLanguage": "App language",

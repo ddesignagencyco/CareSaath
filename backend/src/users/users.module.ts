@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -11,15 +12,30 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiTags,
+} from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Language, UserStatus } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { StorageService } from '../common/storage/storage.module.js';
 import { EmailModule } from '../email/email.module.js';
 import { EmailService } from '../email/email.service.js';
 import { renderWelcomeEmail } from '../email/templates.js';
@@ -67,6 +83,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly auth: AuthService,
+    private readonly storage: StorageService,
     private readonly email?: EmailService,
   ) {}
 
@@ -79,6 +96,7 @@ export class UsersService {
         email: true,
         role: true,
         fullName: true,
+        photoKey: true,
         preferredLanguage: true,
         status: true,
         lastLoginAt: true,
@@ -89,7 +107,84 @@ export class UsersService {
     if (!record) {
       throw new NotFoundException('User not found');
     }
-    return record;
+    const { photoKey, ...profile } = record;
+    return { ...profile, photoUrl: await this.photoUrlFor(photoKey) };
+  }
+
+  /** Public delivery URL for a stored photo key, or null when none was uploaded. */
+  private async photoUrlFor(photoKey: string | null): Promise<string | null> {
+    return photoKey ? this.storage.presignedGet(photoKey) : null;
+  }
+
+  /** Photo key for a user, falling back to the caregiver profile for photos uploaded before User.photoKey existed. */
+  private async userPhotoKey(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { photoKey: true, caregiverProfile: { select: { photoKey: true } } },
+    });
+    return user?.photoKey ?? user?.caregiverProfile?.photoKey ?? null;
+  }
+
+  async photoUrl(user: AuthUser) {
+    const photoKey = await this.userPhotoKey(user.sub);
+    if (!photoKey) {
+      throw new NotFoundException('No photo uploaded');
+    }
+    return { url: await this.storage.presignedGet(photoKey) };
+  }
+
+  /** Delivery URL for the public avatar route; null means the user has no photo. */
+  async publicPhotoUrl(userId: string): Promise<string | null> {
+    const photoKey = await this.userPhotoKey(userId);
+    return photoKey ? this.storage.presignedGet(photoKey) : null;
+  }
+
+  async uploadPhoto(
+    user: AuthUser,
+    file?: { originalname: string; mimetype: string; buffer: Buffer },
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException('No photo uploaded');
+    }
+    this.storage.validateImageUpload(file.mimetype, file.buffer.length);
+    const stored = await this.storage.put(
+      `users/${user.sub}/photo`,
+      file.originalname,
+      file.buffer,
+      file.mimetype,
+    );
+    // Keep the caregiver profile in sync so the public caregiver APIs show the same portrait.
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: user.sub }, data: { photoKey: stored.fileKey } }),
+      this.prisma.caregiverProfile.updateMany({
+        where: { userId: user.sub },
+        data: { photoKey: stored.fileKey },
+      }),
+    ]);
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'user.photo.updated',
+      entityType: 'User',
+      entityId: user.sub,
+    });
+    return { photoKey: stored.fileKey, photoUrl: await this.storage.presignedGet(stored.fileKey) };
+  }
+
+  async removePhoto(user: AuthUser) {
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: user.sub }, data: { photoKey: null } }),
+      this.prisma.caregiverProfile.updateMany({
+        where: { userId: user.sub },
+        data: { photoKey: null },
+      }),
+    ]);
+    await this.audit.log({
+      actorId: user.sub,
+      action: 'user.photo.removed',
+      entityType: 'User',
+      entityId: user.sub,
+    });
+    return { ok: true as const };
   }
 
   async updateMe(user: AuthUser, dto: UpdateProfileDto) {
@@ -222,6 +317,69 @@ export class UsersController {
   })
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return this.users.updateMe(user, dto);
+  }
+
+  @Post('me/photo')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload profile photo',
+    description: 'Uploads a profile photo for any role (customer, caregiver or admin). JPEG, PNG or WEBP up to 10MB.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary', description: 'Profile photo file' },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  uploadPhoto(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: { originalname: string; mimetype: string; buffer: Buffer },
+  ) {
+    return this.users.uploadPhoto(user, file);
+  }
+
+  @Delete('me/photo')
+  @ApiOperation({
+    summary: 'Remove profile photo',
+    description: 'Clears the profile photo so the avatar falls back to initials.',
+  })
+  removePhoto(@CurrentUser() user: AuthUser) {
+    return this.users.removePhoto(user);
+  }
+
+  @Get('me/photo/url')
+  @ApiOperation({
+    summary: 'Get profile photo URL',
+    description: 'Returns a viewable URL for the current user profile photo.',
+  })
+  photoUrl(@CurrentUser() user: AuthUser) {
+    return this.users.photoUrl(user);
+  }
+
+  /**
+   * Public avatar source used by <img> tags across the app. Redirects to the
+   * Cloudinary delivery URL; users without a photo get 404 and the client shows initials.
+   */
+  @Public()
+  @Get(':userId/photo')
+  @ApiOperation({
+    summary: 'Public profile photo by user id',
+    description: 'Redirects to the user profile photo. Returns 404 when the user has no photo.',
+  })
+  async publicPhoto(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Res() res: Response,
+  ) {
+    const url = await this.users.publicPhotoUrl(userId);
+    if (!url) {
+      throw new NotFoundException('No photo uploaded');
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.redirect(302, url);
   }
 
   @Post('me/deactivate')

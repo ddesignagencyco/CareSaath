@@ -325,7 +325,7 @@ export interface AdminPayoutRequest {
   status: PayoutStatus;
   requestedAt: string;
   processedAt: string | null;
-  caregiver: { id: string; specialty: Specialty; user: { fullName: string; phone: string } };
+  caregiver: { id: string; specialty: Specialty; user: { id: string; fullName: string; phone: string } };
   payoutAccount: PayoutAccount;
   /** Phase 15: two-sided payouts. */
   transferredAt?: string | null;

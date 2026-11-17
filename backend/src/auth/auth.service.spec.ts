@@ -335,10 +335,25 @@ describe('AuthService.requestPhoneChange / verifyPhoneChange', () => {
 describe('AuthService.refresh', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('rejects a refresh token that was already used', async () => {
+  it('rejects a refresh token that was already used outside the grace window', async () => {
     const { service, redis } = makeService();
-    redis.client.get.mockResolvedValue('1');
+    redis.client.get.mockImplementation(async (key: string) => {
+      if (key.startsWith('jwt:deny:')) return '1';
+      return null; // rotatedKey expired/empty
+    });
     await expect(service.refresh('token')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('returns cached tokens within the rotation grace period for concurrent requests', async () => {
+    const { service, redis } = makeService();
+    const cachedTokens = { accessToken: 'new-acc', refreshToken: 'new-ref' };
+    redis.client.get.mockImplementation(async (key: string) => {
+      if (key.startsWith('jwt:deny:')) return '1';
+      if (key.startsWith('jwt:rotated:')) return JSON.stringify(cachedTokens);
+      return null;
+    });
+    const result = await service.refresh('token');
+    expect(result).toEqual(cachedTokens);
   });
 
   it('rejects an access token passed as a refresh token', async () => {

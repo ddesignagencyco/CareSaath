@@ -69,6 +69,10 @@ export const meApi = {
   /** PATCH /customer/me */
   update: (dto: { fullName?: string; email?: string; preferredLanguage?: "EN" | "UR" }) =>
     http.patch<Pick<Me, "id" | "phone" | "email" | "fullName" | "preferredLanguage">>("/customer/me", dto),
+  /** POST /customer/me/photo */
+  uploadPhoto: (file: File) => http.upload<{ photoKey: string; photoUrl: string }>("/customer/me/photo", file),
+  /** DELETE /customer/me/photo */
+  removePhoto: () => http.delete<{ ok: true }>("/customer/me/photo"),
 };
 
 export const contactsApi = {

@@ -210,6 +210,7 @@ model User {
   email             String?    @unique
   role              UserRole   @default(CUSTOMER)
   fullName          String     @default("")
+  photoKey          String?
   preferredLanguage Language   @default(EN)
   status            UserStatus @default(ACTIVE)
   lastLoginAt       DateTime?

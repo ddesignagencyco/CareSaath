@@ -79,6 +79,10 @@ export const healthApi = {
 export const meApi = {
   /** GET /customer/me — the shared profile endpoint; used to show the admin's own name. */
   get: (): Promise<Me> => http.get<Me>("/customer/me"),
+  /** POST /customer/me/photo */
+  uploadPhoto: (file: File) => http.upload<{ photoKey: string; photoUrl: string }>("/customer/me/photo", file),
+  /** DELETE /customer/me/photo */
+  removePhoto: () => http.delete<{ ok: true }>("/customer/me/photo"),
 };
 
 export const authApi = {
