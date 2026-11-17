@@ -134,7 +134,7 @@ for (const setting of platformConfig) {
 console.log(`Seeded ${platformConfig.length} platform config values`);
 
 // ===========================================================================
-// 2. Demo users (login via OTP -> MailHog at http://localhost:18025)
+// 2. Demo users (login via OTP delivered to the account holder's email/SMS)
 // ===========================================================================
 
 const CUSTOMERS = [

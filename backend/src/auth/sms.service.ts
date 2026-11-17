@@ -2,12 +2,17 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
 import { WhatsAppService } from '../whatsapp/whatsapp.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
-import { otpMirrorSubject, renderOtpMirrorEmail } from '../email/templates.js';
+import {
+  otpCodeEmailSubject,
+  otpMirrorSubject,
+  renderOtpCodeEmail,
+  renderOtpMirrorEmail,
+} from '../email/templates.js';
 
-/** Context carried alongside an OTP so it can be mirrored to the ops inbox. */
-export interface OtpMirrorContext {
+/** Context carried alongside an OTP so it can reach the right recipients. */
+export interface OtpDeliveryContext {
   purpose: OtpPurpose;
-  /** Destination email; falls back to the OTP_MIRROR_EMAIL ops inbox. */
+  /** The account holder's own email. */
   email?: string | null;
   fullName?: string | null;
   role?: string | null;
@@ -15,17 +20,16 @@ export interface OtpMirrorContext {
   visitId?: string | null;
   phone?: string | null;
   /**
-   * Set by flows that already send the account holder a branded OTP email
-   * (login, sign-up). The mirror then goes only to the ops inbox, so the user
-   * does not receive the same code twice from two different templates.
+   * Set by login/sign-up flows that already sent the holder a branded code, so
+   * they do not receive the same code twice from two different templates.
    */
   alreadyEmailed?: boolean;
 }
 
 /**
- * Dev SMS provider. TRD §2: SMS gateway vendor is TBD — in development we
- * log the OTP. Swap this for a real gateway (Twilio / local provider) later.
- * When OTP_MIRROR_EMAIL is set we also email a copy of every OTP here (ops inbox).
+ * Dispatches a one-time code over the configured channels. Codes are NEVER
+ * written to logs. The ops inbox (when configured) gets a mirror for support;
+ * the account holder gets their own copy unless they were already emailed.
  */
 @Injectable()
 export class SmsService {
@@ -36,43 +40,45 @@ export class SmsService {
     @Optional() private readonly whatsapp?: WhatsAppService,
   ) {}
 
-  async sendOtp(phone: string, code: string, context?: OtpMirrorContext): Promise<void> {
-    this.logger.log(`[DEV-SMS] OTP for ${phone}: ${code}`);
-
-    // If WhatsApp Cloud API is configured, dispatch OTP over WhatsApp
+  async sendOtp(phone: string, code: string, context?: OtpDeliveryContext): Promise<void> {
+    // Deliberately no log line containing the code or the full phone number.
     if (this.whatsapp?.isConfigured) {
       await this.whatsapp.sendOtp(phone, code);
     }
 
     if (!this.email?.isConfigured) return;
+    const purpose = context?.purpose ?? OtpPurpose.LOGIN;
 
-    // The ops inbox gets a copy of EVERY OTP, whatever its purpose — that is the
-    // point of OTP_MIRROR_EMAIL, and routing it to the account holder instead
-    // (the old `context.email ?? mirrorTo`) silently hid change-phone and
-    // visit-check-in codes from it. Flows that already sent the holder a branded
-    // code (login, sign-up) need only the ops copy; the rest also get their own.
-    const recipients = new Set<string>();
     const mirrorTo = (process.env['OTP_MIRROR_EMAIL'] ?? '').trim();
-    if (mirrorTo) recipients.add(mirrorTo);
-    if (!context?.alreadyEmailed && context?.email) recipients.add(context.email);
-    if (recipients.size === 0) return;
-
-    const subject = otpMirrorSubject(context?.purpose ?? 'LOGIN');
-    const html = renderOtpMirrorEmail({
-      code,
-      purpose: context?.purpose ?? 'LOGIN',
-      phone,
-      role: context?.role,
-      visitId: context?.visitId,
-      ttlMinutes: 5,
-    });
-    // Sent one at a time so a failure for one recipient cannot suppress the
-    // other, and so neither address is disclosed to the other in a To: header.
-    for (const to of recipients) {
-      await this.email.sendEmail(to, subject, html).catch((err: Error) => {
-        this.logger.warn(`OTP mirror email to ${to} failed: ${err.message}`);
-      });
+    if (mirrorTo) {
+      await this.email
+        .sendEmail(
+          mirrorTo,
+          otpMirrorSubject(purpose),
+          renderOtpMirrorEmail({
+            code,
+            purpose,
+            phone,
+            role: context?.role,
+            visitId: context?.visitId,
+            ttlMinutes: 5,
+          }),
+        )
+        .catch((err: Error) => {
+          this.logger.warn(`OTP mirror email failed: ${err.message}`);
+        });
     }
+
+    if (context?.alreadyEmailed || !context?.email) return;
+    await this.email
+      .sendEmail(
+        context.email,
+        otpCodeEmailSubject(purpose),
+        renderOtpCodeEmail({ code, purpose, ttlMinutes: 5 }),
+      )
+      .catch((err: Error) => {
+        this.logger.warn(`OTP email delivery failed: ${err.message}`);
+      });
   }
 
   async sendVisitAlert(phone: string, message: string): Promise<void> {

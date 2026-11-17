@@ -22,7 +22,7 @@ Render runs `npm run prisma:migrate && npm run seed` before each deploy (`render
 
 Demo data: patients, addresses, bookings in every state (REQUESTED / CONFIRMED / COMPLETED / CANCELLED / DECLINED), a payment, a review, a dispute, a safety incident, payout accounts, availability and the `WELCOME10` promo.
 
-- **OTP delivery:** the SMS gateway is still a stub, so the code is written to the API log. When the account has an email and `SMTP_*` is set, the login code is **also emailed**. The `+alias` addresses only arrive if the mailbox supports plus-addressing. If it doesn't, read the code from the Render log (`[DEV-SMS] OTP for …`).
+- **OTP delivery:** codes are sent to the account holder via SMS / WhatsApp / email and mirrored to `OTP_MIRROR_EMAIL` for support. Codes are **never** written to the API log. The `+alias` addresses only arrive if the mailbox supports plus-addressing.
 - **Re-deploys keep tester data:** accounts are upserted every time, but the demo bookings graph is built only when it's missing. Set `SEED_RESET=true` for one deploy to rebuild it. Set `SEED_ALLOW_PRODUCTION=false` once this becomes real production.
 - **CI:** the e2e job re-runs the seed exactly as a deploy does and checks that the accounts exist.
 

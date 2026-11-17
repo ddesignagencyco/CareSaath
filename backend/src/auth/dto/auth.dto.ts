@@ -34,7 +34,7 @@ export class VerifyOtpDto {
   @ApiProperty({
     example: '123456',
     description:
-      '6-digit OTP code received via SMS / captured in MailHog at http://localhost:18025 / server logs.',
+      '6-digit OTP code delivered to the account holder via SMS / WhatsApp / email. Never logged by the server.',
   })
   @IsString()
   @Length(4, 8)
