@@ -70,7 +70,7 @@ async function bootstrap() {
     '     - **Admin:** `+923000000000`',
     '     - **Customer:** `+923001110001` (Ayesha Khan) or `+923001110002` (Bilal Ahmed)',
     '     - **Caregiver:** `+923001110011` (Fatima Noor - Nurse) or `+923001110012` (Ali Raza - Physio)',
-    '   - **Step 2:** The OTP is captured locally in **MailHog** at http://localhost:18025 or logged in your server console.',
+    '   - **Step 2:** The OTP is delivered to the account holder via their configured channel (SMS / WhatsApp / email). Codes are never logged.',
     '   - **Step 3:** Call `POST /api/v1/auth/otp/verify` with the phone and OTP to obtain the `accessToken`.',
     '   - **Step 4:** Click the green **Authorize** button at the top right of this page and enter `Bearer <accessToken>`.',
     '',

@@ -348,15 +348,47 @@ function purposeLabel(purpose: string): string {
   return PURPOSE_LABEL[purpose] ?? words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * Code email for the account holder only. The subject names the purpose but
+ * never the code; the body is the only place the code appears.
+ */
+export function otpCodeEmailSubject(purpose: string): string {
+  return `Your CareSaath ${purposeLabel(purpose).toLowerCase()} code`;
+}
+
+/** A one-time code for purposes other than login/sign-up (e.g. visit check-in). */
+export function renderOtpCodeEmail(opts: {
+  code: string;
+  purpose: string;
+  ttlMinutes: number;
+}): string {
+  const label = purposeLabel(opts.purpose);
+  const minutes = `${opts.ttlMinutes} minute${opts.ttlMinutes === 1 ? '' : 's'}`;
+  return layout(
+    `Your ${label.toLowerCase()} code expires in ${minutes}.`,
+    [
+      h1(`${label} verification code`),
+      p(`Enter this code in CareSaath to continue with ${label.toLowerCase()}.`),
+      spacer(4),
+      code(opts.code),
+      spacer(16),
+      p(`The code expires in ${minutes} and can be used once.`, true),
+      spacer(28),
+      rule(),
+      spacer(20),
+      small(
+        "CareSaath staff will never ask you for this code. If you didn't request it, you can ignore this email — your account stays secure without it.",
+      ),
+    ].join(''),
+  );
+}
+
 /** Subject for the ops-inbox copy. Names the purpose only, never the code or the number. */
 export function otpMirrorSubject(purpose: string): string {
   return `CareSaath ops · ${purposeLabel(purpose)} code issued`;
 }
 
-/**
- * Copy of a verification code for the ops inbox (OTP_MIRROR_EMAIL). Carries the
- * code (that is its job) but only a masked phone and the role, never the name.
- */
+/** Ops-inbox copy of a code (never logged; emailed to the configured mirror only). */
 export function renderOtpMirrorEmail(opts: {
   code: string;
   purpose: string;

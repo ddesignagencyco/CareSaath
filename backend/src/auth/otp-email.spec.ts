@@ -38,7 +38,7 @@ describe('AuthService.requestOtp — email delivery', () => {
     );
   });
 
-  it('tells the mirror the user was already emailed, so the code is not sent twice', async () => {
+  it('skips the duplicate email when the holder was already emailed a branded code', async () => {
     const { service, sms } = makeService({ id: 'u-1', email: 'info@caresaath.com' });
     await service.requestOtp('+923000000000');
     expect(sms.sendOtp.mock.calls[0]![2]).toMatchObject({ alreadyEmailed: true });
