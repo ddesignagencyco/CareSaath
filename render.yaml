@@ -114,6 +114,12 @@ services:
       # to dig through server logs. Turn off before real production.
       - key: OTP_MIRROR_EMAIL
         value: info@caresaath.com
+      # Firebase Admin (native push/FCM to Android + iOS, and phone-based OTP).
+      # The full service-account JSON goes on ONE line in the Render dashboard.
+      # It must belong to the same project as the app's google-services.json
+      # (caresaath-2e460). Native push stays disabled until this is set.
+      - key: FIREBASE_ADMIN_SDK_KEY
+        sync: false
       # Web Push (browser notifications while the app is closed). Generate with
       # `npx web-push generate-vapid-keys`; push stays off until both are set.
       - key: VAPID_PUBLIC_KEY
