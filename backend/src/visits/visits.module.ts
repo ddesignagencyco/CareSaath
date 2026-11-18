@@ -397,31 +397,61 @@ export class VisitsService {
    * the same distance validation the GPS path already has.
    */
   private async assertCaregiverNearVisit(
+    visitId: string,
     visit: { booking: { address: { latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string } | null; caregiverId?: string | null } },
     action: string,
   ): Promise<void> {
     const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
-    if (radius <= 0 || !visit.booking.address || !visit.booking.caregiverId) return;
-    const profile = await this.prisma.caregiverProfile.findUnique({
-      where: { id: visit.booking.caregiverId },
-      select: { currentLat: true, currentLng: true, locationUpdatedAt: true },
-    });
-    if (!profile || profile.currentLat == null || profile.currentLng == null) {
-      throw new BadRequestException(
-        `Your live location is unavailable. Turn on location sharing and reach the visit address before you ${action}.`,
-      );
+    if (radius <= 0 || !visit.booking.address) return;
+
+    // Primary source: the per-visit GPS stream written by POST
+    // /caregiver/visits/:id/location. Mobile sends this every ~12s while
+    // EN_ROUTE and never persists an ambient location, so validating only the
+    // caregiver profile would reject every mobile OTP check-in. The Redis entry
+    // has a short TTL, so any value found here is already a current fix.
+    let lat: number | null = null;
+    let lng: number | null = null;
+    const streamed = await this.redis.client.get(this.visitLocationKey(visitId));
+    if (streamed) {
+      try {
+        const fix = JSON.parse(streamed) as { lat?: number; lng?: number };
+        if (fix.lat != null && fix.lng != null) {
+          lat = Number(fix.lat);
+          lng = Number(fix.lng);
+        }
+      } catch {
+        // Corrupt key (e.g. a different value reusing this key): use the
+        // ambient fix below rather than blocking a legitimate arrival.
+      }
     }
-    const fixAgeMs = profile.locationUpdatedAt
-      ? Date.now() - new Date(profile.locationUpdatedAt).getTime()
-      : Number.POSITIVE_INFINITY;
-    if (fixAgeMs > VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES * 60 * 1000) {
-      throw new BadRequestException(
-        `Your location is out of date. Wait for a fresh GPS fix before you ${action}.`,
-      );
+
+    // Fallback: the ambient PATCH /caregiver/location heartbeat used by web.
+    if (lat == null || lng == null) {
+      if (!visit.booking.caregiverId) return;
+      const profile = await this.prisma.caregiverProfile.findUnique({
+        where: { id: visit.booking.caregiverId },
+        select: { currentLat: true, currentLng: true, locationUpdatedAt: true },
+      });
+      if (!profile || profile.currentLat == null || profile.currentLng == null) {
+        throw new BadRequestException(
+          `Your live location is unavailable. Turn on location sharing and reach the visit address before you ${action}.`,
+        );
+      }
+      const fixAgeMs = profile.locationUpdatedAt
+        ? Date.now() - new Date(profile.locationUpdatedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      if (fixAgeMs > VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES * 60 * 1000) {
+        throw new BadRequestException(
+          `Your location is out of date. Wait for a fresh GPS fix before you ${action}.`,
+        );
+      }
+      lat = Number(profile.currentLat);
+      lng = Number(profile.currentLng);
     }
+
     const meters = distanceMeters(
-      Number(profile.currentLat),
-      Number(profile.currentLng),
+      lat,
+      lng,
       Number(visit.booking.address.latitude),
       Number(visit.booking.address.longitude),
     );
@@ -763,7 +793,7 @@ export class VisitsService {
     // live GPS shows they actually reached the visit address (same validation
     // the GPS check-in path applies).
     if (visit.status === VisitStatus.EN_ROUTE) {
-      await this.assertCaregiverNearVisit(visit, 'check in');
+      await this.assertCaregiverNearVisit(id, visit, 'check in');
     }
     const code = randomInt(100000, 999999).toString();
     const codeHash = this.hashOtp(code);
@@ -837,7 +867,7 @@ export class VisitsService {
     if (method === CheckMethod.GPS) {
       await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-in', dto.accuracy);
     } else {
-      await this.assertCaregiverNearVisit(visit, 'check in');
+      await this.assertCaregiverNearVisit(id, visit, 'check in');
       await this.verifyCheckInOtp(id, dto.code);
     }
     const checkInAt = new Date();
