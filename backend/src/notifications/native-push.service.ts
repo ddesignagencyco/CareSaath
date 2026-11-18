@@ -38,7 +38,7 @@ export class NativePushService {
   async sendToUser(
     userId: string,
     payload: WebPushPayload,
-    opts: { ttlSeconds?: number; channelId?: string } = {},
+    opts: { ttlSeconds?: number; channelId?: string; dataOnly?: boolean } = {},
   ): Promise<void> {
     const messaging = this.firebase?.messaging;
     if (!messaging) return;
@@ -52,16 +52,32 @@ export class NativePushService {
         event: payload.event,
         payload: JSON.stringify(payload.data ?? null),
       };
+      // Calls are data-only on Android: FCM must not post its own tray entry,
+      // otherwise the phone shows two notifications and the FCM one bypasses
+      // the app's ringing/full-screen path. The app posts the single call
+      // notification itself from the background handler. iOS still needs a
+      // visible alert, supplied through the APNS payload.
       const result = await messaging.sendEachForMulticast({
         tokens: devices.map((d) => d.token),
-        notification: { title: payload.title, ...(payload.body ? { body: payload.body } : {}) },
+        ...(opts.dataOnly
+          ? {}
+          : { notification: { title: payload.title, ...(payload.body ? { body: payload.body } : {}) } }),
         data,
         android: {
           priority: 'high',
           ttl: (opts.ttlSeconds ?? 24 * 3600) * 1000,
-          notification: { channelId: opts.channelId ?? ANDROID_CHANNEL_ID, tag: payload.id },
+          ...(opts.dataOnly
+            ? {}
+            : { notification: { channelId: opts.channelId ?? ANDROID_CHANNEL_ID, tag: payload.id } }),
         },
-        apns: { payload: { aps: { sound: 'default' } } },
+        apns: {
+          payload: {
+            aps: {
+              ...(opts.dataOnly ? { alert: { title: payload.title, body: payload.body ?? '' } } : {}),
+              sound: 'default',
+            },
+          },
+        },
       });
 
       const dead: string[] = [];

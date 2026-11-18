@@ -82,6 +82,27 @@ describe('Native push (FCM)', () => {
     );
   });
 
+  it('sends calls as data-only on Android so FCM does not post a second notification', async () => {
+    const prisma = createPrismaMock();
+    prisma.deviceToken.findMany.mockResolvedValue([{ id: 'd-1', token: 'tok-1' }]);
+    const send = vi.fn().mockResolvedValue({ responses: [{ success: true }] });
+    const call = { id: 'call-1', event: 'call.incoming', title: 'Incoming call', body: 'Ayesha is calling you', data: { callId: 'call-1' } };
+
+    await new NativePushService(prisma as never, firebaseWith(send)).sendToUser('u-1', call, {
+      ttlSeconds: 60,
+      channelId: 'caresaath-calls',
+      dataOnly: true,
+    });
+
+    const message = send.mock.calls[0][0];
+    expect(message.notification).toBeUndefined();
+    expect(message.android.notification).toBeUndefined();
+    expect(message.android.priority).toBe('high');
+    expect(JSON.parse(message.data.payload).callId).toBe('call-1');
+    // iOS still shows an alert; only Android suppresses the SDK tray entry.
+    expect(message.apns.payload.aps.alert).toEqual({ title: 'Incoming call', body: 'Ayesha is calling you' });
+  });
+
   it('never throws when FCM itself fails', async () => {
     const prisma = createPrismaMock();
     prisma.deviceToken.findMany.mockResolvedValue([{ id: 'd-1', token: 'tok-1' }]);

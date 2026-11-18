@@ -129,6 +129,7 @@ export class CallRingingService implements OnModuleDestroy {
         data: {
           callId: pending.callId,
           visitId: pending.visitId,
+          callerName: pending.callerName,
           url: `/${section}/visits/${pending.visitId}`,
           tag: `call-${pending.callId}`,
           call: true,
@@ -140,6 +141,7 @@ export class CallRingingService implements OnModuleDestroy {
         this.nativePush?.sendToUser(calleeId, payload, {
           ttlSeconds: RING_SECONDS,
           channelId: ANDROID_CALL_CHANNEL_ID,
+          dataOnly: true,
         }),
       ]);
     } catch (err) {

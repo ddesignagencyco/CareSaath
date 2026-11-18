@@ -307,6 +307,43 @@ describe('VisitsService transitions', () => {
     });
   });
 
+  it('accepts the mobile per-visit GPS stream even with no ambient profile fix', async () => {
+    const nearVisit = visitFixture({
+      status: 'EN_ROUTE',
+      booking: {
+        customerId: 'u-cust',
+        customer: { id: 'u-cust', phone: '+923000000001' },
+        patient: { medicalContext: null },
+        caregiverId: 'cg-1',
+        address: { latitude: 31.5, longitude: 74.3 },
+      },
+    });
+    prisma.visit.findFirst.mockResolvedValue(nearVisit);
+    prisma.otpCode.create.mockResolvedValue({});
+    // Mobile never persists an ambient fix — only the per-visit Redis stream.
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    redis.client.get.mockResolvedValue(JSON.stringify({
+      visitId: 'v-1',
+      lat: 31.5,
+      lng: 74.3,
+      at: new Date().toISOString(),
+      etaMinutes: 1,
+    }));
+
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).resolves.toMatchObject({
+      sentTo: '+923000000001',
+    });
+    expect(redis.client.get).toHaveBeenCalledWith('visit:location:v-1');
+
+    // The streamed fix must still be near the address, not just present.
+    redis.client.get.mockResolvedValue(JSON.stringify({
+      visitId: 'v-1', lat: 31.6, lng: 74.4, at: new Date().toISOString(),
+    }));
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).rejects.toThrow(
+      /from the visit address/,
+    );
+  });
+
   it('rejects an early check-in using the configured grace window', async () => {
     configGetNumber = async (key) =>
       key === 'visit.earlyArrivalGraceMinutes' ? 15 : 600;
