@@ -22,7 +22,7 @@ import type { AdminBookingListItem, AdminVisitListItem, BookingStatus, VisitStat
 const LIMIT = 15;
 const BOOKING_STATUSES: BookingStatus[] = ["REQUESTED", "CONFIRMED", "COMPLETED", "DECLINED", "CANCELLED"];
 const VISIT_STATUSES: VisitStatus[] = ["REQUESTED", "CONFIRMED", "EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT", "COMPLETED", "DECLINED", "CANCELLED"];
-const BOOKING_TONE: Record<BookingStatus, Tone> = { REQUESTED: "warning", CONFIRMED: "info", COMPLETED: "success", DECLINED: "neutral", CANCELLED: "danger" };
+const BOOKING_TONE: Record<BookingStatus, Tone> = { REQUESTED: "neutral", CONFIRMED: "neutral", COMPLETED: "success", DECLINED: "danger", CANCELLED: "danger" };
 
 function BookingsTab() {
   const t = useTranslations("adminB.operations");

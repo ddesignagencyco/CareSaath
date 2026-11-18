@@ -44,6 +44,7 @@ describe('VisitsService transitions', () => {
   let sms: ReturnType<typeof createSmsMock>;
   let realtimeEmit: ReturnType<typeof vi.fn>;
   let service: VisitsService;
+  let configGetNumber: (key: string) => Promise<number>;
 
   beforeEach(() => {
     prisma = createPrismaMock();
@@ -51,6 +52,7 @@ describe('VisitsService transitions', () => {
     redis = createRedisMock();
     sms = createSmsMock();
     realtimeEmit = vi.fn();
+    configGetNumber = async () => 600;
     wireTransaction(prisma);
     service = new VisitsService(
       prisma as never,
@@ -58,7 +60,7 @@ describe('VisitsService transitions', () => {
       notifications as never,
       redis as never,
       sms as never,
-      { getNumber: () => Promise.resolve(600) } as never,
+      { getNumber: (key: string) => configGetNumber(key) } as never,
       { recordStrike: vi.fn().mockResolvedValue(undefined) } as never,
       undefined,
       { emit: realtimeEmit, entityUpdated: vi.fn() } as never,
@@ -260,6 +262,74 @@ describe('VisitsService transitions', () => {
       expect.any(String),
       expect.objectContaining({ purpose: 'VISIT_CHECKIN', visitId: 'v-1', phone: '+923000000001' }),
     );
+  });
+
+  it('requires a fresh, nearby live fix before issuing a check-in OTP', async () => {
+    const nearVisit = visitFixture({
+      status: 'EN_ROUTE',
+      booking: {
+        customerId: 'u-cust',
+        customer: { id: 'u-cust', phone: '+923000000001' },
+        patient: { medicalContext: null },
+        caregiverId: 'cg-1',
+        address: { latitude: 31.5, longitude: 74.3 },
+      },
+    });
+    prisma.visit.findFirst.mockResolvedValue(nearVisit);
+    prisma.otpCode.create.mockResolvedValue({});
+
+    // No live fix at all → the OTP must not be issued.
+    prisma.caregiverProfile.findUnique.mockResolvedValue({ id: 'cg-1' });
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).rejects.toThrow(
+      /live location is unavailable/,
+    );
+
+    // A fix that is an hour old is too stale to prove doorstep arrival.
+    prisma.caregiverProfile.findUnique.mockResolvedValue({
+      id: 'cg-1',
+      currentLat: 31.5,
+      currentLng: 74.3,
+      locationUpdatedAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).rejects.toThrow(
+      /location is out of date/,
+    );
+
+    // A fresh fix at the address allows the OTP.
+    prisma.caregiverProfile.findUnique.mockResolvedValue({
+      id: 'cg-1',
+      currentLat: 31.5,
+      currentLng: 74.3,
+      locationUpdatedAt: new Date(),
+    });
+    await expect(service.requestCheckInOtp(caregiver, 'v-1')).resolves.toMatchObject({
+      sentTo: '+923000000001',
+    });
+  });
+
+  it('rejects an early check-in using the configured grace window', async () => {
+    configGetNumber = async (key) =>
+      key === 'visit.earlyArrivalGraceMinutes' ? 15 : 600;
+    const start = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const timeWindowStart =
+      `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
+    const v = visitFixture({
+      status: 'EN_ROUTE',
+      scheduledDate: start,
+      timeWindowStart,
+      booking: {
+        customerId: 'u-cust',
+        customer: { id: 'u-cust', phone: '+923000000001' },
+        patient: { medicalContext: null },
+        address: { latitude: 31.5, longitude: 74.3 },
+      },
+    });
+    prisma.visit.findFirst.mockResolvedValue(v);
+
+    await expect(
+      service.checkIn(caregiver, 'v-1', { lat: 31.5, lng: 74.3 }),
+    ).rejects.toThrow(/only 15 minutes before the visit starts/);
+    expect(prisma.visit.update).not.toHaveBeenCalled();
   });
 
   it('rejects a check-in OTP request on a completed visit', async () => {

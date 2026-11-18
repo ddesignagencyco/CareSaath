@@ -1,15 +1,17 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Languages, LogOut, MapPin } from "lucide-react";
+import { ChevronRight, Languages, LogOut, MapPin, Maximize2 } from "lucide-react";
 import { Switch } from "@shared/ui/switch";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { Card } from "@shared/ui/card";
 import { formatPkMobile } from "@shared/lib/phone";
 import { SECONDARY } from "@/features/caregiver/components/shell/nav";
-import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
+import { PhotoAvatar, usePhotoUrl } from "@/features/caregiver/components/profile-photo";
+import { PhotoViewer } from "@shared/ui/photo-viewer";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
@@ -23,12 +25,28 @@ export default function MorePage() {
   const signOut = useSignOut();
   const t = useTranslations("caregiverA");
   const tc = useTranslations("common");
+  const tp = useTranslations("common.photo");
+  const photoUrl = usePhotoUrl(profile.data?.photoKey ?? null);
+  const [viewOpen, setViewOpen] = useState(false);
   const [shareLocation, setShareLocation] = useLocationSharing();
 
   return (
     <div className="space-y-5">
       <Card className="flex items-center gap-4 p-5">
-        <PhotoAvatar name={me.data?.fullName || t("shell.defaultName")} photoKey={profile.data?.photoKey} size="lg" />
+        <div className="relative shrink-0">
+          <PhotoAvatar name={me.data?.fullName || t("shell.defaultName")} photoKey={profile.data?.photoKey} size="lg" />
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={() => setViewOpen(true)}
+              aria-label={tp("view")}
+              title={tp("view")}
+              className="absolute -start-1 -bottom-1 flex size-7 items-center justify-center rounded-full bg-white text-ink-700 ring-2 ring-brand-600 hover:bg-ink-50"
+            >
+              <Maximize2 className="size-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
         <div className="min-w-0">
           <p className="truncate text-lg font-extrabold text-ink-900">{me.data?.fullName || " "}</p>
           <p className="tabular text-sm text-ink-500">{me.data ? formatPkMobile(me.data.phone) : " "}</p>
@@ -69,6 +87,14 @@ export default function MorePage() {
           <LogOut className="size-5" /> {tc("actions.signOut")}
         </button>
       </Card>
+
+      {viewOpen && photoUrl && (
+        <PhotoViewer
+          src={photoUrl}
+          name={me.data?.fullName || t("shell.defaultName")}
+          onClose={() => setViewOpen(false)}
+        />
+      )}
     </div>
   );
 }

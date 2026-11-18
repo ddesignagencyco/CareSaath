@@ -61,16 +61,20 @@ export function splitEta(etaMinutes: number): { days: number; hours: number; min
   return { days, hours, mins };
 }
 
+/**
+ * One palette for web and app: green = finished, teal = happening now,
+ * muted = still ahead, red = ended badly. EN_ROUTE keeps its travel accent.
+ */
 export const VISIT_TONE: Record<VisitStatus, Tone> = {
-  REQUESTED: "accent",
-  CONFIRMED: "brand",
-  EN_ROUTE: "brand",
+  REQUESTED: "neutral",
+  CONFIRMED: "neutral",
+  EN_ROUTE: "accent",
   CHECKED_IN: "brand",
   IN_PROGRESS: "brand",
-  CHECKED_OUT: "warning",
+  CHECKED_OUT: "success",
   COMPLETED: "success",
-  DECLINED: "neutral",
-  CANCELLED: "neutral",
+  DECLINED: "danger",
+  CANCELLED: "danger",
 };
 
 /** Statuses where the caregiver is actively handling the visit. */

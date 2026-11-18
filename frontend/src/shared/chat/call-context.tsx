@@ -15,11 +15,11 @@ const ICE_FALLBACK: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.googl
 /** Ceiling on waiting for the server's `call:outgoing` ack before giving up on an invite (40s). */
 const RING_TIMEOUT_MS = 40_000;
 /** Server ring window, used until `call:outgoing` reports the real one. */
-const DEFAULT_RING_SECONDS = 30;
+const DEFAULT_RING_SECONDS = 60;
 /** Extra client-side wait past the server ring window before tearing down without a terminal event. */
 const RING_GRACE_MS = 5_000;
-/** Callee-side ceiling on showing an incoming call that never got a terminal event (45s). */
-const INCOMING_TIMEOUT_MS = 45_000;
+/** Callee-side ceiling on showing an incoming call that never got a terminal event (65s). */
+const INCOMING_TIMEOUT_MS = 65_000;
 /** Caller's "tooooo" while the other side rings, and the callee's ringtone. Both loop cleanly. */
 const RINGBACK_SRC = "/sounds/ringback.wav";
 const RINGTONE_SRC = "/sounds/ringtone.wav";
@@ -63,6 +63,9 @@ export interface ActiveCall {
   /** Caller side: the server confirmed the callee has the app open and their device is ringing. */
   ringing?: boolean;
   peerName: string;
+  /** Real user id + API photo URL, so the call UI can show the actual portrait. */
+  peerUserId?: string | null;
+  peerPhotoUrl?: string | null;
   video: boolean;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -71,7 +74,7 @@ export interface ActiveCall {
 export interface CallApi {
   active: ActiveCall | null;
   /** Caller side: needs the callee's **user id** and a shared active visit. */
-  startCall: (opts: { visitId: string; calleeId?: string; peerName: string; video: boolean }) => void;
+  startCall: (opts: { visitId: string; calleeId?: string; peerName: string; peerPhotoUrl?: string | null; video: boolean }) => void;
   accept: () => void;
   reject: () => void;
   end: () => void;
@@ -370,7 +373,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       armRingTimer(ringSeconds * 1000 + RING_GRACE_MS, ringTimedOut);
     });
 
-    socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; callerName?: string; sdp: RTCSessionDescriptionInit }) => {
+    socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; callerName?: string; callerPhotoUrl?: string | null; sdp: RTCSessionDescriptionInit }) => {
       // Already showing this call (e.g. call:sync after a reconnect while it rings): nothing to do.
       if (p.callId === callIdRef.current) return;
       // Ignore a second incoming call while one is active (callIdRef is always current).
@@ -381,7 +384,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       const video = p.sdp?.sdp?.includes("m=video") ?? false;
       pendingOffer.current = { callId: p.callId, sdp: p.sdp, video };
       callIdRef.current = p.callId;
-      setActive({ status: "incoming", callId: p.callId, peerName: p.callerName || "", video, localStream: null, remoteStream: null });
+      setActive({ status: "incoming", callId: p.callId, peerName: p.callerName || "", peerUserId: p.callerId, peerPhotoUrl: p.callerPhotoUrl, video, localStream: null, remoteStream: null });
       // Safety net if call:missed/ended never reaches this tab (e.g. answered on another device).
       armRingTimer(INCOMING_TIMEOUT_MS, () => {
         if (activeRef.current?.status === "incoming") teardownRef.current();
@@ -467,11 +470,11 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   }, [enabled, session, armRingTimer, ringTimedOut]);
 
   const startCall = useCallback(
-    async (opts: { visitId: string; calleeId?: string; peerName: string; video: boolean }) => {
+    async (opts: { visitId: string; calleeId?: string; peerName: string; peerPhotoUrl?: string | null; video: boolean }) => {
       if (active) return;
       try {
         pendingCandidates.current = [];
-        setActive({ status: "outgoing", callId: null, peerName: opts.peerName, video: opts.video, localStream: null, remoteStream: null });
+        setActive({ status: "outgoing", callId: null, peerName: opts.peerName, peerUserId: opts.calleeId, peerPhotoUrl: opts.peerPhotoUrl, video: opts.video, localStream: null, remoteStream: null });
 
         // Give up if the server never acknowledges the invite; call:outgoing re-arms this for the ring window.
         armRingTimer(RING_TIMEOUT_MS, ringTimedOut);

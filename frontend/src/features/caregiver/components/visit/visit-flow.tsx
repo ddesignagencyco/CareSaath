@@ -11,6 +11,7 @@ import { OtpInput } from "@shared/ui/otp-input";
 import { Textarea } from "@shared/ui/field";
 import { formatPkMobile } from "@shared/lib/phone";
 import type { CaregiverVisitDetail } from "@shared/caregiver-types";
+import type { VisitStatus } from "@shared/types";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { visitsApi } from "@/features/caregiver/lib/api/caregiver";
@@ -59,7 +60,7 @@ function stepIndex(status: CaregiverVisitDetail["status"]): number {
   }
 }
 
-function Stepper({ current }: { current: number }) {
+function Stepper({ current, status }: { current: number; status: VisitStatus }) {
   const t = useTranslations("caregiverB.flow");
   return (
     <ol className="grid grid-cols-4 gap-1" aria-label={t("progress")}>
@@ -73,8 +74,9 @@ function Stepper({ current }: { current: number }) {
               <span
                 className={clsx(
                   "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
-                  done && "bg-brand-600 text-white",
-                  now && "bg-brand-600 text-white ring-4 ring-brand-100",
+                  done && "bg-success-600 text-white",
+                  now && status === "EN_ROUTE" && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  now && status !== "EN_ROUTE" && "bg-brand-600 text-white ring-4 ring-brand-100",
                   !done && !now && "bg-ink-100 text-ink-400",
                 )}
                 aria-current={now ? "step" : undefined}
@@ -443,7 +445,7 @@ export function VisitFlow({ visit }: { visit: CaregiverVisitDetail }) {
 
   return (
     <div className="space-y-6">
-      <Stepper current={current} />
+      <Stepper current={current} status={visit.status} />
 
       {visit.status === "CONFIRMED" && (
         <div className="space-y-3">
