@@ -52,6 +52,7 @@ describe('CallRingingService', () => {
     expect(nativePush.sendToUser.mock.calls[0][2]).toEqual({
       ttlSeconds: RING_SECONDS,
       channelId: 'caresaath-calls',
+      dataOnly: true,
     });
   });
 
