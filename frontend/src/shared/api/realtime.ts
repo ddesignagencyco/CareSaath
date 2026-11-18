@@ -45,11 +45,23 @@ export function useRealtime(opts: {
     // Chat is the hot path (a message per keystroke-send): only refetch the chat
     // threads for those, not every query on the current screen.
     const onEntityUpdated = (payload?: { type?: string }) => {
-      if (payload?.type === "chat_message") void queryClient.invalidateQueries({ queryKey: ["chat"] });
-      else refetchAll();
+      if (payload?.type === "chat_message") {
+        // Chat threads ["chat", ...] AND the inbox lists ["chat-conversations", ...].
+        void queryClient.invalidateQueries({ queryKey: ["chat"] });
+        void queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+      } else {
+        // booking / visit / payment / user(photo, name) / caregiver — refresh
+        // every cached identity and list so no screen keeps showing stale data.
+        refetchAll();
+      }
     };
 
     socket.on("entity.updated", onEntityUpdated);
+    // Reaction toggles don't go through entity.updated — refresh the thread.
+    socket.on("message.reaction", () => {
+      void queryClient.invalidateQueries({ queryKey: ["chat"] });
+      void queryClient.invalidateQueries({ queryKey: ["chat-conversations"] });
+    });
     socket.on("notification.created", refetchNotifs);
     socket.on("notification.read", refetchNotifs);
     // Live caregiver position while a visit is EN_ROUTE — feeds the customer's visit tracker map.
@@ -74,6 +86,9 @@ export function useRealtime(opts: {
       }
     });
     socket.io.on("reconnect", refetchAll);
+    // Also refetch when the socket finishes authenticating (first connect or a
+    // fresh token after expiry) — events sent while disconnected are lost.
+    socket.on("ready", refetchAll);
 
     return () => {
       socket.removeAllListeners();

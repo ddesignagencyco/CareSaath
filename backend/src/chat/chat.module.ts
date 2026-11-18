@@ -209,6 +209,7 @@ export class ChatService {
   private async present<
     T extends {
       mediaKey: string | null;
+      mimeType?: string | null;
       body: string | null;
       deletedAt: Date | null;
       replyTo?: { body: string | null; deletedAt: Date | null } | null;
@@ -224,9 +225,47 @@ export class ChatService {
     if (!message.mediaKey || !this.storage) {
       return { ...message, url: null };
     }
-    const { url } = await withFileUrl(this.storage, { fileKey: message.mediaKey });
+    const { url } = await withFileUrl(this.storage, {
+      fileKey: message.mediaKey,
+      mimeType: message.mimeType,
+    });
     const { mediaKey: _mediaKey, ...rest } = message;
     return { ...rest, url };
+  }
+
+  /**
+   * A placed call becomes a virtual chat item so the thread reads like WhatsApp:
+   * one timeline of messages + calls, backed by two tables. The CallLog row
+   * stays the source of truth; nothing is written to ChatMessage for a call.
+   */
+  private presentCall(call: {
+    id: string;
+    callerId: string;
+    status: string;
+    startedAt: Date;
+    endedAt: Date | null;
+    durationSec: number | null;
+    visit: { bookingId: string };
+  }) {
+    return {
+      id: `call-${call.id}`,
+      callId: call.id,
+      type: 'CALL',
+      bookingId: call.visit.bookingId,
+      senderId: call.callerId,
+      callStatus: call.status,
+      durationSec: call.durationSec,
+      body: null,
+      mediaKey: null,
+      mimeType: null,
+      sizeBytes: null,
+      url: null,
+      readAt: null,
+      deletedAt: null,
+      reactions: [],
+      replyTo: null,
+      createdAt: call.startedAt,
+    };
   }
 
   async send(user: AuthUser, bookingId: string, dto: SendMessageDto) {
@@ -272,7 +311,7 @@ export class ChatService {
   async list(user: AuthUser, bookingId: string, query: ListMessagesQueryDto): Promise<Paginated<unknown>> {
     const booking = await this.bookingForParty(user, bookingId);
     const where = { bookingId: booking.id };
-    const [total, items] = await this.prisma.$transaction([
+    const [total, items, calls] = await Promise.all([
       this.prisma.chatMessage.count({ where }),
       this.prisma.chatMessage.findMany({
         where,
@@ -281,8 +320,19 @@ export class ChatService {
         take: query.limit,
         include: this.messageInclude(),
       }),
+      Promise.resolve(
+        this.prisma.callLog.findMany({
+          where: { visit: { bookingId: booking.id } },
+          include: { visit: { select: { bookingId: true } } },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ).catch(() => []),
     ]);
-    return paginate(await Promise.all(items.map((item) => this.present(item))), query.page, query.limit, total);
+    const callRows: Array<Parameters<ChatService['presentCall']>[0]> = calls ?? [];
+    const messages = await Promise.all(items.map((item) => this.present(item)));
+    const merged = [...messages, ...callRows.map((call) => this.presentCall(call))];
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return paginate(merged, query.page, query.limit, total + callRows.length);
   }
 
   /**
@@ -343,6 +393,13 @@ export class ChatService {
       where: { bookingId: booking.id, senderId: { not: user.sub }, readAt: null },
       data: { readAt: new Date() },
     });
+    if (result.count > 0) {
+      const recipientId = user.sub === booking.customerId ? booking.caregiver.userId : booking.customerId;
+      this.realtime?.entityUpdated(
+        { users: [recipientId] },
+        { type: 'chat_message', id: recipientId, action: 'read', data: { readerUserId: user.sub } },
+      );
+    }
     return { updated: result.count };
   }
 
@@ -353,6 +410,13 @@ export class ChatService {
       where: { id: messageId, bookingId: booking.id, senderId: { not: user.sub }, readAt: null },
       data: { readAt: new Date() },
     });
+    if (result.count > 0) {
+      const recipientId = user.sub === booking.customerId ? booking.caregiver.userId : booking.customerId;
+      this.realtime?.entityUpdated(
+        { users: [recipientId] },
+        { type: 'chat_message', id: recipientId, action: 'read', data: { readerUserId: user.sub } },
+      );
+    }
     return { updated: result.count };
   }
 
@@ -412,14 +476,15 @@ export class ChatService {
         id: true,
         status: true,
         createdAt: true,
-        customer: { select: { id: true, fullName: true } },
-        caregiver: { select: { id: true, userId: true, user: { select: { fullName: true } } } },
+        customer: { select: { id: true, fullName: true, photoKey: true } },
+        caregiver: { select: { id: true, userId: true, user: { select: { fullName: true, photoKey: true } } } },
       },
     });
     return bookings.map((b) => ({
       ...b,
       counterpartUserId: isCustomer ? b.caregiver.userId : b.customer.id,
       counterpartName: isCustomer ? b.caregiver.user.fullName : b.customer.fullName,
+      counterpartPhotoKey: isCustomer ? b.caregiver.user.photoKey : b.customer.photoKey,
     }));
   }
 
@@ -451,6 +516,9 @@ export class ChatService {
         return {
           counterpartUserId,
           counterpartName: group[0]!.counterpartName,
+          counterpartPhotoUrl: group[0]!.counterpartPhotoKey
+            ? await this.storage?.presignedGet(group[0]!.counterpartPhotoKey) ?? null
+            : null,
           caregiverId: group[0]!.caregiver.id,
           bookingIds,
           activeBookingId:
@@ -476,8 +544,9 @@ export class ChatService {
     if (bookings.length === 0) {
       throw new NotFoundException('Conversation not found');
     }
-    const where = { bookingId: { in: bookings.map((b) => b.id) } };
-    const [total, items] = await this.prisma.$transaction([
+    const bookingIds = bookings.map((b) => b.id);
+    const where = { bookingId: { in: bookingIds } };
+    const [total, items, calls] = await Promise.all([
       this.prisma.chatMessage.count({ where }),
       this.prisma.chatMessage.findMany({
         where,
@@ -486,8 +555,19 @@ export class ChatService {
         take: query.limit,
         include: this.messageInclude(),
       }),
+      Promise.resolve(
+        this.prisma.callLog.findMany({
+          where: { visit: { bookingId: { in: bookingIds } } },
+          include: { visit: { select: { bookingId: true } } },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ).catch(() => []),
     ]);
-    return paginate(await Promise.all(items.map((item) => this.present(item))), query.page, query.limit, total);
+    const callRows: Array<Parameters<ChatService['presentCall']>[0]> = calls ?? [];
+    const messages = await Promise.all(items.map((item) => this.present(item)));
+    const merged = [...messages, ...callRows.map((call) => this.presentCall(call))];
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return paginate(merged, query.page, query.limit, total + callRows.length);
   }
 
   /** Marks everything from the counterpart, on every booking of the pair, as read. */

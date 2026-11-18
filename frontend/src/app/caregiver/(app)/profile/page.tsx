@@ -46,7 +46,10 @@ function PhotoButton({ name, photoKey }: { name: string; photoKey: string | null
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const upload = useAction((file: File) => profileApi.uploadPhoto(file), { invalidate: [keys.profile], success: t("photoUpdated") });
+  const upload = useAction((file: File) => profileApi.uploadPhoto(file), {
+    invalidate: [keys.profile, keys.me, ["c-caregivers"]],
+    success: t("photoUpdated"),
+  });
   const hasPhoto = !!photoKey;
   return (
     <>

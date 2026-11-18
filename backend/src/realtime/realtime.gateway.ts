@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SkipThrottle } from '@nestjs/throttler';
 import {
@@ -14,6 +14,7 @@ import type { Server, Socket } from 'socket.io';
 import { UserStatus } from '../generated/prisma/client.js';
 import type { UserRole } from '../generated/prisma/client.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { StorageService } from '../common/storage/storage.module.js';
 import { RealtimeService, roleRoom, userRoom } from './realtime.service.js';
 import { CallSignalingService } from './call-signaling.service.js';
 import { CallRingingService, RING_SECONDS } from './call-ringing.service.js';
@@ -51,6 +52,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     private readonly realtime: RealtimeService,
     private readonly calls: CallSignalingService,
     private readonly ringing: CallRingingService,
+    @Optional() private readonly storage?: StorageService,
   ) {}
 
   afterInit(server: Server): void {
@@ -136,13 +138,17 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       const call = await this.calls.startCall(body.visitId, callerId, calleeId);
       const caller = await this.prisma.user.findUnique({
         where: { id: callerId },
-        select: { fullName: true },
+        select: { fullName: true, photoKey: true },
       });
+      const callerPhotoUrl = caller?.photoKey && this.storage
+        ? await this.storage.presignedGet(caller.photoKey)
+        : null;
       const incoming = {
         callId: call.id,
         visitId: body.visitId,
         callerId,
         callerName: body.callerName ?? caller?.fullName ?? '',
+        callerPhotoUrl,
         sdp: body.sdp,
       };
       // Ring like a phone call even when the other person is offline: their
@@ -230,6 +236,11 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       }
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:ended', { callId: call.id });
+      // Calls now live in the chat timeline — refresh both parties' threads.
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId: call.id } },
+      );
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
@@ -249,6 +260,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:rejected', { callId: call.id });
       client.broadcast.to(userRoom(userId)).emit('call:rejected', { callId: call.id });
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId: call.id } },
+      );
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }

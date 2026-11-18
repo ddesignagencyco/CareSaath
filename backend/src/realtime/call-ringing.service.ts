@@ -16,6 +16,8 @@ export interface PendingCall {
   visitId: string;
   callerId: string;
   callerName: string;
+  /** Signed photo URL for the caller's avatar (generated at invite time). */
+  callerPhotoUrl?: string | null;
   sdp: unknown;
 }
 
@@ -88,6 +90,11 @@ export class CallRingingService implements OnModuleDestroy {
       await this.calls.markMissed(callId);
       await this.redis.client.del(pendingKey(calleeId));
       this.realtime.emit({ users: [call.callerId, call.calleeId] }, 'call:missed', { callId });
+      // The missed call is now a row in the chat timeline on both clients.
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId } },
+      );
 
       const caller = await this.prisma.user.findUnique({ where: { id: call.callerId }, select: { fullName: true } });
       await this.notifications?.notify({

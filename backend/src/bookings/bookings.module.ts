@@ -609,7 +609,7 @@ export class BookingsService {
           licenseBody: true,
           ratingAverage: true,
           ratingCount: true,
-          user: { select: { fullName: true } },
+          user: { select: { fullName: true, photoKey: true } },
         },
       },
       prescriptions: {
@@ -652,6 +652,7 @@ export class BookingsService {
       id: string;
       customerId: string;
       caregiverId: string;
+      caregiver?: { user?: { photoKey?: string | null } } | null;
       prescriptions: Array<{ fileKey: string }>;
       visits?: Array<{ note: { summary: string; submittedAt: Date } | null }>;
     },
@@ -666,7 +667,12 @@ export class BookingsService {
       this.priorVisitsWithCaregiver(booking.customerId, booking.caregiverId, booking.id),
     ]);
     const visits = booking.visits?.map((visit) => ({ ...visit, hasNote: visit.note !== null }));
-    return { ...booking, prescriptions, priorVisitsWithCaregiver, ...(visits ? { visits } : {}) };
+    // Caregiver portrait for booking cards on web + both apps (key stays in DB).
+    const photoKey = booking.caregiver?.user?.photoKey;
+    const caregiver = photoKey
+      ? { ...booking.caregiver, photoUrl: (await withFileUrl(this.storage, { fileKey: photoKey })).url }
+      : booking.caregiver;
+    return { ...booking, caregiver, prescriptions, priorVisitsWithCaregiver, ...(visits ? { visits } : {}) };
   }
 
   async getBooking(id: string) {

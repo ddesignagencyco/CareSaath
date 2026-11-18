@@ -3,13 +3,16 @@
 import clsx from "clsx";
 import { useTranslations } from "next-intl";
 import { AlertCircle, ChevronLeft, ChevronRight, Inbox } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useHydrated } from "../hooks/use-hydrated";
 import { initials } from "../lib/format";
 import { Button } from "./button";
 
 export function Avatar({ name, src, size = "md", className }: { name: string; src?: string | null; size?: "sm" | "md" | "lg"; className?: string }) {
   const [failed, setFailed] = useState<string | null>(null);
+  // A replaced photo gets a new URL; reset the failed state so initials don't
+  // stick forever after one transient 404.
+  useEffect(() => setFailed(null), [src]);
   const sizing = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-14 text-lg" }[size];
   if (src && src !== failed) {
     return (

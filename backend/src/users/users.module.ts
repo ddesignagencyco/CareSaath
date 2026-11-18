@@ -8,6 +8,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -28,7 +29,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { Language, UserStatus } from '../generated/prisma/client.js';
+import { Language, UserRole, UserStatus } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -41,6 +42,7 @@ import { EmailService } from '../email/email.service.js';
 import { renderWelcomeEmail } from '../email/templates.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AuthService } from '../auth/auth.service.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 import { RequestPhoneChangeDto, VerifyPhoneChangeDto } from '../auth/dto/auth.dto.js';
 
 export class UpdateProfileDto {
@@ -85,6 +87,7 @@ export class UsersService {
     private readonly auth: AuthService,
     private readonly storage: StorageService,
     private readonly email?: EmailService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
   async getMe(user: AuthUser) {
@@ -217,6 +220,10 @@ export class UsersService {
       entityType: 'User',
       entityId: user.sub,
     });
+    this.realtime?.entityUpdated(
+      { users: [user.sub], roles: [UserRole.CUSTOMER, UserRole.CAREGIVER, UserRole.ADMIN] },
+      { type: 'user', id: user.sub, action: 'profile_updated' },
+    );
     // First time this account gets an email on file: welcome them there too.
     if (dto.email && !before?.email && updated.email) {
       this.email

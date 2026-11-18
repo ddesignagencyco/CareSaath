@@ -31,7 +31,7 @@ function useCaregiverChatTransport(): ChatTransport {
   }, [bookings.data]);
 
   const sig = items
-    .map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${metaByCustomer[c.counterpartUserId]?.visitId ?? ""}:${metaByCustomer[c.counterpartUserId]?.serviceType ?? ""}`)
+    .map((c) => `${c.counterpartUserId}:${c.counterpartName}:${c.counterpartPhotoUrl ?? ""}:${c.activeBookingId ?? ""}:${c.bookingIds.join(",")}:${metaByCustomer[c.counterpartUserId]?.visitId ?? ""}:${metaByCustomer[c.counterpartUserId]?.serviceType ?? ""}`)
     .join("|");
   const threads = useMemo<ChatThreadMeta[]>(
     () =>
@@ -45,6 +45,7 @@ function useCaregiverChatTransport(): ChatTransport {
           bookingIds: c.bookingIds,
           visitId: meta?.visitId,
           peerUserId: c.counterpartUserId,
+          photoUrl: c.counterpartPhotoUrl,
         };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures every field the threads depend on, stably

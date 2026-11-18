@@ -13,7 +13,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
  *  DELETE round-trip (and the server's `deletedAt`) confirms it. */
 type Patch = { deleted?: boolean };
 
-const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice" };
+const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice", CALL: "call" };
 
 /** Collapse per-user reaction rows into one chip per emoji, flagging mine. */
 function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: string | undefined): ChatReaction[] {
@@ -63,6 +63,9 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
       deleted: m.deletedAt != null,
       createdAt: new Date(m.createdAt).getTime(),
       readByThem: m.senderId === myUserId ? m.readAt != null : true,
+      ...(m.type === "CALL"
+        ? { call: { callId: m.callId ?? "", status: m.callStatus ?? "INITIATED", durationSec: m.durationSec } }
+        : {}),
     }),
     [myUserId],
   );
@@ -92,7 +95,7 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
             return m;
           })
           .sort((a, b) => a.createdAt - b.createdAt);
-        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, bookingIds: th.bookingIds, messages };
+        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, photoUrl: th.photoUrl, bookingIds: th.bookingIds, messages };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dataSig stands in for the per-thread query data
     [threads, dataSig, extra, patches, mapBackend],

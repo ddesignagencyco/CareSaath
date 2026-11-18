@@ -53,6 +53,7 @@ import {
   Prisma,
   Specialty,
   StrikeReason,
+  UserRole,
   VerificationStatus,
   VisitStatus,
 } from '../generated/prisma/client.js';
@@ -410,6 +411,14 @@ export class CaregiversService {
     @Optional() private readonly realtime?: RealtimeService,
   ) {}
 
+  /** Tell every client (both apps + web) that a caregiver's public data changed. */
+  private caregiverChanged(userId: string, action: string): void {
+    this.realtime?.entityUpdated(
+      { users: [userId], roles: [UserRole.CUSTOMER, UserRole.CAREGIVER, UserRole.ADMIN] },
+      { type: 'caregiver', id: userId, action },
+    );
+  }
+
   /** Public search results are cached in Redis; any coverage/visibility change must drop them. */
   private async invalidateSearchCache(): Promise<void> {
     try {
@@ -576,6 +585,10 @@ export class CaregiversService {
       entityType: 'CaregiverProfile',
       entityId: profile.id,
     });
+    // Specialty/cities/rate/bio drive the public directory and booking cards on
+    // both clients — drop the Redis search cache and push a live refresh.
+    await this.invalidateSearchCache();
+    this.caregiverChanged(user.sub, 'profile_updated');
     return updated;
   }
 
@@ -625,6 +638,7 @@ export class CaregiversService {
       metadata: { areas: dto.areas.length },
     });
     await this.invalidateSearchCache();
+    this.caregiverChanged(user.sub, 'service_areas_changed');
     return this.listServiceAreas(user);
   }
 
@@ -653,6 +667,7 @@ export class CaregiversService {
       entityId: area.id,
     });
     await this.invalidateSearchCache();
+    this.caregiverChanged(user.sub, 'service_areas_changed');
     return area;
   }
 
@@ -672,6 +687,7 @@ export class CaregiversService {
     }
     await this.prisma.caregiverServiceArea.delete({ where: { id } });
     await this.invalidateSearchCache();
+    this.caregiverChanged(user.sub, 'service_areas_changed');
     return { ok: true as const };
   }
 
@@ -1047,6 +1063,7 @@ export class CaregiversService {
       entityType: 'CaregiverProfile',
       entityId: profile.id,
     });
+    this.caregiverChanged(user.sub, 'availability_changed');
     return {
       acceptingImmediate: updated.acceptingImmediate,
       availableNow: await this.isAvailableNow(updated),

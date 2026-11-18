@@ -1,5 +1,12 @@
 /** In-app chat types. Backed by a local mock store today; maps 1:1 to the planned backend (see docs/requirement.md → In-app messaging). */
-export type ChatMessageType = "text" | "image" | "video" | "file" | "voice";
+export type ChatMessageType = "text" | "image" | "video" | "file" | "voice" | "call";
+
+/** Virtual chat item backed by a CallLog row. */
+export interface CallMeta {
+  callId: string;
+  status: string;
+  durationSec?: number | null;
+}
 
 export interface ChatReaction {
   emoji: string;
@@ -31,6 +38,8 @@ export interface ChatMessage {
   createdAt: number;
   /** For my messages: has the other party read it (drives the read ticks). */
   readByThem: boolean;
+  /** Set for `type: "call"` items. */
+  call?: CallMeta;
 }
 
 export interface ChatConversation {
@@ -47,11 +56,13 @@ export interface ChatConversation {
   visitId?: string;
   /** For real WebRTC calls: the other party's user id (the call callee). */
   peerUserId?: string;
+  /** The other party's real portrait URL from GET /chat/conversations. */
+  photoUrl?: string | null;
 }
 
 /* ---- Real backend (booking-scoped, text + media) ------------------------- */
 
-export type BackendChatType = "TEXT" | "IMAGE" | "FILE" | "VOICE";
+export type BackendChatType = "TEXT" | "IMAGE" | "FILE" | "VOICE" | "CALL";
 
 export interface BackendChatReaction {
   id: string;
@@ -77,6 +88,10 @@ export interface BackendChatMessage {
   editedAt: string | null;
   deletedAt: string | null;
   createdAt: string;
+  /** Present only on virtual CALL items synthesized from a CallLog row. */
+  callId?: string;
+  callStatus?: string;
+  durationSec?: number | null;
 }
 
 /** One chat thread = one booking. The app resolves the other party's name/role. */
@@ -94,12 +109,15 @@ export interface ChatThreadMeta {
   visitId?: string;
   /** The other party's user id, the call callee. */
   peerUserId?: string;
+  /** Real portrait URL returned by the conversations endpoint. */
+  photoUrl?: string | null;
 }
 
 /** GET /chat/conversations — one per counterpart, spanning all their bookings. */
 export interface ChatConversationSummary {
   counterpartUserId: string;
   counterpartName: string;
+  counterpartPhotoUrl?: string | null;
   caregiverId: string;
   bookingIds: string[];
   activeBookingId: string | null;

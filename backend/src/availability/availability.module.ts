@@ -7,6 +7,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -38,6 +39,8 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { UserRole } from '../generated/prisma/client.js';
+import { RealtimeService } from '../realtime/realtime.service.js';
 
 export class AvailabilityRuleDto {
   @ApiProperty({
@@ -101,7 +104,16 @@ export class AvailabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Optional() private readonly realtime?: RealtimeService,
   ) {}
+
+  /** Availability drives the public directory on web + both apps — push a refresh. */
+  private changed(userId: string) {
+    this.realtime?.entityUpdated(
+      { users: [userId], roles: [UserRole.CUSTOMER, UserRole.CAREGIVER, UserRole.ADMIN] },
+      { type: 'caregiver', id: userId, action: 'availability_changed' },
+    );
+  }
 
   private async caregiverId(user: AuthUser): Promise<string> {
     const profile = await this.prisma.caregiverProfile.findUnique({
@@ -165,6 +177,7 @@ export class AvailabilityService {
       entityId: caregiverId,
       metadata: { rules: dto.rules.length },
     });
+    this.changed(user.sub);
     return this.get(user);
   }
 
@@ -184,6 +197,7 @@ export class AvailabilityService {
       entityType: 'AvailabilityBlock',
       entityId: block.id,
     });
+    this.changed(user.sub);
     return block;
   }
 
@@ -196,6 +210,7 @@ export class AvailabilityService {
       throw new NotFoundException('Block not found');
     }
     await this.prisma.availabilityBlock.delete({ where: { id } });
+    this.changed(user.sub);
     return { ok: true as const };
   }
 }

@@ -14,6 +14,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useNow } from "@shared/hooks/use-now";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import type { ActiveCall } from "./call-context";
 
 function fmtDur(ms: number) {
@@ -103,8 +104,8 @@ export function CallOverlay({
           onClick={() => setIsMinimized(false)}
           className="flex items-center gap-3 text-start transition-opacity hover:opacity-90"
         >
-          <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-brand-700 to-teal-500 text-sm font-bold text-white shadow-md">
-            {(call.peerName || "·").charAt(0).toUpperCase()}
+          <div className="relative shrink-0">
+            <UserAvatar userId={call.peerUserId} name={call.peerName} photoUrl={call.peerPhotoUrl} size="sm" />
             <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-slate-900 bg-emerald-500" />
           </div>
           <div className="min-w-0 pr-1">
@@ -206,8 +207,14 @@ export function CallOverlay({
             </>
           )}
 
-          <div className="relative flex size-36 items-center justify-center rounded-full bg-gradient-to-tr from-brand-700 via-brand-600 to-teal-500 text-5xl font-extrabold text-white shadow-[0_0_60px_rgba(20,184,166,0.35)] ring-4 ring-brand-400/40 ring-offset-4 ring-offset-[#0b1120] sm:size-44 sm:text-6xl">
-            {(call.peerName || "·").charAt(0).toUpperCase()}
+          <div className="relative">
+            <UserAvatar
+              userId={call.peerUserId}
+              name={call.peerName}
+              photoUrl={call.peerPhotoUrl}
+              size="lg"
+              className="!size-36 rounded-full ring-4 ring-brand-500/50 ring-offset-4 ring-offset-[#0b1120] sm:!size-44"
+            />
           </div>
         </div>
 

@@ -7,7 +7,7 @@ const pending = { callId: 'call-1', visitId: 'v-1', callerId: 'u-caller', caller
 describe('CallRingingService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let redis: ReturnType<typeof createRedisMock>;
-  let realtime: { emit: ReturnType<typeof vi.fn> };
+  let realtime: { emit: ReturnType<typeof vi.fn>; entityUpdated: ReturnType<typeof vi.fn> };
   let calls: { markMissed: ReturnType<typeof vi.fn> };
   let notifications: { notify: ReturnType<typeof vi.fn> };
   let webPush: { sendToUser: ReturnType<typeof vi.fn> };
@@ -18,7 +18,7 @@ describe('CallRingingService', () => {
     vi.useFakeTimers();
     prisma = createPrismaMock();
     redis = createRedisMock();
-    realtime = { emit: vi.fn() };
+    realtime = { emit: vi.fn(), entityUpdated: vi.fn() };
     calls = { markMissed: vi.fn().mockResolvedValue(undefined) };
     notifications = { notify: vi.fn().mockResolvedValue(undefined) };
     webPush = { sendToUser: vi.fn().mockResolvedValue(undefined) };
@@ -61,6 +61,10 @@ describe('CallRingingService', () => {
 
     expect(calls.markMissed).toHaveBeenCalledWith('call-1');
     expect(realtime.emit).toHaveBeenCalledWith({ users: ['u-caller', 'u-callee'] }, 'call:missed', { callId: 'call-1' });
+    expect(realtime.entityUpdated).toHaveBeenCalledWith(
+      { users: ['u-caller', 'u-callee'] },
+      expect.objectContaining({ type: 'chat_message', action: 'call_logged' }),
+    );
     expect(notifications.notify).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u-callee', event: 'call.missed', message: 'Ayesha tried to call you.' }),
     );
