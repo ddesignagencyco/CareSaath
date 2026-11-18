@@ -221,6 +221,14 @@ describe('Phase 9 completions (e2e)', () => {
       .set(bearer(caregiverToken));
     expect(enRoute.body.status).toBe('EN_ROUTE');
 
+    // An OTP is now doorstep-only: mirror the app's ambient GPS heartbeat at
+    // the visit address so the caregiver has a fresh nearby fix to prove arrival.
+    const fix = await request(app.getHttpServer())
+      .patch('/api/v1/caregiver/location')
+      .set(bearer(caregiverToken))
+      .send({ lat: 31.5204, lng: 74.3587 });
+    expect(fix.status).toBe(200);
+
     capturedOtp.length = 0;
     const issued = await request(app.getHttpServer())
       .post(`/api/v1/caregiver/visits/${visitId}/check-in-otp`)
