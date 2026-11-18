@@ -57,8 +57,9 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
               <span
                 className={clsx(
                   "relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  done && "bg-brand-600 text-white",
-                  now && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  done && "bg-success-600 text-white",
+                  now && visit.status === "EN_ROUTE" && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  now && visit.status !== "EN_ROUTE" && "bg-brand-600 text-white ring-4 ring-brand-100",
                   !done && !now && "bg-ink-100 text-ink-400",
                 )}
               >

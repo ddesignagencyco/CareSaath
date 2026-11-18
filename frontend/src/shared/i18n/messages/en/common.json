@@ -41,6 +41,7 @@
   "photo": {
     "add": "Add photo",
     "change": "Change photo",
+    "view": "View full-size photo",
     "manageTitle": "Profile photo",
     "manageDescription": "Would you like to update or remove your profile photo?",
     "update": "Update photo",

@@ -49,7 +49,10 @@ describe('CallRingingService', () => {
     expect(payload).toMatchObject({ event: 'call.incoming', body: 'Ayesha is calling you' });
     expect(payload.data).toMatchObject({ url: '/caregiver/visits/v-1', call: true });
     expect(webPush.sendToUser.mock.calls[0][2]).toEqual({ ttlSeconds: RING_SECONDS, urgency: 'high' });
-    expect(nativePush.sendToUser.mock.calls[0][2]).toEqual({ ttlSeconds: RING_SECONDS });
+    expect(nativePush.sendToUser.mock.calls[0][2]).toEqual({
+      ttlSeconds: RING_SECONDS,
+      channelId: 'caresaath-calls',
+    });
   });
 
   it('marks an unanswered call missed after the ring window and tells both sides', async () => {

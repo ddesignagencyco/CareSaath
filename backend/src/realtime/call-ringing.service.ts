@@ -4,12 +4,15 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { NotificationsService } from '../notifications/notifications.module.js';
 import { WebPushService } from '../notifications/web-push.service.js';
-import { NativePushService } from '../notifications/native-push.service.js';
+import { ANDROID_CALL_CHANNEL_ID, NativePushService } from '../notifications/native-push.service.js';
 import { RealtimeService } from './realtime.service.js';
 import { CallSignalingService } from './call-signaling.service.js';
 
-/** How long a call rings before it counts as missed. */
-export const RING_SECONDS = 30;
+/**
+ * How long a call rings before it counts as missed. 60s (instead of 30s) gives
+ * a delayed high-priority FCM delivery a real chance to reach a locked phone.
+ */
+export const RING_SECONDS = 60;
 
 export interface PendingCall {
   callId: string;
@@ -88,7 +91,12 @@ export class CallRingingService implements OnModuleDestroy {
       const call = await this.prisma.callLog.findUnique({ where: { id: callId } });
       if (!call || call.status !== 'INITIATED') return;
       await this.calls.markMissed(callId);
-      await this.redis.client.del(pendingKey(calleeId));
+      // A newer call can have replaced this one in the single pending slot —
+      // only clear the slot if it still belongs to the call that expired.
+      const pendingRaw = await this.redis.client.get(pendingKey(calleeId));
+      if (pendingRaw && (JSON.parse(pendingRaw) as PendingCall).callId === callId) {
+        await this.redis.client.del(pendingKey(calleeId));
+      }
       this.realtime.emit({ users: [call.callerId, call.calleeId] }, 'call:missed', { callId });
       // The missed call is now a row in the chat timeline on both clients.
       this.realtime.entityUpdated(
@@ -129,7 +137,10 @@ export class CallRingingService implements OnModuleDestroy {
       // A ringing push delivered after the call stopped ringing is worse than none.
       await Promise.all([
         this.webPush?.sendToUser(calleeId, payload, { ttlSeconds: RING_SECONDS, urgency: 'high' }),
-        this.nativePush?.sendToUser(calleeId, payload, { ttlSeconds: RING_SECONDS }),
+        this.nativePush?.sendToUser(calleeId, payload, {
+          ttlSeconds: RING_SECONDS,
+          channelId: ANDROID_CALL_CHANNEL_ID,
+        }),
       ]);
     } catch (err) {
       this.logger.warn(`Incoming-call push for ${pending.callId} failed: ${(err as Error).message}`);

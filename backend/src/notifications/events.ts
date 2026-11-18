@@ -76,6 +76,10 @@ export const NOTIFICATION_EVENTS: Record<string, NotificationEventDefinition> = 
   'caregiver.suspended': { audience: CAREGIVER, title: 'Your account has been suspended' },
   'caregiver.suspended.admin': { audience: ADMIN, title: 'Caregiver auto-suspended for repeated strikes' },
 
+  // ---- Chat: push-only so a message reaches a phone whose app is closed.
+  // The live socket update is unchanged; this is only the tray notification.
+  'chat.message.new': { audience: CUSTOMER_OR_CAREGIVER, title: 'New message', skipEmail: true },
+
   // ---- In-app calls
   // Push-only (sent straight to devices by CallRingingService, never stored in the feed).
   'call.incoming': { audience: CUSTOMER_OR_CAREGIVER, title: 'Incoming call', skipEmail: true },

@@ -81,8 +81,8 @@ export default function Privacy() {
         <p>
           We may update this policy as CareSaath expands to new cities and features; material changes will be reflected here with a new
           date. Questions about your privacy can be sent to{" "}
-          <a href="mailto:privacy@caresaath.pk" className="font-semibold text-brand-700 hover:underline">
-            privacy@caresaath.pk
+          <a href="mailto:info@caresaath.com" className="font-semibold text-brand-700 hover:underline">
+            info@caresaath.com
           </a>
           .
         </p>

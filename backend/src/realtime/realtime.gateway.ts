@@ -140,9 +140,16 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         where: { id: callerId },
         select: { fullName: true, photoKey: true },
       });
-      const callerPhotoUrl = caller?.photoKey && this.storage
-        ? await this.storage.presignedGet(caller.photoKey)
-        : null;
+      // The avatar is cosmetic — a signed-URL failure must never abort the
+      // invite and leave the doctor's phone silent.
+      let callerPhotoUrl: string | null = null;
+      if (caller?.photoKey && this.storage) {
+        try {
+          callerPhotoUrl = await this.storage.presignedGet(caller.photoKey);
+        } catch (err) {
+          this.logger.warn(`Could not sign caller photo for call: ${(err as Error).message}`);
+        }
+      }
       const incoming = {
         callId: call.id,
         visitId: body.visitId,
@@ -151,14 +158,19 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
         callerPhotoUrl,
         sdp: body.sdp,
       };
-      // Ring like a phone call even when the other person is offline: their
-      // devices get a push, and opening the app in time picks the call up.
+      // Deliver to the user room unconditionally. Socket.IO drops it when the
+      // room is empty, but a device that connects from the push immediately
+      // asks for a replay with `call:sync`, so this avoids a race where the
+      // room looked empty for a few milliseconds and nobody ever got the call.
       const calleeOnline = this.realtime.isUserConnected(calleeId);
-      if (calleeOnline) {
-        this.realtime.emit({ users: [calleeId] }, 'call:incoming', incoming);
-      }
+      this.realtime.emit({ users: [calleeId] }, 'call:incoming', incoming);
       await this.ringing.ring(calleeId, incoming);
-      client.emit('call:outgoing', { callId: call.id, calleeOnline, ringSeconds: RING_SECONDS });
+      client.emit('call:outgoing', {
+        callId: call.id,
+        calleeOnline,
+        pushSent: true,
+        ringSeconds: RING_SECONDS,
+      });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }

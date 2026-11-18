@@ -52,6 +52,9 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
+import { NativePushService } from '../notifications/native-push.service.js';
+import { WebPushService } from '../notifications/web-push.service.js';
 import { ConfigService, PlatformConfigModule } from '../config/platform-config.module.js';
 
 /** Chat exists only on a real (accepted) booking: never on a request, a decline, or a cancelled request. */
@@ -156,7 +159,38 @@ export class ChatService {
     @Optional() private readonly redis?: RedisService,
     @Optional() private readonly realtime?: RealtimeService,
     @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly nativePush?: NativePushService,
+    @Optional() private readonly webPush?: WebPushService,
   ) {}
+
+  /**
+   * A chat message used to be socket-only: the moment the app was closed the
+   * event was lost, so there was no notification and no sound. Fan out a
+   * best-effort push (phone tray + browser) alongside the live socket update.
+   * Fire-and-forget — a push failure must never fail the send itself.
+   */
+  private pushMessageToRecipient(
+    recipientId: string,
+    message: { id: string; body: string | null; type: ChatMessageType },
+    bookingId: string,
+  ): void {
+    const preview = message.type === ChatMessageType.TEXT
+      ? (message.body ?? '').trim().slice(0, 120)
+      : {
+          [ChatMessageType.IMAGE]: 'Photo',
+          [ChatMessageType.VOICE]: 'Voice message',
+          [ChatMessageType.FILE]: 'Document',
+        }[message.type];
+    const payload = {
+      id: message.id,
+      event: 'chat.message.new',
+      title: 'New message',
+      body: preview || 'New message',
+      data: { bookingId, messageId: message.id, url: `/messages?booking=${bookingId}` },
+    };
+    void this.nativePush?.sendToUser(recipientId, payload, { ttlSeconds: 3600 });
+    void this.webPush?.sendToUser(recipientId, payload);
+  }
 
   /**
    * The booking, only if the caller is the customer, the assigned caregiver,
@@ -295,6 +329,7 @@ export class ChatService {
         data: { bookingId, senderId: user.sub, body: message.body, type: message.type, replyToId: message.replyToId },
       },
     );
+    this.pushMessageToRecipient(recipientId, message, bookingId);
     return this.present(message);
   }
 
@@ -462,6 +497,16 @@ export class ChatService {
    * The caller's open chat bookings (CONFIRMED/COMPLETED), each tagged with
    * the other party, so threads can be grouped per (customer, caregiver) pair.
    */
+  /** Never let one broken avatar key fail the whole conversation list. */
+  private async photoUrlForChat(photoKey: string | null): Promise<string | null> {
+    if (!photoKey || !this.storage) return null;
+    try {
+      return await this.storage.presignedGet(photoKey);
+    } catch {
+      return null;
+    }
+  }
+
   private async chatBookingsByCounterpart(user: AuthUser, counterpartUserId?: string) {
     const isCustomer = user.role === UserRole.CUSTOMER;
     const bookings = await this.prisma.booking.findMany({
@@ -477,14 +522,25 @@ export class ChatService {
         status: true,
         createdAt: true,
         customer: { select: { id: true, fullName: true, photoKey: true } },
-        caregiver: { select: { id: true, userId: true, user: { select: { fullName: true, photoKey: true } } } },
+        caregiver: {
+          select: {
+            id: true,
+            userId: true,
+            // Legacy portraits live on the caregiver row; newer uploads mirror
+            // onto User.photoKey. Chat must accept either source.
+            photoKey: true,
+            user: { select: { fullName: true, photoKey: true } },
+          },
+        },
       },
     });
     return bookings.map((b) => ({
       ...b,
       counterpartUserId: isCustomer ? b.caregiver.userId : b.customer.id,
       counterpartName: isCustomer ? b.caregiver.user.fullName : b.customer.fullName,
-      counterpartPhotoKey: isCustomer ? b.caregiver.user.photoKey : b.customer.photoKey,
+      counterpartPhotoKey: isCustomer
+        ? b.caregiver.user.photoKey ?? b.caregiver.photoKey
+        : b.customer.photoKey,
     }));
   }
 
@@ -516,9 +572,9 @@ export class ChatService {
         return {
           counterpartUserId,
           counterpartName: group[0]!.counterpartName,
-          counterpartPhotoUrl: group[0]!.counterpartPhotoKey
-            ? await this.storage?.presignedGet(group[0]!.counterpartPhotoKey) ?? null
-            : null,
+          counterpartPhotoUrl: await this.photoUrlForChat(
+            group[0]!.counterpartPhotoKey,
+          ),
           caregiverId: group[0]!.caregiver.id,
           bookingIds,
           activeBookingId:
@@ -759,6 +815,7 @@ export class ChatService {
         data: { bookingId, senderId: user.sub, type: message.type, replyToId: message.replyToId },
       },
     );
+    this.pushMessageToRecipient(recipientId, message, bookingId);
     return this.present(message);
   }
 }
@@ -977,7 +1034,7 @@ export class ChatConversationsController {
 }
 
 @Module({
-  imports: [PlatformConfigModule],
+  imports: [PlatformConfigModule, NotificationsModule],
   controllers: [ChatController, ChatUploadsController, ChatConversationsController],
   providers: [ChatService],
   exports: [ChatService],

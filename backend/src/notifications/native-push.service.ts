@@ -12,6 +12,9 @@ const DEAD_TOKEN_CODES = new Set([
 /** Android notification channel the app creates for these alerts (see the app's push setup). */
 export const ANDROID_CHANNEL_ID = 'caresaath-default';
 
+/** Dedicated channel for incoming calls so the ring is distinct from alerts. */
+export const ANDROID_CALL_CHANNEL_ID = 'caresaath-calls';
+
 /**
  * Native app push (Firebase Cloud Messaging) so a notification reaches a phone
  * whose app is closed or in the background. Same role as WebPushService for
@@ -32,7 +35,11 @@ export class NativePushService {
   }
 
   /** Best-effort fan-out to every device of the user; dead tokens are pruned. Never throws. */
-  async sendToUser(userId: string, payload: WebPushPayload, opts: { ttlSeconds?: number } = {}): Promise<void> {
+  async sendToUser(
+    userId: string,
+    payload: WebPushPayload,
+    opts: { ttlSeconds?: number; channelId?: string } = {},
+  ): Promise<void> {
     const messaging = this.firebase?.messaging;
     if (!messaging) return;
     try {
@@ -52,7 +59,7 @@ export class NativePushService {
         android: {
           priority: 'high',
           ttl: (opts.ttlSeconds ?? 24 * 3600) * 1000,
-          notification: { channelId: ANDROID_CHANNEL_ID, tag: payload.id },
+          notification: { channelId: opts.channelId ?? ANDROID_CHANNEL_ID, tag: payload.id },
         },
         apns: { payload: { aps: { sound: 'default' } } },
       });

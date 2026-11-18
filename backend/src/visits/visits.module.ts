@@ -389,6 +389,49 @@ export class VisitsService {
     } satisfies Prisma.VisitInclude;
   }
 
+  /**
+   * OTP alone must not let a caregiver check in from across the city. While a
+   * visit is EN_ROUTE the app streams the caregiver's location every few
+   * seconds, so require that last known fix to be near the visit address before
+   * an OTP check-in (or an OTP request) is allowed. This gives web and mobile
+   * the same distance validation the GPS path already has.
+   */
+  private async assertCaregiverNearVisit(
+    visit: { booking: { address: { latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string } | null; caregiverId?: string | null } },
+    action: string,
+  ): Promise<void> {
+    const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
+    if (radius <= 0 || !visit.booking.address || !visit.booking.caregiverId) return;
+    const profile = await this.prisma.caregiverProfile.findUnique({
+      where: { id: visit.booking.caregiverId },
+      select: { currentLat: true, currentLng: true, locationUpdatedAt: true },
+    });
+    if (!profile || profile.currentLat == null || profile.currentLng == null) {
+      throw new BadRequestException(
+        `Your live location is unavailable. Turn on location sharing and reach the visit address before you ${action}.`,
+      );
+    }
+    const fixAgeMs = profile.locationUpdatedAt
+      ? Date.now() - new Date(profile.locationUpdatedAt).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (fixAgeMs > VISIT_LOCATION_FALLBACK_MAX_AGE_MINUTES * 60 * 1000) {
+      throw new BadRequestException(
+        `Your location is out of date. Wait for a fresh GPS fix before you ${action}.`,
+      );
+    }
+    const meters = distanceMeters(
+      Number(profile.currentLat),
+      Number(profile.currentLng),
+      Number(visit.booking.address.latitude),
+      Number(visit.booking.address.longitude),
+    );
+    if (meters > radius) {
+      throw new BadRequestException(
+        `You are about ${Math.round(meters)} m from the visit address; ${action} is allowed within ${radius} m`,
+      );
+    }
+  }
+
   /** Reject GPS fixes that are further from the visit address than the configured radius. */
   private async assertWithinGeofence(
     address: { latitude: Prisma.Decimal | number | string; longitude: Prisma.Decimal | number | string } | null,
@@ -716,6 +759,12 @@ export class VisitsService {
         `An OTP can only be issued for a confirmed, en-route or in-progress visit (now ${visit.status})`,
       );
     }
+    // An OTP is the arrival confirmation — only issue it once the caregiver's
+    // live GPS shows they actually reached the visit address (same validation
+    // the GPS check-in path applies).
+    if (visit.status === VisitStatus.EN_ROUTE) {
+      await this.assertCaregiverNearVisit(visit, 'check in');
+    }
     const code = randomInt(100000, 999999).toString();
     const codeHash = this.hashOtp(code);
     const key = this.checkInOtpKey(id);
@@ -784,9 +833,11 @@ export class VisitsService {
     if (visit.status !== VisitStatus.EN_ROUTE) {
       throw new BadRequestException(`Cannot move visit from ${visit.status} to CHECKED_IN`);
     }
+    await this.assertNotTooEarly(visit);
     if (method === CheckMethod.GPS) {
       await this.assertWithinGeofence(visit.booking.address, dto.lat!, dto.lng!, 'check-in', dto.accuracy);
     } else {
+      await this.assertCaregiverNearVisit(visit, 'check in');
       await this.verifyCheckInOtp(id, dto.code);
     }
     const checkInAt = new Date();
@@ -798,6 +849,32 @@ export class VisitsService {
     });
     await this.assertNotLate(visit, checkInAt);
     return result;
+  }
+
+  /**
+   * Check-in is an arrival confirmation, so it cannot happen long before the
+   * booked window. This rule lives on the server so the mobile app and the web
+   * app can never disagree about whether a caregiver is allowed to check in.
+   * Visits without timing data (legacy rows) are left alone.
+   */
+  private async assertNotTooEarly(visit: {
+    scheduledDate?: Date | string | null;
+    timeWindowStart?: string | null;
+  }): Promise<void> {
+    if (!visit.scheduledDate || !visit.timeWindowStart) return;
+    const grace = await this.config.getNumber('visit.earlyArrivalGraceMinutes');
+    if (grace <= 0) return;
+    const start = scheduledStartAt({
+      scheduledDate: new Date(visit.scheduledDate),
+      timeWindowStart: visit.timeWindowStart,
+    });
+    const earliest = new Date(start.getTime() - grace * 60 * 1000);
+    if (new Date() < earliest) {
+      const minutes = Math.round((start.getTime() - Date.now()) / 60_000);
+      throw new BadRequestException(
+        `You can check in only ${grace} minutes before the visit starts (still ${minutes} minutes away)`,
+      );
+    }
   }
 
   /** A caregiver who checks in well past their window start gets a strike. */

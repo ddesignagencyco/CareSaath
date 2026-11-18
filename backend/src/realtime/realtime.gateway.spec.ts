@@ -176,9 +176,15 @@ describe('RealtimeGateway call signaling', () => {
     realtime.isUserConnected = vi.fn().mockReturnValue(false) as never;
     const socket = fakeAuthedSocket('u-caller');
     await gateway.handleCallInvite(socket as never, { visitId: 'v-1', calleeId: 'u-callee', sdp: { x: 1 } });
-    expect(realtimeEmit).not.toHaveBeenCalledWith({ users: ['u-callee'] }, 'call:incoming', expect.anything());
+    // Always emit to the user room: Socket.IO drops it when the room is empty,
+    // but a device opening from the push asks for a replay with `call:sync`.
+    expect(realtimeEmit).toHaveBeenCalledWith(
+      { users: ['u-callee'] },
+      'call:incoming',
+      expect.objectContaining({ callId: 'call-1', visitId: 'v-1' }),
+    );
     expect(ringing.ring).toHaveBeenCalledWith('u-callee', expect.objectContaining({ callId: 'call-1', visitId: 'v-1' }));
-    expect(socket.emit).toHaveBeenCalledWith('call:outgoing', { callId: 'call-1', calleeOnline: false, ringSeconds: 30 });
+    expect(socket.emit).toHaveBeenCalledWith('call:outgoing', { callId: 'call-1', calleeOnline: false, pushSent: true, ringSeconds: 60 });
   });
 
   it('hands a device that connects mid-ring the call still waiting for it', async () => {

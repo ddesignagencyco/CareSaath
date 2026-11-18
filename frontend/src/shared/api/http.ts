@@ -236,9 +236,14 @@ export interface Health {
   redis: boolean;
 }
 
-/** GET /health (public): whether the API, PostgreSQL and Redis are up. */
+/** GET /health (public): whether the API, PostgreSQL and Redis are up.
+ *  The backend excludes health from the /api/v1 global prefix, so it lives at
+ *  the origin root — not under API_BASE_URL. */
 export async function checkHealth(): Promise<Health> {
-  const res = await send("GET", buildUrl("/health"));
+  const url = new URL(API_BASE_URL);
+  url.pathname = "/health";
+  url.search = "";
+  const res = await send("GET", url.toString());
   if (!res.ok) throw await toError(res);
   return parse<Health>(res);
 }

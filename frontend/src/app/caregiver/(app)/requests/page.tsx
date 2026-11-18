@@ -253,7 +253,14 @@ export default function RequestsPage() {
       accessorKey: "status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <Badge tone={row.original.status === "CONFIRMED" ? "success" : row.original.status === "DECLINED" ? "neutral" : "danger"} dot>
+        <Badge
+          tone={
+            row.original.status === "DECLINED" || row.original.status === "CANCELLED"
+              ? "danger"
+              : "neutral"
+          }
+          dot
+        >
           {L.bookingCaregiver(row.original.status)}
         </Badge>
       ),

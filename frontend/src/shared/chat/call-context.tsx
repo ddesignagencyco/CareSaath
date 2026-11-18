@@ -15,11 +15,11 @@ const ICE_FALLBACK: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.googl
 /** Ceiling on waiting for the server's `call:outgoing` ack before giving up on an invite (40s). */
 const RING_TIMEOUT_MS = 40_000;
 /** Server ring window, used until `call:outgoing` reports the real one. */
-const DEFAULT_RING_SECONDS = 30;
+const DEFAULT_RING_SECONDS = 60;
 /** Extra client-side wait past the server ring window before tearing down without a terminal event. */
 const RING_GRACE_MS = 5_000;
-/** Callee-side ceiling on showing an incoming call that never got a terminal event (45s). */
-const INCOMING_TIMEOUT_MS = 45_000;
+/** Callee-side ceiling on showing an incoming call that never got a terminal event (65s). */
+const INCOMING_TIMEOUT_MS = 65_000;
 /** Caller's "tooooo" while the other side rings, and the callee's ringtone. Both loop cleanly. */
 const RINGBACK_SRC = "/sounds/ringback.wav";
 const RINGTONE_SRC = "/sounds/ringtone.wav";

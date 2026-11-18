@@ -47,7 +47,8 @@ describe("status badges", () => {
     rerender(<VisitStatusBadge status="CANCELLED" />);
     expect(screen.getByText("Visit cancelled")).toHaveClass("bg-danger-50");
     rerender(<VisitStatusBadge status="EN_ROUTE" />);
-    expect(screen.getByText("Visit en route")).toHaveClass("bg-info-50");
+    // EN_ROUTE keeps the accent tone (in-progress travel), not the info tone.
+    expect(screen.getByText("Visit en route")).toHaveClass("bg-accent-50");
     rerender(<VerificationBadge status="APPROVED" />);
     expect(screen.getByText("Approved")).toHaveClass("bg-success-50");
   });

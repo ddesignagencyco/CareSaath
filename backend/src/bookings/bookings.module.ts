@@ -609,6 +609,9 @@ export class BookingsService {
           licenseBody: true,
           ratingAverage: true,
           ratingCount: true,
+          // Legacy portraits live on the caregiver profile row, newer ones on
+          // the user row. Select both so either source can be presented.
+          photoKey: true,
           user: { select: { fullName: true, photoKey: true } },
         },
       },
@@ -652,7 +655,7 @@ export class BookingsService {
       id: string;
       customerId: string;
       caregiverId: string;
-      caregiver?: { user?: { photoKey?: string | null } } | null;
+      caregiver?: { photoKey?: string | null; user?: { photoKey?: string | null } } | null;
       prescriptions: Array<{ fileKey: string }>;
       visits?: Array<{ note: { summary: string; submittedAt: Date } | null }>;
     },
@@ -668,7 +671,8 @@ export class BookingsService {
     ]);
     const visits = booking.visits?.map((visit) => ({ ...visit, hasNote: visit.note !== null }));
     // Caregiver portrait for booking cards on web + both apps (key stays in DB).
-    const photoKey = booking.caregiver?.user?.photoKey;
+    // Prefer the mirrored user key, fall back to the legacy caregiver-profile key.
+    const photoKey = booking.caregiver?.user?.photoKey ?? booking.caregiver?.photoKey;
     const caregiver = photoKey
       ? { ...booking.caregiver, photoUrl: (await withFileUrl(this.storage, { fileKey: photoKey })).url }
       : booking.caregiver;
