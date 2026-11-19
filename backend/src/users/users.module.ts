@@ -64,21 +64,6 @@ export class UpdateProfileDto {
   email?: string;
 }
 
-export class EmergencyContactDto {
-  @ApiProperty({ example: 'Hamza Khan (spouse)', description: 'Contact name and relationship' })
-  @IsString()
-  @MinLength(1)
-  @MaxLength(120)
-  name!: string;
-
-  @ApiProperty({ example: '+923002220001', description: 'Emergency phone number' })
-  @IsString()
-  @Matches(/^\+?[0-9]{10,15}$/, {
-    message: 'phone must be a valid phone number (e.g. +923001234567)',
-  })
-  phone!: string;
-}
-
 @Injectable()
 export class UsersService {
   constructor(
@@ -239,37 +224,6 @@ export class UsersService {
     return updated;
   }
 
-  async listEmergencyContacts(user: AuthUser) {
-    return this.prisma.emergencyContact.findMany({
-      where: { userId: user.sub },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async addEmergencyContact(user: AuthUser, dto: EmergencyContactDto) {
-    const contact = await this.prisma.emergencyContact.create({
-      data: { userId: user.sub, name: dto.name, phone: dto.phone },
-    });
-    await this.audit.log({
-      actorId: user.sub,
-      action: 'user.emergency_contact.added',
-      entityType: 'EmergencyContact',
-      entityId: contact.id,
-    });
-    return contact;
-  }
-
-  async removeEmergencyContact(user: AuthUser, id: string) {
-    const contact = await this.prisma.emergencyContact.findFirst({
-      where: { id, userId: user.sub },
-    });
-    if (!contact) {
-      throw new NotFoundException('Emergency contact not found');
-    }
-    await this.prisma.emergencyContact.delete({ where: { id } });
-    return { ok: true as const };
-  }
-
   /** Phone is the login identity; starts the CHANGE_PHONE OTP flow to the new number. */
   requestPhoneChange(user: AuthUser, dto: RequestPhoneChangeDto) {
     return this.auth.requestPhoneChange(user.sub, dto.newPhone);
@@ -414,36 +368,6 @@ export class UsersController {
   })
   verifyPhoneChange(@CurrentUser() user: AuthUser, @Body() dto: VerifyPhoneChangeDto) {
     return this.users.verifyPhoneChange(user, dto);
-  }
-
-  @Roles('CUSTOMER')
-  @Get('emergency-contacts')
-  @ApiOperation({
-    summary: 'List emergency contacts',
-    description: 'Retrieves all emergency contacts associated with the current user.',
-  })
-  listContacts(@CurrentUser() user: AuthUser) {
-    return this.users.listEmergencyContacts(user);
-  }
-
-  @Roles('CUSTOMER')
-  @Post('emergency-contacts')
-  @ApiOperation({
-    summary: 'Add an emergency contact',
-    description: 'Saves a new emergency contact who can be alerted during an SOS emergency.',
-  })
-  addContact(@CurrentUser() user: AuthUser, @Body() dto: EmergencyContactDto) {
-    return this.users.addEmergencyContact(user, dto);
-  }
-
-  @Roles('CUSTOMER')
-  @Delete('emergency-contacts/:id')
-  @ApiOperation({
-    summary: 'Remove an emergency contact',
-    description: 'Deletes a saved emergency contact by ID.',
-  })
-  removeContact(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.users.removeEmergencyContact(user, id);
   }
 }
 

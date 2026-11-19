@@ -29,7 +29,6 @@ import type {
   CustomerPayment,
   CustomerPaymentWithVisit,
   CustomerVisitDetail,
-  EmergencyContact,
   InitiatePaymentResult,
   PatientInput,
   PromoQuote,
@@ -73,15 +72,6 @@ export const meApi = {
   uploadPhoto: (file: File) => http.upload<{ photoKey: string; photoUrl: string }>("/customer/me/photo", file),
   /** DELETE /customer/me/photo */
   removePhoto: () => http.delete<{ ok: true }>("/customer/me/photo"),
-};
-
-export const contactsApi = {
-  /** GET /customer/emergency-contacts */
-  list: () => (http.get<EmergencyContact[]>("/customer/emergency-contacts")),
-  /** POST /customer/emergency-contacts */
-  add: (dto: { name: string; phone: string }) => (http.post<EmergencyContact>("/customer/emergency-contacts", dto)),
-  /** DELETE /customer/emergency-contacts/:id */
-  remove: (id: string) => (http.delete<{ ok: true }>(`/customer/emergency-contacts/${id}`)),
 };
 
 export const patientsApi = {

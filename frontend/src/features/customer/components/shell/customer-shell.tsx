@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, CalendarCheck2, CircleUserRound, Home, LogOut, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Siren, Users, Wallet } from "lucide-react";
+import { Bell, CalendarCheck2, CircleUserRound, Home, LogOut, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Scale, Search, Siren, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -35,7 +35,6 @@ type NavLabel =
   | "nav.account"
   | "items.patients"
   | "items.addresses"
-  | "items.contacts"
   | "items.payments"
   | "items.disputes"
   | "items.notifications"
@@ -65,7 +64,6 @@ const SIDEBAR_GROUPS: { label?: "groups.care" | "groups.family" | "groups.accoun
     items: [
       { href: "/customer/account/patients", label: "items.patients", icon: Users },
       { href: "/customer/account/addresses", label: "items.addresses", icon: MapPin },
-      { href: "/customer/account/contacts", label: "items.contacts", icon: Phone },
     ],
   },
   {

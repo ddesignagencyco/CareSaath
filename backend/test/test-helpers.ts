@@ -25,7 +25,6 @@ export function createPrismaMock() {
   return {
     user: model(),
     otpCode: model(),
-    emergencyContact: model(),
     patientProfile: model(),
     address: model(),
     caregiverProfile: model(),

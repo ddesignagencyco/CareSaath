@@ -5,7 +5,6 @@ import {
   authApi,
   bookingsApi,
   caregiversApi,
-  contactsApi,
   disputesApi,
   meApi,
   notificationsApi,
@@ -42,9 +41,6 @@ const rows: Row[] = [
   ["auth.logout", () => authApi.logout(), "POST", "/auth/logout", {}],
   ["me.get", () => meApi.get(), "GET", "/customer/me", undefined],
   ["me.update", () => meApi.update({ fullName: "Ahmed Raza", preferredLanguage: "UR" }), "PATCH", "/customer/me", { fullName: "Ahmed Raza", preferredLanguage: "UR" }],
-  ["contacts.list", () => contactsApi.list(), "GET", "/customer/emergency-contacts", undefined],
-  ["contacts.add", () => contactsApi.add({ name: "Sana", phone: "+923331234567" }), "POST", "/customer/emergency-contacts", { name: "Sana", phone: "+923331234567" }],
-  ["contacts.remove", () => contactsApi.remove("ec1"), "DELETE", "/customer/emergency-contacts/ec1", undefined],
   ["patients.list", () => patientsApi.list(), "GET", "/customer/patients", undefined],
   ["patients.get", () => patientsApi.get("p1"), "GET", "/customer/patients/p1", undefined],
   [

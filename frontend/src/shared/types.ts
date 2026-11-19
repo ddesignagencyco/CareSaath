@@ -174,11 +174,33 @@ export interface AdminCustomer {
   id: string;
   phone: string;
   email: string | null;
+  role?: UserRole;
   fullName: string;
   status: UserStatus;
   preferredLanguage: Language;
   lastLoginAt: string | null;
   createdAt: string;
+}
+
+export interface AdminUser extends AdminCustomer {
+  role: UserRole;
+}
+
+export interface EditorialPage {
+  slug: string;
+  title: string;
+  content: string;
+  updatedAt: string | null;
+}
+
+export interface ContactInfo {
+  email: string;
+  caregiverEmail: string;
+  pressEmail: string;
+  phone: string;
+  whatsapp: string;
+  address: string;
+  hours: string;
 }
 
 /** GET /admin/customers/:id — profile + booking summary. */

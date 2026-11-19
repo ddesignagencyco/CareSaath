@@ -136,7 +136,7 @@
     "familyReview": "Family review"
   },
   "safety": {
-    "sosDescription": "CareSaath's safety team is alerted immediately, along with the family's emergency contact.",
+    "sosDescription": "CareSaath's safety team is alerted immediately.",
     "family": "Family",
     "priorityHint": {
       "LOW": "Access problem, wrong address",

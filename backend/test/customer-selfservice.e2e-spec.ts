@@ -24,7 +24,6 @@ describe('Customer self-service (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.emergencyContact.deleteMany({ where: { userId } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: userId } });
     await prisma.address.deleteMany({ where: { userId } });
     await prisma.user.deleteMany({ where: { id: userId } });
@@ -45,25 +44,6 @@ describe('Customer self-service (e2e)', () => {
     expect(patch.status).toBe(200);
     expect(patch.body.fullName).toBe('Renamed');
     expect(patch.body.preferredLanguage).toBe('UR');
-  });
-
-  it('manages emergency contacts', async () => {
-    const add = await request(app.getHttpServer())
-      .post('/api/v1/customer/emergency-contacts')
-      .set(bearer(token))
-      .send({ name: 'Kin', phone: '+923001112222' });
-    expect(add.status).toBe(201);
-
-    const list = await request(app.getHttpServer())
-      .get('/api/v1/customer/emergency-contacts')
-      .set(bearer(token));
-    expect(list.body).toHaveLength(1);
-
-    const del = await request(app.getHttpServer())
-      .delete(`/api/v1/customer/emergency-contacts/${add.body.id}`)
-      .set(bearer(token));
-    expect(del.status).toBe(200);
-    expect(del.body).toEqual({ ok: true });
   });
 
   it('runs the patient CRUD flow (FR-C2)', async () => {

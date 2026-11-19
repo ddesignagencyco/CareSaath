@@ -8,6 +8,11 @@ import type {
   AdminBookingListItem,
   AdminCustomer,
   AdminCustomerDetail,
+  AdminUser,
+  ContactInfo,
+  EditorialPage,
+  UserRole,
+  UserStatus,
   AdminPayment,
   AdminPayoutRequest,
   AdminVisitListItem,
@@ -274,4 +279,39 @@ export const customersApi = {
     http.post<AdminCustomerDetail>(`/admin/customers/${id}/deactivate`, reason ? { reason } : {}),
   /** POST /admin/customers/:id/reactivate — restores the account. */
   reactivate: (id: string) => http.post<AdminCustomerDetail>(`/admin/customers/${id}/reactivate`, {}),
+};
+
+/** All users directory (Customers, Caregivers, Admins) + account management actions. */
+export const usersApi = {
+  /** GET /admin/users?q=&role=&status=&page=&limit= */
+  list: (q: PageQuery & { q?: string; role?: UserRole; status?: UserStatus }) =>
+    http.get<Paginated<AdminUser>>("/admin/users", q),
+  /** GET /admin/users/:id */
+  get: (id: string) => http.get<AdminCustomerDetail>(`/admin/users/${id}`),
+  /** POST /admin/users/:id/deactivate */
+  deactivate: (id: string, reason?: string) =>
+    http.post<AdminCustomerDetail>(`/admin/users/${id}/deactivate`, reason ? { reason } : {}),
+  /** POST /admin/users/:id/suspend */
+  suspend: (id: string, reason?: string) =>
+    http.post<AdminCustomerDetail>(`/admin/users/${id}/suspend`, reason ? { reason } : {}),
+  /** POST /admin/users/:id/reactivate */
+  reactivate: (id: string) => http.post<AdminCustomerDetail>(`/admin/users/${id}/reactivate`, {}),
+  /** POST /admin/users/:id/revoke-sessions */
+  revokeSessions: (id: string) => http.post<{ ok: true; message: string }>(`/admin/users/${id}/revoke-sessions`, {}),
+};
+
+/** Editorial CMS content & platform public contact information. */
+export const editorialApi = {
+  /** GET /admin/editorial/pages */
+  listPages: () => http.get<EditorialPage[]>("/admin/editorial/pages"),
+  /** GET /admin/editorial/pages/:slug */
+  getPage: (slug: string) => http.get<EditorialPage>(`/admin/editorial/pages/${slug}`),
+  /** PUT /admin/editorial/pages/:slug */
+  updatePage: (slug: string, dto: { title: string; content: string }) =>
+    http.put<EditorialPage>(`/admin/editorial/pages/${slug}`, dto),
+  /** GET /admin/editorial/contact-info */
+  getContactInfo: () => http.get<ContactInfo>("/admin/editorial/contact-info"),
+  /** PUT /admin/editorial/contact-info */
+  updateContactInfo: (dto: Partial<ContactInfo>) =>
+    http.put<ContactInfo>(`/admin/editorial/contact-info`, dto),
 };

@@ -191,7 +191,7 @@ describe("SosDialog", () => {
     await user.click(screen.getByRole("button", { name: /Send SOS now/ }));
     expect(send).toHaveBeenCalledWith("Patient fell");
     expect(await screen.findByRole("dialog", { name: "Help is being alerted" })).toBeInTheDocument();
-    expect(screen.getByText(/2 safety team members and 1 emergency contact notified/)).toBeInTheDocument();
+    expect(screen.getByText(/2 safety team members notified/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Done" }));
     expect(onClose).toHaveBeenCalled();
   });

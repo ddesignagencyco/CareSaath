@@ -62,7 +62,7 @@ export default function Privacy() {
       <Section title="Your choices">
         <Bullets
           items={[
-            "View and update your profile, patient profiles, addresses and emergency contacts in the app.",
+            "View and update your profile, patient profiles and addresses in the app.",
             "Switch the app language between Urdu and English at any time.",
             "Remove a patient profile or address when it is not tied to an active booking.",
             "Contact us to ask about the data held about you.",

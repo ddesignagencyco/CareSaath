@@ -126,19 +126,6 @@ describe('UsersService', () => {
     );
   });
 
-  it('refuses to delete an emergency contact owned by another user', async () => {
-    prisma.emergencyContact.findFirst.mockResolvedValue(null);
-    await expect(service.removeEmergencyContact(user, 'ec-1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-  });
-
-  it('deletes an owned emergency contact', async () => {
-    prisma.emergencyContact.findFirst.mockResolvedValue({ id: 'ec-1' });
-    prisma.emergencyContact.delete.mockResolvedValue({ id: 'ec-1' });
-    await expect(service.removeEmergencyContact(user, 'ec-1')).resolves.toEqual({ ok: true });
-  });
-
   describe('profile photos', () => {
     it('returns photoUrl in getMe when photoKey is present', async () => {
       prisma.user.findUnique.mockResolvedValue({
