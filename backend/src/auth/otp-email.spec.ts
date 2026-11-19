@@ -6,7 +6,13 @@ function makeService(
   opts: { smtpConfigured?: boolean } = {},
 ) {
   const redis = {
-    client: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn(), set: vi.fn(), get: vi.fn() },
+    client: {
+      incr: vi.fn().mockResolvedValue(1),
+      expire: vi.fn(),
+      set: vi.fn(),
+      get: vi.fn(),
+      del: vi.fn(),
+    },
   };
   const prisma = { user: { findUnique: vi.fn().mockResolvedValue(user) }, otpCode: { create: vi.fn() } };
   const sms = { sendOtp: vi.fn() };
