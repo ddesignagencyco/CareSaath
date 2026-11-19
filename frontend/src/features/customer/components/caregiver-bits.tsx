@@ -75,7 +75,6 @@ export function CaregiverCard({ c }: { c: CaregiverSearchItem }) {
           </div>
         </div>
       </div>
-      {c.bio && <p dir="auto" className="mt-3 line-clamp-2 text-sm text-ink-600">{c.bio}</p>}
       <div className="mt-auto flex items-end justify-between gap-3 pt-4">
         <div className="space-y-1 text-xs text-ink-500">
           {c.experienceYears !== null && (

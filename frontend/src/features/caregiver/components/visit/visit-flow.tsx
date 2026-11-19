@@ -2,9 +2,9 @@
 
 import type { QueryKey } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Check, Car, KeyRound, LocateFixed, LogIn, LogOut, MapPinned, NotebookPen, Star } from "lucide-react";
+import { Check, Car, KeyRound, Loader2, LocateFixed, LogIn, LogOut, MapPinned, NotebookPen, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAction, useApiErrorText } from "@shared/api/use-action";
 import { Button } from "@shared/ui/button";
 import { OtpInput } from "@shared/ui/otp-input";
@@ -106,9 +106,16 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
   const [mode, setMode] = useState<"gps" | "otp">("gps");
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ sentTo: string; at: number } | null>(null);
+  const [sent, setSent] = useState<{ sentTo: string; at: number; devCode?: string } | null>(null);
+  const [resendIn, setResendIn] = useState(0);
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setInterval(() => setResendIn((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
 
   const checkIn = useAction((dto: Parameters<typeof visitsApi.checkIn>[1]) => visitsApi.checkIn(visit.id, dto), {
     invalidate,
@@ -124,9 +131,10 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
   });
   const sendCode = useAction(() => visitsApi.checkInOtp(visit.id), {
     invalidate: [],
-    success: null,
+    success: t("codeSentToast"),
     onSuccess: (r) => {
-      setSent({ sentTo: r.sentTo, at: Date.now() });
+      setSent({ sentTo: r.sentTo, at: Date.now(), devCode: (r as { devCode?: string }).devCode });
+      setResendIn(60);
       setOtpError(null);
       setCode("");
     },
@@ -219,10 +227,27 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
             autoFocus
           />
           {otpError && <p className="text-sm font-medium text-danger-600">{otpError}</p>}
+          {sent.devCode && (
+            <p className="rounded-lg bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-800">
+              {t("mockCode", { code: sent.devCode })}
+            </p>
+          )}
           <div className="flex items-center justify-between">
-            <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => sendCode.mutate(undefined)}>
-              {t("newCode")}
-            </button>
+            {resendIn > 0 ? (
+              <span className="tabular text-xs font-semibold text-ink-500">
+                {t("resendIn", { time: `0:${String(resendIn).padStart(2, "0")}` })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={sendCode.isPending}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline disabled:opacity-50"
+                onClick={() => sendCode.mutate(undefined)}
+              >
+                {sendCode.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                {t("newCode")}
+              </button>
+            )}
             <Button loading={checkIn.isPending} disabled={code.length !== 6} onClick={() => checkIn.mutate({ method: "OTP", code })}>
               {t("checkIn")}
             </Button>
@@ -241,9 +266,16 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
   const [mode, setMode] = useState<"gps" | "otp">("gps");
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ sentTo: string } | null>(null);
+  const [sent, setSent] = useState<{ sentTo: string; at?: number; devCode?: string } | null>(null);
+  const [resendIn, setResendIn] = useState(0);
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setInterval(() => setResendIn((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
 
   const checkOut = useAction((dto: Parameters<typeof visitsApi.checkOut>[1]) => visitsApi.checkOut(visit.id, dto), {
     invalidate,
@@ -258,9 +290,10 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
   });
   const sendCode = useAction(() => visitsApi.checkInOtp(visit.id), {
     invalidate: [],
-    success: null,
+    success: t("codeSentToast"),
     onSuccess: (r) => {
-      setSent({ sentTo: r.sentTo });
+      setSent({ sentTo: r.sentTo, at: Date.now(), devCode: (r as { devCode?: string }).devCode });
+      setResendIn(60);
       setOtpError(null);
       setCode("");
     },
@@ -348,10 +381,27 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
             autoFocus
           />
           {otpError && <p className="text-sm font-medium text-danger-600">{otpError}</p>}
+          {sent.devCode && (
+            <p className="rounded-lg bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-800">
+              {t("mockCode", { code: sent.devCode })}
+            </p>
+          )}
           <div className="flex items-center justify-between">
-            <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => sendCode.mutate(undefined)}>
-              {t("newCode")}
-            </button>
+            {resendIn > 0 ? (
+              <span className="tabular text-xs font-semibold text-ink-500">
+                {t("resendIn", { time: `0:${String(resendIn).padStart(2, "0")}` })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={sendCode.isPending}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline disabled:opacity-50"
+                onClick={() => sendCode.mutate(undefined)}
+              >
+                {sendCode.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                {t("newCode")}
+              </button>
+            )}
             <Button loading={checkOut.isPending} disabled={code.length !== 6} onClick={() => checkOut.mutate({ method: "OTP", code })}>
               {t("checkOutConfirm")}
             </Button>

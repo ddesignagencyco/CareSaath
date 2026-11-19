@@ -86,6 +86,8 @@
     "otpIntro": "We'll text a 6-digit code to the family. Ask them to read it to you.",
     "sendCode": "Send code to family",
     "codeSent": "Code sent to the family's phone. Ask them for it — it's valid for 10 minutes.",
+    "codeSentToast": "New code sent to family",
+    "resendIn": "Resend in {time}",
     "newCode": "Send a new code",
     "checkIn": "Check in",
     "mockCode": "Mock mode: the family's code is {code}",

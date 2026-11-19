@@ -205,19 +205,6 @@ export default function BookingDetailPage() {
                             </span>
                           )}
                         </Link>
-                        {SOS_ELIGIBLE_STATUSES.includes(v.status) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setSosVisit(v);
-                            }}
-                            className="hidden items-center gap-1 rounded-lg border border-danger-300 bg-danger-50 px-2.5 py-1 text-xs font-bold text-danger-700 hover:bg-danger-600 hover:text-white sm:inline-flex"
-                          >
-                            <Siren className="size-3.5" /> {ts("sos.button")}
-                          </button>
-                        )}
                         {canMove ? (
                           <Button size="sm" variant="ghost" onClick={() => setMoving(v)}>
                             <CalendarClock className="size-4" /> <span className="hidden sm:inline">{t("reschedule")}</span>
