@@ -16,7 +16,7 @@ import { LOGO_CID } from './logo.js';
 
 const BRAND = 'CareSaath';
 export const SUPPORT_EMAIL = 'info@caresaath.com';
-const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
+export const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
 
 const C = {
   brand: '#167267',
@@ -293,16 +293,28 @@ function layout(preview: string, body: string): string {
 /* ─── Emails ─── */
 
 /** Any catalogue notification event (booking, visit, payment, safety, admin queue). */
-export function renderNotificationEmail(opts: { title: string; message?: string; variant?: Variant }): string {
+export function renderNotificationEmail(opts: {
+  title: string;
+  message?: string;
+  variant?: Variant;
+  facts?: Array<[string, string | null | undefined]>;
+  action?: { label: string; url: string };
+}): string {
   const variant = opts.variant ?? 'standard';
+  const factsHtml = opts.facts && opts.facts.length > 0 ? facts(opts.facts) : '';
+  const actionButton = opts.action
+    ? button(opts.action.url, opts.action.label)
+    : button(WEB_URL, 'View in CareSaath');
+
   return layout(
     opts.message || opts.title,
     [
       variant === 'standard' ? '' : callout(variant),
       h1(opts.title),
       opts.message ? p(opts.message) : '',
+      factsHtml ? spacer(8) + factsHtml + spacer(16) : '',
       spacer(8),
-      button(WEB_URL, 'View in CareSaath'),
+      actionButton,
     ].join(''),
   );
 }
