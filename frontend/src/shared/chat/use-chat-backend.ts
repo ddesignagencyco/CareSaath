@@ -28,6 +28,20 @@ function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: str
  * the API; nothing is invented here. `senderId` is the caller, so the caller
  * sees an outgoing row and the callee an incoming/missed/declined one.
  */
+/** Extract a readable filename from a backend row or signed media URL. */
+function extractMediaName(m: BackendChatMessage): string | undefined {
+  const explicit = (m as BackendChatMessage & { fileName?: string | null; mediaName?: string | null }).fileName ?? (m as BackendChatMessage & { mediaName?: string | null }).mediaName;
+  if (explicit) return explicit;
+  if (!m.url) return undefined;
+  try {
+    const pathname = new URL(m.url, "http://localhost").pathname;
+    const raw = pathname.split("/").pop();
+    return raw ? decodeURIComponent(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function toChatMessage(m: BackendChatMessage, myUserId: string | undefined): ChatMessage {
   return {
     id: m.id,
@@ -37,6 +51,7 @@ export function toChatMessage(m: BackendChatMessage, myUserId: string | undefine
     type: m.deletedAt ? "text" : TYPE_MAP[m.type],
     text: m.deletedAt ? undefined : (m.body ?? undefined),
     mediaUrl: m.deletedAt ? undefined : (m.url ?? undefined),
+    mediaName: m.deletedAt ? undefined : extractMediaName(m),
     mediaSize: m.sizeBytes ?? undefined,
     replyToId: m.replyToId ?? undefined,
     reactions: m.deletedAt ? [] : aggregateReactions(m.reactions, myUserId),
@@ -168,7 +183,10 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
             await qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
             setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
           })
-          .catch(() => toast.error(t("sendFailed"))); // keep the bubble, but surface the failure
+          .catch(() => {
+            setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
+            toast.error(t("sendFailed"));
+          });
         return;
       }
       // Media / voice → resumable upload to the backend; an optimistic bubble shows the local

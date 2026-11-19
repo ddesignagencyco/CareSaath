@@ -4,7 +4,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Camera, Loader2, Maximize2, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAction } from "../api/use-action";
 import { Button } from "./button";
 import { Avatar } from "./misc";
@@ -51,10 +51,6 @@ export function PhotoPicker({
   const hasPhoto = !!photoUrl;
   const canRemove = hasPhoto && !!remove;
 
-  useEffect(() => {
-    if (!photoUrl) setViewOpen(false);
-  }, [photoUrl]);
-
   const openFilePicker = () => input.current?.click();
   const onCameraClick = () => (canRemove ? setChoiceOpen(true) : openFilePicker());
 
@@ -90,7 +86,6 @@ export function PhotoPicker({
           ref={input}
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          capture="user"
           className="sr-only"
           onChange={(e) => {
             const file = e.target.files?.[0];

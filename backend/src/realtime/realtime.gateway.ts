@@ -41,8 +41,25 @@ interface SocketData {
  * access token expires (event `auth.expired`), so the client refreshes its token
  * and reconnects; a revoked or deactivated account cannot stay subscribed.
  */
+function wsCorsOrigin(
+  origin: string | undefined,
+  cb: (err: Error | null, allow?: boolean) => void,
+): void {
+  // Non-browser clients (mobile apps, curl, server-to-server) send no Origin header.
+  if (!origin) return cb(null, true);
+  const allowed = (process.env['CORS_ORIGINS'] ?? 'https://caresaath-ui.vercel.app')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (allowed.includes(origin)) return cb(null, true);
+  if (process.env['NODE_ENV'] !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
+    return cb(null, true);
+  }
+  return cb(null, false);
+}
+
 @SkipThrottle()
-@WebSocketGateway({ cors: { origin: true, credentials: true } })
+@WebSocketGateway({ cors: { origin: wsCorsOrigin, credentials: true } })
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
 

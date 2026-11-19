@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Bell, ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -35,10 +35,16 @@ export default function NotificationsPage() {
   // The API returns one row per channel (PUSH, SMS, WhatsApp); the in-app feed is PUSH only.
   const items = (list.data?.items ?? []).filter((n) => n.channel === "PUSH");
 
+  const qc = useQueryClient();
   const newest = items[0]?.createdAt;
   useEffect(() => {
-    if (newest) markSeen(newest);
-  }, [newest]);
+    if (!newest) return;
+    markSeen(newest);
+    void notificationsApi
+      .markRead({ before: newest })
+      .then(() => qc.invalidateQueries({ queryKey: keys.notifications }))
+      .catch(() => undefined);
+  }, [newest, qc]);
 
   return (
     <>

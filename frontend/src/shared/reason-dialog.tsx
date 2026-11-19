@@ -45,6 +45,11 @@ export function ReasonDialog({
   withReason?: boolean;
 }) {
   const [reason, setReason] = useState("");
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setReason("");
+  }
   const t = useTranslations();
   const tooShort = withReason && reason.trim().length < minLength;
 

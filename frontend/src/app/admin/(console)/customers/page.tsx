@@ -86,7 +86,9 @@ function CustomerDrawer({ customer, onClose }: { customer: AdminCustomer; onClos
         <p className="mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">
           {detail.data ? t("bookingsCount", { count: detail.data.bookingsTotal }) : t("recentBookings")}
         </p>
-        {!detail.data ? (
+        {detail.isError ? (
+          <ErrorState error={detail.error} onRetry={() => detail.refetch()} />
+        ) : !detail.data ? (
           <div className="space-y-2">
             <Skeleton className="h-12 rounded-lg" />
             <Skeleton className="h-12 rounded-lg" />

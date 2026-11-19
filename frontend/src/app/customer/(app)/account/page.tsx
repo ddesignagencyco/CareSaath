@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, MapPin, MessagesSquare, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -19,13 +19,14 @@ import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { useMe, useSessionRaw } from "@/features/customer/lib/auth";
+import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
   { href: "/customer/messages", key: "messages", icon: MessagesSquare },
   { href: "/customer/account/patients", key: "patients", icon: Users },
   { href: "/customer/account/addresses", key: "addresses", icon: MapPin },
+  { href: "/customer/account/contacts", key: "contacts", icon: Phone },
   { href: "/customer/account/disputes", key: "disputes", icon: Scale },
   { href: "/customer/account/payments", key: "payments", icon: Wallet },
   { href: "/customer/notifications", key: "notifications", icon: Bell },
@@ -84,9 +85,11 @@ function ProfileForm({ me }: { me: Me }) {
 
 export default function AccountPage() {
   const t = useTranslations("customerB.account");
+  const ts = useTranslations("customerA.shell");
   const tc = useTranslations("common");
   const f = useFmt();
   const me = useMe();
+  const signOut = useSignOut();
   // Until the reload-time session rehydrate finishes, `hydrated` is false on both
   // the server render and the first client render, so gating user data on it keeps
   // the two in sync (a query that resolves during streamed hydration would otherwise
@@ -120,7 +123,7 @@ export default function AccountPage() {
                 </div>
               </div>
               <div className="pt-5">
-                {profile ? <ProfileForm key={`${profile.fullName}-${profile.preferredLanguage}`} me={profile} /> : <Skeleton className="h-48" />}
+                {profile ? <ProfileForm key={`${profile.fullName}-${profile.email ?? ""}-${profile.preferredLanguage}`} me={profile} /> : <Skeleton className="h-48" />}
               </div>
             </div>
           </Card>
@@ -132,10 +135,23 @@ export default function AccountPage() {
           {MOBILE_LINKS.map(({ href, key, icon: Icon }) => (
             <Link key={href} href={href} className="flex items-center gap-3 px-5 py-4 text-sm font-semibold text-ink-800 hover:bg-ink-25">
               <Icon className="size-5 text-ink-400" />
-              <span className="flex-1">{key === "notifications" ? tc("nav.notifications") : t(`links.${key}`)}</span>
+              <span className="flex-1">
+                {key === "notifications" ? tc("nav.notifications") : key === "contacts" ? ts("items.contacts") : t(`links.${key}`)}
+              </span>
               <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
             </Link>
           ))}
+        </Card>
+
+        <Card className="overflow-hidden lg:hidden">
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex w-full items-center gap-3 px-5 py-4 text-sm font-semibold text-danger-600 hover:bg-danger-50"
+          >
+            <LogOut className="size-5" />
+            <span>{tc("actions.signOut")}</span>
+          </button>
         </Card>
       </div>
     </>

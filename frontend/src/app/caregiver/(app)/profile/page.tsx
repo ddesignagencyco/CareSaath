@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BadgeCheck, Camera, Maximize2, Star } from "lucide-react";
 import { TierBadge } from "@shared/ui/tier-badge";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { useAction } from "@shared/api/use-action";
 import { Badge } from "@shared/ui/badge";
@@ -25,7 +25,8 @@ import { PhotoAvatar, usePhotoUrl } from "@/features/caregiver/components/profil
 import { PhotoCropModal } from "@shared/ui/photo-crop-modal";
 import { PhotoViewer } from "@shared/ui/photo-viewer";
 import { ServiceAreasCard } from "@/features/caregiver/components/service-areas-card";
-import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
+import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { CITY_OPTIONS, SPECIALTY_OPTIONS } from "@shared/lib/options";
 
@@ -55,10 +56,6 @@ function PhotoButton({ name, photoKey }: { name: string; photoKey: string | null
     success: t("photoUpdated"),
   });
   const hasPhoto = !!photoUrl;
-
-  useEffect(() => {
-    if (!photoUrl) setViewOpen(false);
-  }, [photoUrl]);
 
   return (
     <>
@@ -295,7 +292,7 @@ export default function ProfilePage() {
               </Card>
             )}
             <ProfileForm key={p.updatedAt} me={me.data} profile={p} />
-            <ServiceAreasCard />
+            {p.serviceArea?.cities?.includes("Lahore") && <ServiceAreasCard />}
           </div>
 
           <div className="space-y-5">
@@ -324,6 +321,7 @@ export default function ProfilePage() {
                 </div>
               </CardBody>
             </Card>
+            <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
           </div>
         </div>
       )}

@@ -207,7 +207,19 @@ export function AddressForm({ address, onClose, onSaved }: { address: Address | 
           {(id) => <Input id={id} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} placeholder={t("labelPlaceholder")} />}
         </Field>
         <Field label={t("city")} required>
-          {(id) => <Select inputId={id} value={city} onChange={setCity} options={CITY_OPTIONS} placeholder={t("cityPlaceholder")} isSearchable />}
+          {(id) => (
+            <Select
+              inputId={id}
+              value={city}
+              onChange={(next) => {
+                setCity(next);
+                if (next !== city) setCoords(null);
+              }}
+              options={CITY_OPTIONS}
+              placeholder={t("cityPlaceholder")}
+              isSearchable
+            />
+          )}
         </Field>
         <Field label={t("address")} required className="sm:col-span-2" hint={t("addressHint")}>
           {(id) => <Input id={id} value={line} maxLength={240} onChange={(e) => setLine(e.target.value)} placeholder={t("addressPlaceholder")} />}

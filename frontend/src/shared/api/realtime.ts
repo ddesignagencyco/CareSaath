@@ -80,9 +80,21 @@ export function useRealtime(opts: {
     socket.on("visit.location", (p?: { visitId?: string }) => {
       if (p?.visitId) queryClient.setQueryData(["visit-location", p.visitId], p);
     });
+    let disposed = false;
+    let authErrorRetried = false;
+
+    socket.on("connect", () => {
+      authErrorRetried = false;
+    });
     // Bad/inactive token: attempt one refresh before closing permanently
     socket.on("auth.error", async () => {
+      if (authErrorRetried) {
+        socket.close();
+        return;
+      }
+      authErrorRetried = true;
       const refreshed = await refreshRef.current().catch(() => false);
+      if (disposed) return;
       if (refreshed) {
         socket.connect();
       } else {
@@ -92,9 +104,12 @@ export function useRealtime(opts: {
     // Token expired: refresh first, then reconnect with the new access cookie.
     socket.on("auth.expired", async () => {
       const refreshed = await refreshRef.current().catch(() => false);
+      if (disposed) return;
       if (refreshed) {
         socket.disconnect();
         socket.connect();
+      } else {
+        socket.close();
       }
     });
     // Events emitted while the socket was down are recovered here. `ready`
@@ -104,8 +119,10 @@ export function useRealtime(opts: {
     socket.io.on("reconnect", scheduleRefetchAll);
 
     return () => {
+      disposed = true;
       if (refetchAllTimer.current) clearTimeout(refetchAllTimer.current);
       refetchAllTimer.current = null;
+      socket.io?.off?.("reconnect", scheduleRefetchAll);
       socket.removeAllListeners();
       socket.close();
     };

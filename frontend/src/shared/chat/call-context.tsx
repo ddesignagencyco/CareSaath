@@ -26,7 +26,7 @@ const RINGTONE_SRC = "/sounds/ringtone.wav";
 /** Grace period for temporary network/signal blips before concluding the call dropped (8s). */
 const RECONNECT_GRACE_MS = 8_000;
 
-function createSilentAudioStream(): MediaStream {
+function createSilentAudioStream(): { stream: MediaStream; cleanup: () => void } {
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioCtx) {
@@ -39,12 +39,23 @@ function createSilentAudioStream(): MediaStream {
       if (track) {
         track.enabled = false;
       }
-      return dst.stream;
+      return {
+        stream: dst.stream,
+        cleanup: () => {
+          try {
+            oscillator.stop();
+            oscillator.disconnect();
+          } catch {
+            /* already stopped */
+          }
+          void ctx.close().catch(() => undefined);
+        },
+      };
     }
   } catch {
     /* fallback to empty stream */
   }
-  return new MediaStream();
+  return { stream: new MediaStream(), cleanup: () => undefined };
 }
 
 /** Close the service worker's "Incoming call" notification for `callId` (tagged `call-<id>`), if any. */
@@ -98,8 +109,11 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
+  const silentCleanupRef = useRef<(() => void) | null>(null);
   const callIdRef = useRef<string | null>(null);
+  const callGenRef = useRef(0);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
+  const pendingRemoteCandidates = useRef<RTCIceCandidateInit[]>([]);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ringTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Looping ringback (caller) / ringtone (callee); null when silent.
@@ -158,6 +172,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   );
 
   const teardown = useCallback(() => {
+    callGenRef.current += 1;
     clearTimers();
     stopTone();
     pcRef.current?.getSenders().forEach((s) => s.track?.stop());
@@ -165,9 +180,12 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
+    silentCleanupRef.current?.();
+    silentCleanupRef.current = null;
     callIdRef.current = null;
     pendingOffer.current = null;
     pendingCandidates.current = [];
+    pendingRemoteCandidates.current = [];
     calleeOnlineRef.current = true;
     setActive(null);
   }, [clearTimers, stopTone]);
@@ -334,7 +352,9 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       // When testing on a PC/laptop without a mic or when device is not found,
       // create a silent dummy audio stream so WebRTC connects smoothly for testing.
       if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
-        const fallbackStream = createSilentAudioStream();
+        const { stream: fallbackStream, cleanup } = createSilentAudioStream();
+        silentCleanupRef.current?.();
+        silentCleanupRef.current = cleanup;
         localRef.current = fallbackStream;
         return fallbackStream;
       }
@@ -400,6 +420,12 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
         callIdRef.current = p.callId;
         flushCandidatesRef.current(p.callId);
         await pcRef.current?.setRemoteDescription(new RTCSessionDescription(p.sdp));
+        if (pcRef.current && pendingRemoteCandidates.current.length > 0) {
+          const queued = pendingRemoteCandidates.current.splice(0);
+          for (const c of queued) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+          }
+        }
         setActive((a) => (a ? { ...a, callId: p.callId, status: "connected" } : a));
       } catch {
         teardownRef.current();
@@ -408,7 +434,11 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
 
     socket.on("call:ice-candidate", async (p: { callId: string; candidate: RTCIceCandidateInit }) => {
       try {
-        await pcRef.current?.addIceCandidate(new RTCIceCandidate(p.candidate));
+        if (!pcRef.current || !pcRef.current.remoteDescription) {
+          pendingRemoteCandidates.current.push(p.candidate);
+          return;
+        }
+        await pcRef.current.addIceCandidate(new RTCIceCandidate(p.candidate));
       } catch {
         // candidate can arrive before remote description; safely handled
       }
@@ -455,36 +485,78 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       teardownRef.current();
     });
 
+    let disposed = false;
+    let authErrorRetried = false;
+
+    socket.on("auth.error", async () => {
+      if (authErrorRetried) {
+        socket.close();
+        return;
+      }
+      authErrorRetried = true;
+      const refreshed = await http.refreshSession().catch(() => false);
+      if (disposed) return;
+      if (refreshed) {
+        socket.connect();
+      } else {
+        socket.close();
+      }
+    });
+
+    socket.on("auth.expired", async () => {
+      const refreshed = await http.refreshSession().catch(() => false);
+      if (disposed) return;
+      if (refreshed) {
+        socket.disconnect();
+        socket.connect();
+      } else {
+        socket.close();
+      }
+    });
+
     // On every (re)connect, ask for a call still ringing for this user, e.g. the site was just opened
     // from an "incoming call" push. All call:* listeners above are attached before this can fire.
     socket.on("connect", () => {
+      authErrorRetried = false;
       socket.emit("call:sync");
     });
 
     return () => {
+      disposed = true;
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
       teardownRef.current();
     };
-  }, [enabled, session, armRingTimer, ringTimedOut]);
+  }, [enabled, session, http, armRingTimer, ringTimedOut]);
 
   const startCall = useCallback(
     async (opts: { visitId: string; calleeId?: string; peerName: string; peerPhotoUrl?: string | null; video: boolean }) => {
       if (active) return;
+      const gen = ++callGenRef.current;
       try {
         pendingCandidates.current = [];
+        pendingRemoteCandidates.current = [];
         setActive({ status: "outgoing", callId: null, peerName: opts.peerName, peerUserId: opts.calleeId, peerPhotoUrl: opts.peerPhotoUrl, video: opts.video, localStream: null, remoteStream: null });
 
         // Give up if the server never acknowledges the invite; call:outgoing re-arms this for the ring window.
         armRingTimer(RING_TIMEOUT_MS, ringTimedOut);
 
         const stream = await getMedia(opts.video);
+        if (gen !== callGenRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         const pc = newPeer();
         pcRef.current = pc;
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         setActive((a) => (a ? { ...a, localStream: stream } : a));
         const offer = await pc.createOffer();
+        if (gen !== callGenRef.current) {
+          pc.close();
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         await pc.setLocalDescription(offer);
         socketRef.current?.emit("call:invite", {
           visitId: opts.visitId,
@@ -492,6 +564,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
           sdp: offer,
         });
       } catch (err) {
+        if (gen !== callGenRef.current) return;
         const error = err as { name?: string; message?: string };
         if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
           toastRef.current.error(tRef.current("micBlocked"));
@@ -507,6 +580,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const accept = useCallback(async () => {
     const offer = pendingOffer.current;
     if (!offer) return;
+    const gen = ++callGenRef.current;
     // Silence the ringtone and drop the incoming safety net while the mic prompt is up.
     stopTone();
     if (ringTimerRef.current) {
@@ -515,16 +589,32 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     }
     try {
       const stream = await getMedia(offer.video);
+      if (gen !== callGenRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       const pc = newPeer();
       pcRef.current = pc;
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp));
+      if (pendingRemoteCandidates.current.length > 0) {
+        const queued = pendingRemoteCandidates.current.splice(0);
+        for (const c of queued) {
+          await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+        }
+      }
       const answer = await pc.createAnswer();
+      if (gen !== callGenRef.current) {
+        pc.close();
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       await pc.setLocalDescription(answer);
       socketRef.current?.emit("call:answer", { callId: offer.callId, sdp: answer });
       setActive((a) => (a ? { ...a, status: "connected", localStream: stream } : a));
       pendingOffer.current = null;
     } catch {
+      if (gen !== callGenRef.current) return;
       if (offer.callId) socketRef.current?.emit("call:reject", { callId: offer.callId });
       teardownRef.current();
     }

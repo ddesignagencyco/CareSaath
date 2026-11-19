@@ -501,9 +501,10 @@ function Composer({ onSend, replyTo, onCancelReply }: { onSend: (input: SendInpu
         // MediaRecorder often reports "audio/webm;codecs=opus" (or mp4 with a
         // codec suffix); the backend whitelist expects a bare mime type.
         const mime = (rec.mimeType || "audio/webm").split(";")[0].trim();
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
         const blob = new Blob(chunksRef.current, { type: mime });
         const reader = new FileReader();
-        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: "voice-note.webm" });
+        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: `voice-note.${ext}` });
         reader.readAsDataURL(blob);
         onCancelReply();
       };

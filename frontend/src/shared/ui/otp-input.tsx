@@ -55,7 +55,7 @@ export function OtpInput({
           autoComplete={i === 0 ? "one-time-code" : "off"}
           aria-label={t("digit", { n: i + 1 })}
           aria-invalid={invalid}
-          maxLength={1}
+          maxLength={i === 0 ? length : 1}
           onFocus={(e) => e.target.select()}
           onChange={(e) => {
             const typed = e.target.value.replace(/\D/g, "");

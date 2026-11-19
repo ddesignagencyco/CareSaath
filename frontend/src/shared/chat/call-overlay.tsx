@@ -52,11 +52,11 @@ export function CallOverlay({
   useEffect(() => {
     if (remoteAudio.current && call.remoteStream) remoteAudio.current.srcObject = call.remoteStream;
     if (remoteVideo.current && call.remoteStream) remoteVideo.current.srcObject = call.remoteStream;
-  }, [call.remoteStream]);
+  }, [call.remoteStream, isMinimized]);
 
   useEffect(() => {
     if (localVideo.current && call.localStream) localVideo.current.srcObject = call.localStream;
-  }, [call.localStream]);
+  }, [call.localStream, isMinimized]);
 
   const toggleMic = () => {
     if (call.localStream) {
@@ -97,12 +97,12 @@ export function CallOverlay({
   /* ------------------- Minimized Floating View (PiP) ------------------- */
   if (isMinimized) {
     return (
-      <div className="fixed top-5 end-5 z-[70] flex items-center gap-3.5 rounded-2xl border border-slate-700/90 bg-slate-900 px-4 py-3 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7)] animate-in fade-in slide-in-from-top-3">
+      <div className="fixed top-5 end-4 z-[70] flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border border-slate-700/90 bg-slate-900 px-3.5 py-2.5 text-white shadow-[0_15px_40px_rgba(0,0,0,0.7)] animate-in fade-in slide-in-from-top-3 sm:end-5 sm:gap-3.5 sm:px-4 sm:py-3">
         <audio ref={remoteAudio} autoPlay muted={isSpeakerMuted} />
         <button
           type="button"
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-3 text-start transition-opacity hover:opacity-90"
+          className="flex min-w-0 flex-1 items-center gap-3 text-start transition-opacity hover:opacity-90"
         >
           <div className="relative shrink-0">
             <UserAvatar userId={call.peerUserId} name={call.peerName} photoUrl={call.peerPhotoUrl} size="sm" />
@@ -169,22 +169,22 @@ export function CallOverlay({
       <div className="pointer-events-none absolute left-1/2 top-1/2 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-teal-500/10 blur-[120px]" />
 
       {/* Top Header Bar */}
-      <div className="relative z-10 flex items-center justify-between">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setIsMinimized(true)}
-          className="flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-800/90 px-4 py-2 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 hover:text-white shadow-md active:scale-95"
+          className="flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-800/90 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 hover:text-white shadow-md active:scale-95 sm:px-4 sm:py-2"
         >
           <ChevronDown className="size-4" />
           <span>Minimize</span>
         </button>
 
-        <div className="flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-800/90 px-4 py-1.5 text-xs font-medium text-slate-300 shadow-md">
+        <div className="hidden items-center gap-2 rounded-full border border-slate-700/80 bg-slate-800/90 px-4 py-1.5 text-xs font-medium text-slate-300 shadow-md sm:flex">
           <ShieldCheck className="size-4 text-emerald-400" />
           <span>End-to-end encrypted</span>
         </div>
 
-        <div className="flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-800/90 px-3.5 py-1.5 text-xs font-medium text-slate-400 shadow-md">
+        <div className="flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-800/90 px-3 py-1.5 text-xs font-medium text-slate-400 shadow-md sm:px-3.5">
           <span className="size-2 rounded-full bg-emerald-400" />
           <span>HD Voice</span>
         </div>

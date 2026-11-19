@@ -145,9 +145,21 @@ function WeeklyEditor({ initial }: { initial: Availability }) {
                   size="sm"
                   variant="ghost"
                   className="self-start"
+                  disabled={!!wins[wins.length - 1] && wins[wins.length - 1].end >= "23:55"}
                   onClick={() => {
                     const last = wins[wins.length - 1];
-                    update(dow, [...wins, { start: last?.end ?? "09:00", end: last ? "20:00" : "17:00" }]);
+                    if (!last) {
+                      update(dow, [...wins, { start: "09:00", end: "17:00" }]);
+                      return;
+                    }
+                    if (last.end < "20:00") {
+                      update(dow, [...wins, { start: last.end, end: "20:00" }]);
+                      return;
+                    }
+                    const [h, m] = last.end.split(":").map(Number);
+                    const endMin = Math.min(23 * 60 + 59, h * 60 + m + 120);
+                    const nextEnd = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
+                    update(dow, [...wins, { start: last.end, end: nextEnd }]);
                   }}
                 >
                   <Plus className="size-4" /> {t("addWindow")}

@@ -113,10 +113,22 @@ export function DataTable<T>({
                   return (
                     <th
                       key={h.id}
+                      tabIndex={sortable ? 0 : undefined}
+                      aria-sort={sortable ? (sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none") : undefined}
                       onClick={sortable ? h.column.getToggleSortingHandler() : undefined}
+                      onKeyDown={
+                        sortable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                h.column.getToggleSortingHandler()?.(e);
+                              }
+                            }
+                          : undefined
+                      }
                       className={cn(
                         "border-b border-ink-100 bg-ink-25 px-5 py-3 text-start text-xs font-bold tracking-wide whitespace-nowrap text-ink-500 uppercase",
-                        sortable && "cursor-pointer select-none hover:text-ink-700",
+                        sortable && "cursor-pointer select-none hover:text-ink-700 focus-visible:outline-2 focus-visible:outline-brand-500",
                         (h.column.columnDef.meta as { className?: string } | undefined)?.className,
                       )}
                     >
@@ -141,8 +153,19 @@ export function DataTable<T>({
               rows.map((row) => (
                 <tr
                   key={row.id}
+                  tabIndex={onRowClick ? 0 : undefined}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                  className={cn("border-b border-ink-100 last:border-0", onRowClick && "cursor-pointer transition-colors hover:bg-brand-50/40")}
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onRowClick(row.original);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={cn("border-b border-ink-100 last:border-0", onRowClick && "cursor-pointer transition-colors hover:bg-brand-50/40 focus-visible:outline-2 focus-visible:outline-brand-500")}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className={cn("px-5 py-3.5 align-middle", (cell.column.columnDef.meta as { className?: string } | undefined)?.className)}>

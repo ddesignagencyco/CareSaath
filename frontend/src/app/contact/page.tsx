@@ -6,7 +6,7 @@ import { SiteFooter } from "../site-footer";
 import { SiteNav } from "../site-nav";
 
 export const metadata: Metadata = {
-  title: "Contact — CareSaath",
+  title: "Contact",
   description: "Reach the CareSaath team for support, caregiver onboarding, safety concerns or partnerships.",
 };
 

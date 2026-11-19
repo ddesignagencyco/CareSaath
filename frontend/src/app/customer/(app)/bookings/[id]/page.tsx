@@ -162,8 +162,8 @@ export default function BookingDetailPage() {
                     const canMove = open && (v.status === "REQUESTED" || v.status === "CONFIRMED") && now && visitStart(v.scheduledDate, v.timeWindowStart) > now;
                     return (
                       <li key={v.id} className={clsx("flex items-center gap-3 px-5 py-3", (v.status === "CANCELLED" || v.status === "DECLINED") && "opacity-60")}>
-                        <Link href={`/customer/visits/${v.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                          <div className="w-36 shrink-0">
+                        <Link href={`/customer/visits/${v.id}`} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+                          <div className="min-w-[8rem] shrink-0 sm:w-36">
                             <p className="text-sm font-bold text-ink-900">{f.relativeDay(v.scheduledDate, now)}</p>
                             <p className="tabular text-xs whitespace-nowrap text-ink-500">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</p>
                           </div>

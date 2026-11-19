@@ -119,17 +119,20 @@ async function bootstrap() {
     .addTag('System & Notifications', 'Dispatched SMS, Push, and WhatsApp notifications')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none',
-      filter: true,
-      displayRequestDuration: true,
-      tryItOutEnabled: true,
-    },
-    customSiteTitle: 'CareSaath API Docs',
-  });
+  const enableSwagger = !isProduction || process.env['SWAGGER_ENABLED'] === 'true';
+  if (enableSwagger) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'none',
+        filter: true,
+        displayRequestDuration: true,
+        tryItOutEnabled: true,
+      },
+      customSiteTitle: 'CareSaath API Docs',
+    });
+  }
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port, '0.0.0.0');
@@ -137,7 +140,9 @@ async function bootstrap() {
   const base = `http://localhost:${port}`;
   const logger = new Logger('Bootstrap');
   logger.log(`API base:       ${base}/api/v1`);
-  logger.log(`Swagger UI:     ${base}/docs`);
-  logger.log(`OpenAPI JSON:   ${base}/docs-json`);
+  if (enableSwagger) {
+    logger.log(`Swagger UI:     ${base}/docs`);
+    logger.log(`OpenAPI JSON:   ${base}/docs-json`);
+  }
 }
 await bootstrap();

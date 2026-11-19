@@ -236,7 +236,7 @@ export function LoginScreen(props: LoginScreenProps) {
                   onChange={setPhone}
                   onBlur={() => setTouched(true)}
                   error={phoneError}
-                  autoFocus
+                  autoFocus={!props.collectName && !props.collectEmail}
                 />
               </div>
 
@@ -290,7 +290,7 @@ export function LoginScreen(props: LoginScreenProps) {
                 {resendIn > 0 ? (
                   <span className="tabular font-semibold text-ink-700">{t("login.resendIn", { time: `0:${String(resendIn).padStart(2, "0")}` })}</span>
                 ) : (
-                  <button type="button" onClick={() => sendCode()} className="font-semibold text-brand-700 hover:underline">
+                  <button type="button" disabled={loading} onClick={() => sendCode()} className="font-semibold text-brand-700 hover:underline disabled:opacity-50">
                     {t("login.resend")}
                   </button>
                 )}

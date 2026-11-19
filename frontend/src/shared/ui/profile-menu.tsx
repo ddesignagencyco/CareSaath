@@ -73,7 +73,7 @@ export function ProfileMenu({
       {open && (
         <div
           role="menu"
-          className="absolute end-0 z-40 mt-2 w-64 origin-top-right rounded-2xl border border-ink-100 bg-white p-1.5 shadow-pop"
+          className="absolute end-0 z-40 mt-2 w-64 origin-top-right rtl:origin-top-left rounded-2xl border border-ink-100 bg-white p-1.5 shadow-pop"
         >
           <div className="flex items-center gap-3 px-3 py-3">
             {renderAvatar ? renderAvatar("md") : <Avatar name={name} />}
