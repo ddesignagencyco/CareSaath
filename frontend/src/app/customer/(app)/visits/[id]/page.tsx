@@ -32,7 +32,7 @@ import {
 } from "@/features/customer/components/visit-panels";
 import { visitsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { ACTIVE_VISIT, VISIT_TONE } from "@/features/customer/lib/labels";
+import { ACTIVE_VISIT, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@/features/customer/lib/labels";
 
 export default function CustomerVisitPage() {
   const { id } = useParams<{ id: string }>();
@@ -79,6 +79,7 @@ export default function CustomerVisitPage() {
 
   const c = caregiver.data;
   const active = v && ACTIVE_VISIT.includes(v.status);
+  const canSos = v && SOS_ELIGIBLE_STATUSES.includes(v.status);
   const canReschedule = v && (v.status === "REQUESTED" || v.status === "CONFIRMED") && now && visitStart(v.scheduledDate, v.timeWindowStart) > now;
 
   return (
@@ -103,7 +104,7 @@ export default function CustomerVisitPage() {
             </Badge>
           </header>
 
-          {active && (
+          {canSos && (
             // Full-width on mobile for fast emergency access; compact and right-aligned on larger screens.
             <div className="flex sm:justify-end">
               <button

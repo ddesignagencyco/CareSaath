@@ -79,3 +79,13 @@ export const VISIT_TONE: Record<VisitStatus, Tone> = {
 
 /** Statuses where the caregiver is actively handling the visit. */
 export const ACTIVE_STATUSES: VisitStatus[] = ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT"];
+
+/** Statuses where an SOS can be raised (visit is confirmed or ongoing, not completed or cancelled). */
+export const SOS_ELIGIBLE_STATUSES: VisitStatus[] = [
+  "CONFIRMED",
+  "EN_ROUTE",
+  "CHECKED_IN",
+  "IN_PROGRESS",
+  "CHECKED_OUT",
+];
+

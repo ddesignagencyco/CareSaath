@@ -27,8 +27,8 @@ function Party({ label, user }: { label: string; user: Dispute["raisedBy"] }) {
   const tl = useTranslations("labels");
   const isCaregiver = user.role === "CAREGIVER";
   const profileUrl = isCaregiver
-    ? `/admin/caregivers?q=${encodeURIComponent(user.fullName)}`
-    : `/admin/users?q=${encodeURIComponent(user.fullName)}`;
+    ? `/admin/caregivers?id=${encodeURIComponent(user.id)}`
+    : `/admin/users?id=${encodeURIComponent(user.id)}`;
 
   return (
     <Link

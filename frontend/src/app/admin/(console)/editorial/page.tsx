@@ -3,51 +3,52 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Bold,
+  Code,
+  CornerDownLeft,
   Eye,
-  FileEdit,
+  Heading1,
   Heading2,
   Heading3,
-  HelpCircle,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
   Mail,
   MapPin,
+  Minus,
   Phone,
   Quote,
+  Redo,
+  RemoveFormatting,
   Save,
-  Send,
-  Sparkles,
+  Strikethrough,
+  Underline,
+  Undo,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { Button } from "@shared/ui/button";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { Field, Input, Textarea } from "@shared/ui/field";
-import { EmptyState, ErrorState, FilterTabs, Skeleton } from "@shared/ui/misc";
+import { FilterTabs, Skeleton } from "@shared/ui/misc";
 import { editorialApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
-import { useToast } from "@shared/ui/toast";
-import type { ContactInfo, EditorialPage } from "@shared/types";
+import type { ContactInfo } from "@shared/types";
 
 const PAGES = [
-  { slug: "about", label: "About Us", description: "Company overview, healthcare mission, and background." },
+  { slug: "about", label: "About Us", description: "Company background, healthcare verification mission, and safety promise." },
   { slug: "terms", label: "Terms of Service", description: "Legal terms for customer booking, visits, and caregiver conduct." },
-  { slug: "privacy", label: "Privacy Policy", description: "Data security, encryption, and medical information privacy." },
+  { slug: "privacy", label: "Privacy Policy", description: "Medical data security, encryption, and patient privacy standards." },
 ] as const;
 
 export default function EditorialAdminPage() {
-  const toast = useToast();
   const [tab, setTab] = useState<"pages" | "contact">("pages");
   const [selectedSlug, setSelectedSlug] = useState<string>("about");
 
-  // Page Editor State
-  const [pageTitle, setPageTitle] = useState("");
-  const [pageContent, setPageContent] = useState("");
-  const [previewMode, setPreviewMode] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Rich Text Editor State
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [rawHtmlMode, setRawHtmlMode] = useState(false);
+  const [htmlContent, setHtmlContent] = useState("");
 
   // Contact Info State
   const [contact, setContact] = useState<Partial<ContactInfo>>({});
@@ -59,12 +60,16 @@ export default function EditorialAdminPage() {
     enabled: tab === "pages",
   });
 
+  // Sync loaded page content to editor
   useEffect(() => {
     if (pageQuery.data) {
-      setPageTitle(pageQuery.data.title);
-      setPageContent(pageQuery.data.content);
+      const content = pageQuery.data.content || "";
+      setHtmlContent(content);
+      if (editorRef.current && !rawHtmlMode) {
+        editorRef.current.innerHTML = content;
+      }
     }
-  }, [pageQuery.data, selectedSlug]);
+  }, [pageQuery.data, selectedSlug, rawHtmlMode]);
 
   // Query Contact Info
   const contactQuery = useQuery({
@@ -81,10 +86,15 @@ export default function EditorialAdminPage() {
 
   // Save Page Action
   const savePage = useAction(
-    () => editorialApi.updatePage(selectedSlug, { title: pageTitle.trim(), content: pageContent.trim() }),
+    () => {
+      const finalContent = rawHtmlMode
+        ? htmlContent
+        : (editorRef.current?.innerHTML ?? htmlContent);
+      return editorialApi.updatePage(selectedSlug, { content: finalContent });
+    },
     {
       invalidate: [keys.editorial],
-      success: `"${pageTitle || selectedSlug}" published successfully`,
+      success: `Page "${PAGES.find((p) => p.slug === selectedSlug)?.label ?? selectedSlug}" published successfully`,
     },
   );
 
@@ -94,28 +104,55 @@ export default function EditorialAdminPage() {
     success: "Platform contact information updated successfully",
   });
 
-  // Helper to insert markdown/formatting tags
-  const insertFormatting = (prefix: string, suffix: string = "") => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const text = el.value;
-    const selection = text.substring(start, end) || "text";
-    const replacement = `${prefix}${selection}${suffix}`;
-    const nextValue = text.substring(0, start) + replacement + text.substring(end);
-    setPageContent(nextValue);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + prefix.length, start + prefix.length + selection.length);
-    }, 0);
+  // Execute formatting command on contentEditable
+  const execCmd = (command: string, value: string | undefined = undefined) => {
+    if (rawHtmlMode) return;
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+    if (editorRef.current) {
+      setHtmlContent(editorRef.current.innerHTML);
+    }
   };
+
+  const handleLink = () => {
+    if (rawHtmlMode) return;
+    const url = prompt("Enter URL link (e.g. https://... or mailto:...):");
+    if (url) {
+      execCmd("createLink", url);
+    }
+  };
+
+  const handleEditorInput = () => {
+    if (editorRef.current) {
+      setHtmlContent(editorRef.current.innerHTML);
+    }
+  };
+
+  const toggleRawHtml = () => {
+    if (rawHtmlMode) {
+      // Switching back to visual editor: sync raw HTML into contentEditable
+      setRawHtmlMode(false);
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.innerHTML = htmlContent;
+        }
+      }, 0);
+    } else {
+      // Switching to raw HTML view: capture current innerHTML
+      if (editorRef.current) {
+        setHtmlContent(editorRef.current.innerHTML);
+      }
+      setRawHtmlMode(true);
+    }
+  };
+
+  const currentPage = PAGES.find((p) => p.slug === selectedSlug);
 
   return (
     <>
       <PageHeader
         title="Editorial & Content Management"
-        description="Manage the live copy of public pages (About, Terms, Privacy) and update the site's official contact information."
+        description="Directly edit and format the live text of public website pages and platform contact details."
       />
 
       <div className="mb-6">
@@ -123,174 +160,238 @@ export default function EditorialAdminPage() {
           value={tab}
           onChange={(v) => setTab(v as "pages" | "contact")}
           options={[
-            { value: "pages", label: "Editorial Pages" },
-            { value: "contact", label: "Contact Information" },
+            { value: "pages", label: "Public Pages Copy" },
+            { value: "contact", label: "Official Contact Details" },
           ]}
         />
       </div>
 
       {tab === "pages" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-          {/* Page Picker Sidebar */}
+          {/* Page Selector Sidebar */}
           <div className="space-y-2 lg:col-span-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400 mb-3">Public Pages</h3>
-            {PAGES.map((p) => (
-              <button
-                key={p.slug}
-                type="button"
-                onClick={() => setSelectedSlug(p.slug)}
-                className={`w-full text-start rounded-xl p-3.5 transition-all ${
-                  selectedSlug === p.slug
-                    ? "bg-brand-50 border border-brand-200 text-brand-950 shadow-xs"
-                    : "bg-white border border-ink-100 text-ink-700 hover:bg-ink-50 hover:border-ink-200"
-                }`}
-              >
-                <p className="font-bold text-sm text-ink-900">{p.label}</p>
-                <p className="text-xs text-ink-500 line-clamp-2 mt-0.5">{p.description}</p>
-              </button>
-            ))}
+            <h3 className="text-xs font-bold uppercase tracking-wider text-ink-400 mb-2">Select Page</h3>
+            {PAGES.map((p) => {
+              const active = selectedSlug === p.slug;
+              return (
+                <button
+                  key={p.slug}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlug(p.slug);
+                    setRawHtmlMode(false);
+                  }}
+                  className={`w-full text-start rounded-xl p-3.5 transition-all ${
+                    active
+                      ? "bg-brand-50 border border-brand-200 text-brand-950 shadow-xs"
+                      : "bg-white border border-ink-100 text-ink-700 hover:bg-ink-50 hover:border-ink-200"
+                  }`}
+                >
+                  <p className="font-bold text-sm text-ink-900">{p.label}</p>
+                  <p className="text-xs text-ink-500 mt-1 line-clamp-2">{p.description}</p>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Editor Area */}
+          {/* Rich Text Editor Main Card */}
           <div className="lg:col-span-3">
             <Card>
               <CardHeader
-                title={`Editing: ${PAGES.find((p) => p.slug === selectedSlug)?.label ?? selectedSlug}`}
-                description="Use the rich formatting toolbar to structure headings, paragraphs, and guidelines."
+                title={`Editing: ${currentPage?.label ?? selectedSlug}`}
+                description="Use the rich formatting toolbar below to edit headings, bold text, bullet points, and paragraphs."
                 action={
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => setPreviewMode(!previewMode)}
+                      onClick={toggleRawHtml}
+                      title="Toggle raw HTML source view"
                     >
-                      <Eye className="size-4" /> {previewMode ? "Editor Mode" : "Live Preview"}
+                      <Code className="size-4" /> {rawHtmlMode ? "Visual Editor" : "HTML Source"}
                     </Button>
                     <Button
                       size="sm"
                       loading={savePage.isPending}
                       onClick={() => savePage.mutate(undefined)}
-                      disabled={!pageTitle.trim() || !pageContent.trim()}
                     >
-                      <Save className="size-4" /> Save Page
+                      <Save className="size-4" /> Save Page Content
                     </Button>
                   </div>
                 }
               />
-              <CardBody className="space-y-4">
+
+              <CardBody className="p-0">
                 {pageQuery.isLoading ? (
-                  <div className="space-y-4">
+                  <div className="p-6 space-y-4">
                     <Skeleton className="h-10 rounded-lg" />
                     <Skeleton className="h-64 rounded-lg" />
                   </div>
                 ) : (
-                  <>
-                    <Field label="Page Title" required>
-                      {(id) => (
-                        <Input
-                          id={id}
-                          value={pageTitle}
-                          onChange={(e) => setPageTitle(e.target.value)}
-                          placeholder="e.g. Terms of Service"
-                        />
-                      )}
-                    </Field>
+                  <div>
+                    {/* Rich Text Formatting Toolbar */}
+                    {!rawHtmlMode && (
+                      <div className="flex flex-wrap items-center gap-1 border-b border-ink-100 bg-ink-25/80 px-3 py-2">
+                        {/* Heading / Block Dropdown */}
+                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
+                          <button
+                            type="button"
+                            onClick={() => execCmd("formatBlock", "<p>")}
+                            title="Normal Paragraph"
+                            className="rounded-lg px-2 py-1 text-xs font-semibold text-ink-700 hover:bg-ink-100"
+                          >
+                            Normal
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("formatBlock", "<h2>")}
+                            title="Heading 2"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Heading2 className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("formatBlock", "<h3>")}
+                            title="Heading 3"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Heading3 className="size-4" />
+                          </button>
+                        </div>
 
-                    {/* Toolbar */}
-                    {!previewMode && (
-                      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-ink-200 bg-ink-50 p-1.5">
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("**", "**")}
-                          title="Bold"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <Bold className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("*", "*")}
-                          title="Italic"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <Italic className="size-4" />
-                        </button>
-                        <span className="mx-1 h-4 w-px bg-ink-200" />
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("## ")}
-                          title="Heading 2"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <Heading2 className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("### ")}
-                          title="Heading 3"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <Heading3 className="size-4" />
-                        </button>
-                        <span className="mx-1 h-4 w-px bg-ink-200" />
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("- ")}
-                          title="Bullet list"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <List className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("1. ")}
-                          title="Numbered list"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <ListOrdered className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("> ")}
-                          title="Quote"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <Quote className="size-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => insertFormatting("[Link title](", ")")}
-                          title="Insert link"
-                          className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-200 hover:text-ink-900"
-                        >
-                          <LinkIcon className="size-4" />
-                        </button>
-                      </div>
-                    )}
+                        {/* Inline Formatting */}
+                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
+                          <button
+                            type="button"
+                            onClick={() => execCmd("bold")}
+                            title="Bold (Ctrl+B)"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Bold className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("italic")}
+                            title="Italic (Ctrl+I)"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Italic className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("underline")}
+                            title="Underline (Ctrl+U)"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Underline className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("strikeThrough")}
+                            title="Strikethrough"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Strikethrough className="size-4" />
+                          </button>
+                        </div>
 
-                    {previewMode ? (
-                      <div className="min-h-[360px] rounded-xl border border-ink-200 bg-ink-25 p-6 prose prose-ink max-w-none">
-                        <h1 className="text-2xl font-bold text-ink-900">{pageTitle}</h1>
-                        <div className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-ink-800">
-                          {pageContent}
+                        {/* Lists */}
+                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
+                          <button
+                            type="button"
+                            onClick={() => execCmd("insertUnorderedList")}
+                            title="Bullet List"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <List className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("insertOrderedList")}
+                            title="Numbered List"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <ListOrdered className="size-4" />
+                          </button>
+                        </div>
+
+                        {/* Blockquote & Divider & Link */}
+                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
+                          <button
+                            type="button"
+                            onClick={() => execCmd("formatBlock", "<blockquote>")}
+                            title="Quote"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Quote className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("insertHorizontalRule")}
+                            title="Horizontal Divider"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Minus className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleLink}
+                            title="Insert Link"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <LinkIcon className="size-4" />
+                          </button>
+                        </div>
+
+                        {/* Clear & History */}
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => execCmd("removeFormat")}
+                            title="Clear Formatting"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <RemoveFormatting className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("undo")}
+                            title="Undo (Ctrl+Z)"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Undo className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => execCmd("redo")}
+                            title="Redo (Ctrl+Y)"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                          >
+                            <Redo className="size-4" />
+                          </button>
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold uppercase tracking-wider text-ink-500">
-                          Content (Markdown & HTML supported)
-                        </label>
-                        <textarea
-                          ref={textareaRef}
-                          value={pageContent}
-                          rows={14}
-                          onChange={(e) => setPageContent(e.target.value)}
-                          className="w-full rounded-xl border border-ink-200 bg-white p-4 font-mono text-sm leading-relaxed text-ink-900 shadow-xs focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                          placeholder="Write the page content here..."
-                        />
-                      </div>
                     )}
-                  </>
+
+                    {/* Editor Surface */}
+                    {rawHtmlMode ? (
+                      <textarea
+                        value={htmlContent}
+                        rows={18}
+                        onChange={(e) => setHtmlContent(e.target.value)}
+                        className="w-full p-6 font-mono text-xs leading-relaxed text-ink-800 bg-ink-25/50 border-0 focus:outline-none"
+                        placeholder="Enter HTML source here..."
+                      />
+                    ) : (
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        onInput={handleEditorInput}
+                        className="min-h-[420px] p-6 focus:outline-none text-ink-900 leading-relaxed [&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h2]:mt-6 [&>h2]:mb-3 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:text-ink-900 [&>h3]:mt-5 [&>h3]:mb-2 [&>p]:mb-3 [&>p]:text-base [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:mb-4 [&>li]:mb-1.5 [&>blockquote]:border-l-4 [&>blockquote]:border-brand-500 [&>blockquote]:pl-4 [&>blockquote]:italic [&>blockquote]:text-ink-600 [&>blockquote]:my-4 [&>hr]:my-6 [&>hr]:border-ink-200"
+                      />
+                    )}
+                  </div>
                 )}
               </CardBody>
             </Card>
@@ -299,21 +400,21 @@ export default function EditorialAdminPage() {
       )}
 
       {tab === "contact" && (
-        <Card className="max-w-3xl">
+        <Card className="max-w-2xl">
           <CardHeader
-            title="Official Contact & Support Details"
-            description="These details populate the public /contact page, website footer, and support inquiries across the platform."
+            title="Official Contact Details"
+            description="Essential contact information displayed to users across the website and support channels."
             action={
               <Button
                 size="sm"
                 loading={saveContact.isPending}
                 onClick={() => saveContact.mutate(undefined)}
               >
-                <Save className="size-4" /> Save Contact Info
+                <Save className="size-4" /> Save Contact Details
               </Button>
             }
           />
-          <CardBody className="space-y-5">
+          <CardBody>
             {contactQuery.isLoading ? (
               <div className="space-y-4">
                 <Skeleton className="h-10 rounded-lg" />
@@ -322,86 +423,45 @@ export default function EditorialAdminPage() {
               </div>
             ) : (
               <form
-                className="space-y-5"
+                className="space-y-4"
                 onSubmit={(e) => {
                   e.preventDefault();
                   saveContact.mutate(undefined);
                 }}
               >
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Customer Support Email">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        type="email"
-                        value={contact.email ?? ""}
-                        onChange={(e) => setContact({ ...contact, email: e.target.value })}
-                        placeholder="info@caresaath.com"
-                      />
-                    )}
-                  </Field>
+                <Field label="Support Email">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      type="email"
+                      value={contact.email ?? ""}
+                      onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                      placeholder="support@caresaath.com"
+                    />
+                  )}
+                </Field>
 
-                  <Field label="Caregiver Onboarding Email">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        type="email"
-                        value={contact.caregiverEmail ?? ""}
-                        onChange={(e) => setContact({ ...contact, caregiverEmail: e.target.value })}
-                        placeholder="caregivers@caresaath.pk"
-                      />
-                    )}
-                  </Field>
-                </div>
+                <Field label="Helpline / Phone Number">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      value={contact.phone ?? ""}
+                      onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                      placeholder="+92 42 111 227 372"
+                    />
+                  )}
+                </Field>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Press & Business Inquiries Email">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        type="email"
-                        value={contact.pressEmail ?? ""}
-                        onChange={(e) => setContact({ ...contact, pressEmail: e.target.value })}
-                        placeholder="hello@caresaath.pk"
-                      />
-                    )}
-                  </Field>
-
-                  <Field label="Helpline / Phone Number">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        value={contact.phone ?? ""}
-                        onChange={(e) => setContact({ ...contact, phone: e.target.value })}
-                        placeholder="+92 42 111 227 372"
-                      />
-                    )}
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="WhatsApp Support Number">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        value={contact.whatsapp ?? ""}
-                        onChange={(e) => setContact({ ...contact, whatsapp: e.target.value })}
-                        placeholder="+92 300 2273728"
-                      />
-                    )}
-                  </Field>
-
-                  <Field label="Operating Hours">
-                    {(id) => (
-                      <Input
-                        id={id}
-                        value={contact.hours ?? ""}
-                        onChange={(e) => setContact({ ...contact, hours: e.target.value })}
-                        placeholder="24/7 Helpline & Dispatch"
-                      />
-                    )}
-                  </Field>
-                </div>
+                <Field label="WhatsApp Support Number">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      value={contact.whatsapp ?? ""}
+                      onChange={(e) => setContact({ ...contact, whatsapp: e.target.value })}
+                      placeholder="+92 300 2273728"
+                    />
+                  )}
+                </Field>
 
                 <Field label="Head Office Address">
                   {(id) => (
@@ -415,7 +475,7 @@ export default function EditorialAdminPage() {
                   )}
                 </Field>
 
-                <div className="flex justify-end pt-2">
+                <div className="flex justify-end pt-3">
                   <Button type="submit" loading={saveContact.isPending}>
                     <Save className="size-4" /> Save Contact Details
                   </Button>

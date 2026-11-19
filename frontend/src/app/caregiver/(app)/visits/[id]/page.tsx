@@ -24,7 +24,7 @@ import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { useVisitLocationStream } from "@/features/caregiver/lib/use-live-location";
-import { ACTIVE_STATUSES, mapsUrl, VISIT_TONE } from "@shared/lib/visit";
+import { ACTIVE_STATUSES, mapsUrl, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@shared/lib/visit";
 
 /**
  * The API decrypts medical context for the assigned caregiver, but when it
@@ -72,6 +72,7 @@ export default function VisitDetailPage() {
 
   const v = visit.data;
   const active = v && ACTIVE_STATUSES.includes(v.status);
+  const canSos = v && SOS_ELIGIBLE_STATUSES.includes(v.status);
   const booking = v?.booking;
   const patient = booking?.patient;
   const address = booking?.address;
@@ -121,7 +122,7 @@ export default function VisitDetailPage() {
             </Badge>
           </header>
 
-          {active && (
+          {canSos && (
             // Full-width on mobile for fast emergency access; compact and right-aligned on larger screens.
             <div className="flex sm:justify-end">
               <button

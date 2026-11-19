@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, MessagesSquare, Navigation, NotebookPen, Repeat, UploadCloud, XCircle } from "lucide-react";
+import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, MessagesSquare, Navigation, NotebookPen, Repeat, Siren, UploadCloud, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
@@ -25,9 +25,10 @@ import { RespondCountdown } from "@shared/ui/respond-countdown";
 import type { PrescriptionSummary, Visit } from "@shared/caregiver-types";
 import { Rating, useCaregiver } from "@/features/customer/components/caregiver-bits";
 import { RescheduleDialog } from "@/features/customer/components/reschedule-dialog";
-import { bookingsApi, paymentsApi } from "@/features/customer/lib/api/customer";
+import { SosDialog } from "@shared/ui/sos-dialog";
+import { bookingsApi, paymentsApi, visitsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { BOOKING_TONE, bookingDisplayStatus, hasCancellableVisits, VISIT_TONE } from "@/features/customer/lib/labels";
+import { BOOKING_TONE, bookingDisplayStatus, hasCancellableVisits, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@/features/customer/lib/labels";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
@@ -54,6 +55,7 @@ export default function BookingDetailPage() {
   const [reason, setReason] = useState("");
   const [moving, setMoving] = useState<Visit | null>(null);
   const [viewing, setViewing] = useState<PrescriptionSummary | null>(null);
+  const [sosVisit, setSosVisit] = useState<Visit | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const cancel = useAction((reason: string) => bookingsApi.cancel(id, reason || undefined), {
@@ -81,6 +83,9 @@ export default function BookingDetailPage() {
   const open = b && (b.status === "REQUESTED" || b.status === "CONFIRMED");
   const shownStatus = b ? bookingDisplayStatus(b) : null;
   const perVisit = b ? b.rateSnapshot - b.discountAmount : 0;
+  const liveSosVisit =
+    b?.visits.find((v) => ["IN_PROGRESS", "CHECKED_IN", "EN_ROUTE"].includes(v.status)) ??
+    b?.visits.find((v) => SOS_ELIGIBLE_STATUSES.includes(v.status));
 
   return (
     <div className="space-y-5">
@@ -105,6 +110,15 @@ export default function BookingDetailPage() {
                 <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-sm">
                   {L.bookingCustomer(shownStatus!)}
                 </Badge>
+              )}
+              {liveSosVisit && (
+                <button
+                  type="button"
+                  onClick={() => setSosVisit(liveSosVisit)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
+                >
+                  <Siren className="size-4" /> {ts("sos.button")}
+                </button>
               )}
               {hasCancellableVisits(b) && (
                 <Button
@@ -191,6 +205,19 @@ export default function BookingDetailPage() {
                             </span>
                           )}
                         </Link>
+                        {SOS_ELIGIBLE_STATUSES.includes(v.status) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSosVisit(v);
+                            }}
+                            className="hidden items-center gap-1 rounded-lg border border-danger-300 bg-danger-50 px-2.5 py-1 text-xs font-bold text-danger-700 hover:bg-danger-600 hover:text-white sm:inline-flex"
+                          >
+                            <Siren className="size-3.5" /> {ts("sos.button")}
+                          </button>
+                        )}
                         {canMove ? (
                           <Button size="sm" variant="ghost" onClick={() => setMoving(v)}>
                             <CalendarClock className="size-4" /> <span className="hidden sm:inline">{t("reschedule")}</span>
@@ -370,6 +397,13 @@ export default function BookingDetailPage() {
           mimeType={viewing.mimeType}
           load={() => bookingsApi.prescriptionUrl(b.id, viewing.id)}
           onClose={() => setViewing(null)}
+        />
+      )}
+      {sosVisit && b && (
+        <SosDialog
+          description={`${L.specialty(b.serviceType)} · ${b.patient.name}`}
+          send={(note) => visitsApi.sos({ visitId: sosVisit.id, note })}
+          onClose={() => setSosVisit(null)}
         />
       )}
     </div>

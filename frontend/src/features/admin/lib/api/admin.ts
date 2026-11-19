@@ -106,8 +106,8 @@ export const authApi = {
 };
 
 export const caregiversApi = {
-  /** GET /admin/caregivers?status=&q=&reverifyDueBefore=&page=&limit= (q = name/phone/license; reverifyDueBefore → due-asc order) */
-  list: (q: PageQuery & { status?: VerificationStatus; q?: string; reverifyDueBefore?: string }) =>
+  /** GET /admin/caregivers?status=&q=&id=&reverifyDueBefore=&page=&limit= (q = name/phone/license; reverifyDueBefore → due-asc order) */
+  list: (q: PageQuery & { status?: VerificationStatus; q?: string; id?: string; reverifyDueBefore?: string }) =>
     http.get<Paginated<AdminCaregiver>>("/admin/caregivers", q),
   /** POST /admin/caregivers/:id/approve */
   approve: (id: string, reason?: string) =>
@@ -249,8 +249,8 @@ export const auditApi = {
 };
 
 export const callLogsApi = {
-  /** GET /admin/call-logs?visitId=&page=&limit= — persisted in-app call history (investigation; filter by visit, not status). */
-  list: (q: PageQuery & { visitId?: string }) =>
+  /** GET /admin/call-logs?visitId=&q=&page=&limit= — persisted in-app call history (investigation; filter by visit or caller/callee). */
+  list: (q: PageQuery & { visitId?: string; q?: string }) =>
     http.get<Paginated<CallLogEntry>>("/admin/call-logs", q),
 };
 
@@ -283,8 +283,8 @@ export const customersApi = {
 
 /** All users directory (Customers, Caregivers, Admins) + account management actions. */
 export const usersApi = {
-  /** GET /admin/users?q=&role=&status=&page=&limit= */
-  list: (q: PageQuery & { q?: string; role?: UserRole; status?: UserStatus }) =>
+  /** GET /admin/users?q=&id=&role=&status=&page=&limit= */
+  list: (q: PageQuery & { q?: string; id?: string; role?: UserRole; status?: UserStatus }) =>
     http.get<Paginated<AdminUser>>("/admin/users", q),
   /** GET /admin/users/:id */
   get: (id: string) => http.get<AdminCustomerDetail>(`/admin/users/${id}`),
@@ -307,7 +307,7 @@ export const editorialApi = {
   /** GET /admin/editorial/pages/:slug */
   getPage: (slug: string) => http.get<EditorialPage>(`/admin/editorial/pages/${slug}`),
   /** PUT /admin/editorial/pages/:slug */
-  updatePage: (slug: string, dto: { title: string; content: string }) =>
+  updatePage: (slug: string, dto: { title?: string; content: string }) =>
     http.put<EditorialPage>(`/admin/editorial/pages/${slug}`, dto),
   /** GET /admin/editorial/contact-info */
   getContactInfo: () => http.get<ContactInfo>("/admin/editorial/contact-info"),

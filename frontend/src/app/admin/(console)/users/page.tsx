@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { UserStatusBadge } from "@shared/status";
 import { Badge, type Tone } from "@shared/ui/badge";
@@ -13,7 +13,7 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { Input } from "@shared/ui/field";
-import { ErrorState, FilterTabs } from "@shared/ui/misc";
+import { ErrorState } from "@shared/ui/misc";
 import { Select } from "@shared/ui/select";
 import { UserAvatar } from "@shared/ui/user-avatar";
 import { UserDrawer } from "@/features/admin/components/users/user-drawer";
@@ -31,6 +31,13 @@ const ROLE_TONE: Record<string, Tone> = {
   ADMIN: "warning",
 };
 
+const ROLE_OPTIONS: { value: UserRole | "ALL"; label: string }[] = [
+  { value: "ALL", label: "All roles" },
+  { value: "CUSTOMER", label: "Customers" },
+  { value: "CAREGIVER", label: "Caregivers" },
+  { value: "ADMIN", label: "Admins" },
+];
+
 const STATUS_OPTIONS: { value: UserStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "All statuses" },
   { value: "ACTIVE", label: "Active" },
@@ -43,7 +50,8 @@ export default function UsersPage() {
   const tl = useTranslations("labels");
   const f = useFmt();
   const searchParams = useSearchParams();
-  const initialQ = searchParams?.get("q") ?? "";
+  const idParam = searchParams?.get("id") ?? searchParams?.get("userId") ?? "";
+  const initialQ = searchParams?.get("q") ?? idParam;
 
   const [role, setRole] = useState<UserRole | "ALL">("ALL");
   const [status, setStatus] = useState<UserStatus | "ALL">("ALL");
@@ -53,16 +61,26 @@ export default function UsersPage() {
   const [selected, setSelected] = useState<AdminUser | null>(null);
 
   const list = useQuery({
-    queryKey: [...keys.users, "list", role, status, q, page],
+    queryKey: [...keys.users, "list", role, status, q, page, idParam],
     queryFn: () =>
       usersApi.list({
         page,
         limit: LIMIT,
         ...(role !== "ALL" ? { role } : {}),
         ...(status !== "ALL" ? { status } : {}),
+        ...(idParam ? { id: idParam } : {}),
         ...(q ? { q } : {}),
       }),
   });
+
+  useEffect(() => {
+    if (idParam && list.data?.items?.length) {
+      const match = list.data.items.find((u) => u.id === idParam);
+      if (match) {
+        setSelected(match);
+      }
+    }
+  }, [idParam, list.data?.items]);
 
   const columns: ColumnDef<AdminUser, unknown>[] = [
     {
@@ -149,71 +167,67 @@ export default function UsersPage() {
         description="Search, view, suspend, reactivate, or revoke sessions for any user on the platform."
       />
 
-      <div className="mb-4">
-        <FilterTabs
-          value={role}
-          onChange={(v) => {
-            setRole(v as UserRole | "ALL");
-            setPage(1);
-          }}
-          options={[
-            { value: "ALL", label: "All Roles" },
-            { value: "CUSTOMER", label: "Customers" },
-            { value: "CAREGIVER", label: "Caregivers" },
-            { value: "ADMIN", label: "Admins" },
-          ]}
-        />
-      </div>
-
-      <Card>
-        {list.isError ? (
+      {list.isError ? (
+        <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
-        ) : (
-          <DataTable
-            columns={columns}
-            data={list.data?.items ?? []}
-            loading={!list.data}
-            emptyText="No users match these criteria."
-            onRowClick={(row) => setSelected(row)}
-            serverPagination={
-              list.data
-                ? {
-                    page: list.data.page,
-                    limit: list.data.limit,
-                    total: list.data.total,
-                    onPageChange: setPage,
-                  }
-                : undefined
-            }
-            toolbar={() => (
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                <div className="min-w-0 flex-1 sm:max-w-xs">
-                  <Input
-                    value={qInput}
-                    onChange={(e) => {
-                      setQInput(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search by name, phone or email…"
-                  />
-                </div>
-                <Select<UserStatus | "ALL">
-                  className="w-48"
-                  value={status}
-                  isSearchable={false}
-                  onChange={(v) => {
-                    if (v) {
-                      setStatus(v);
-                      setPage(1);
-                    }
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={list.data?.items ?? []}
+          loading={!list.data}
+          emptyText="No users match these criteria."
+          onRowClick={(row) => setSelected(row)}
+          serverPagination={
+            list.data
+              ? {
+                  page: list.data.page,
+                  limit: list.data.limit,
+                  total: list.data.total,
+                  onPageChange: setPage,
+                }
+              : undefined
+          }
+          toolbar={() => (
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1 sm:max-w-xs">
+                <Input
+                  value={qInput}
+                  onChange={(e) => {
+                    setQInput(e.target.value);
+                    setPage(1);
                   }}
-                  options={STATUS_OPTIONS}
+                  placeholder="Search by name, phone or email…"
                 />
               </div>
-            )}
-          />
-        )}
-      </Card>
+              <Select<UserRole | "ALL">
+                className="w-44"
+                value={role}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setRole(v);
+                    setPage(1);
+                  }
+                }}
+                options={ROLE_OPTIONS}
+              />
+              <Select<UserStatus | "ALL">
+                className="w-44"
+                value={status}
+                isSearchable={false}
+                onChange={(v) => {
+                  if (v) {
+                    setStatus(v);
+                    setPage(1);
+                  }
+                }}
+                options={STATUS_OPTIONS}
+              />
+            </div>
+          )}
+        />
+      )}
 
       {selected && <UserDrawer user={selected} onClose={() => setSelected(null)} />}
     </>

@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FileWarning } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CaregiverDrawer } from "@/features/admin/components/caregivers/caregiver-drawer";
 import { PageHeader } from "@shared/page-header";
 import { UserStatusBadge, VerificationBadge } from "@shared/status";
@@ -31,7 +31,8 @@ export default function CaregiversPage() {
   const f = useFmt();
   const L = useLabels();
   const searchParams = useSearchParams();
-  const initialQ = searchParams?.get("q") ?? "";
+  const idParam = searchParams?.get("id") ?? searchParams?.get("caregiverId") ?? "";
+  const initialQ = searchParams?.get("q") ?? idParam;
   const [status, setStatus] = useState<VerificationStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdminCaregiver | null>(null);
@@ -39,9 +40,25 @@ export default function CaregiversPage() {
   const q = useDebouncedValue(qInput.trim());
 
   const list = useQuery({
-    queryKey: [...keys.caregivers, "list", status, q, page],
-    queryFn: () => caregiversApi.list({ ...(status === "ALL" ? {} : { status }), ...(q ? { q } : {}), page, limit: LIMIT }),
+    queryKey: [...keys.caregivers, "list", status, q, page, idParam],
+    queryFn: () =>
+      caregiversApi.list({
+        ...(status === "ALL" ? {} : { status }),
+        ...(idParam ? { id: idParam } : {}),
+        ...(q ? { q } : {}),
+        page,
+        limit: LIMIT,
+      }),
   });
+
+  useEffect(() => {
+    if (idParam && list.data?.items?.length) {
+      const match = list.data.items.find((c) => c.id === idParam || c.user.id === idParam);
+      if (match) {
+        setSelected(match);
+      }
+    }
+  }, [idParam, list.data?.items]);
 
   const counts = useQueries({
     queries: STATUSES.map((s) => ({

@@ -121,6 +121,11 @@ export class ListCaregiversQueryDto {
   @IsDateString()
   reverifyDueBefore?: string;
 
+  @ApiPropertyOptional({ example: 'uuid', description: 'Filter by caregiver profile ID or User ID' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiPropertyOptional({ example: 'Fatima', description: 'Search by name, phone, or license number' })
   @IsOptional()
   @IsString()
@@ -196,7 +201,12 @@ export class VerificationService {
   }
 
   async list(query: ListCaregiversQueryDto) {
+    const isUuid = Boolean(query.q && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.q.trim()));
+    const targetId = query.id?.trim();
+    const isTargetUuid = Boolean(targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId));
+
     const where: Prisma.CaregiverProfileWhereInput = {
+      ...(isTargetUuid ? { OR: [{ id: targetId }, { userId: targetId }] } : {}),
       ...(query.status ? { verificationStatus: query.status } : {}),
       ...(query.reverifyDueBefore
         ? { reverifyDueAt: { lte: new Date(query.reverifyDueBefore) } }
@@ -204,6 +214,7 @@ export class VerificationService {
       ...(query.q
         ? {
             OR: [
+              ...(isUuid ? [{ id: query.q.trim() }, { userId: query.q.trim() }] : []),
               { user: { fullName: { contains: query.q, mode: 'insensitive' } } },
               { user: { phone: { contains: query.q } } },
               { licenseNumber: { contains: query.q, mode: 'insensitive' } },

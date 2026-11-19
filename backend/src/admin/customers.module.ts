@@ -22,6 +22,11 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class ListCustomersQueryDto {
+  @ApiPropertyOptional({ example: 'uuid', description: 'Filter by exact user id' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiPropertyOptional({ example: 'Ayesha', description: 'Search by name, phone, or email' })
   @IsOptional()
   @IsString()
@@ -84,12 +89,15 @@ export class AdminCustomersService {
 
   async list(query: ListCustomersQueryDto, defaultRole: UserRole | null = UserRole.CUSTOMER): Promise<Paginated<unknown>> {
     const role = query.role ?? (defaultRole === null ? undefined : defaultRole);
+    const isUuid = Boolean(query.q && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.q.trim()));
     const where: Prisma.UserWhereInput = {
+      ...(query.id ? { id: query.id } : {}),
       ...(role ? { role } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.q
         ? {
             OR: [
+              ...(isUuid ? [{ id: query.q.trim() }] : []),
               { fullName: { contains: query.q, mode: 'insensitive' } },
               { phone: { contains: query.q } },
               { email: { contains: query.q, mode: 'insensitive' } },
