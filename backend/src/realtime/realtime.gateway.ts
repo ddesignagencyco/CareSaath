@@ -239,7 +239,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
-      await this.ringing.settle(call.id, call.calleeId);
+      await this.ringing.settle(call.id, call.calleeId, 'call.ended');
       // Hanging up before it was answered is a missed call for the callee, not a call.
       if (call.status === 'INITIATED' && call.callerId === userId) {
         await this.calls.markMissed(call.id);
@@ -267,7 +267,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
-      await this.ringing.settle(call.id, call.calleeId);
+      await this.ringing.settle(call.id, call.calleeId, 'call.rejected');
       await this.calls.markRejected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:rejected', { callId: call.id });

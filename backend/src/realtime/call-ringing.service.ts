@@ -74,14 +74,35 @@ export class CallRingingService implements OnModuleDestroy {
     return call?.status === 'INITIATED' ? pending : null;
   }
 
-  /** Stop ringing: the call was answered, declined or hung up. */
-  async settle(callId: string, calleeId: string): Promise<void> {
+  /**
+   * Stop ringing: the call was answered, declined or hung up. When the callee's
+   * app has no live socket we must also send a data-only push, otherwise their
+   * ringing notification keeps sounding long after the caller hung up.
+   */
+  async settle(
+    callId: string,
+    calleeId: string,
+    endEvent?: 'call.ended' | 'call.rejected',
+  ): Promise<void> {
     const timer = this.timers.get(callId);
     if (timer) clearTimeout(timer);
     this.timers.delete(callId);
     const raw = await this.redis.client.get(pendingKey(calleeId));
     if (raw && (JSON.parse(raw) as PendingCall).callId === callId) {
       await this.redis.client.del(pendingKey(calleeId));
+    }
+    if (endEvent) {
+      await this.nativePush?.sendToUser(
+        calleeId,
+        {
+          id: callId,
+          event: endEvent,
+          title: endEvent === 'call.rejected' ? 'Call declined' : 'Call ended',
+          body: null,
+          data: { callId },
+        },
+        { dataOnly: true, ttlSeconds: 30 },
+      );
     }
   }
 
@@ -111,6 +132,20 @@ export class CallRingingService implements OnModuleDestroy {
         payload: { callId, visitId: call.visitId },
         message: `${caller?.fullName || 'Someone'} tried to call you.`,
       });
+      // The notification above is a normal alert (FCM shows it itself), so a
+      // killed app never runs Dart to clear its own ringing notification. This
+      // data-only twin reaches the background handler and stops the ring.
+      await this.nativePush?.sendToUser(
+        call.calleeId,
+        {
+          id: callId,
+          event: 'call.missed',
+          title: 'Missed call',
+          body: null,
+          data: { callId, visitId: call.visitId },
+        },
+        { dataOnly: true, ttlSeconds: 60 },
+      );
     } catch (err) {
       this.logger.warn(`Missed-call handling for ${callId} failed: ${(err as Error).message}`);
     }
