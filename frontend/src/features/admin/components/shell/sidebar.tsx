@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   BadgePercent,
   BarChart3,
+  BookOpenText,
   CalendarCheck2,
   CalendarClock,
   CreditCard,
@@ -106,7 +107,8 @@ export function Sidebar({ onNavigate, collapsed = false, enabled = true }: { onN
     {
       label: t("nav.groups.platform"),
       items: [
-        { href: "/admin/customers", label: t("nav.customers"), icon: Users },
+        { href: "/admin/users", label: t("nav.users"), icon: Users },
+        { href: "/admin/editorial", label: t("nav.editorial"), icon: BookOpenText },
         { href: "/admin/settings", label: t("nav.settings"), icon: Settings2 },
         ...(CAN_AUDIT_LOG ? [{ href: "/admin/audit-logs", label: t("nav.auditLogs"), icon: ScrollText }] : []),
       ],

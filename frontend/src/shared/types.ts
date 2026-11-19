@@ -281,11 +281,28 @@ export interface SafetyIncident {
   status: IncidentStatus;
   assignedAdminId: string | null;
   resolvedAt: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   createdAt: string;
   updatedAt: string;
   reportedBy: { id: string; fullName: string; role: UserRole; phone: string };
   assignedAdmin: { id: string; fullName: string } | null;
   events: IncidentEvent[];
+  visit?: {
+    id: string;
+    status: string;
+    scheduledDate: string;
+    timeWindowStart?: string | null;
+    timeWindowEnd?: string | null;
+    booking: {
+      id: string;
+      serviceType: Specialty;
+      patient: { name: string; relationship?: string | null };
+      address?: { addressLine: string; city: string; latitude?: number | string | null; longitude?: number | string | null } | null;
+      customer: { id: string; fullName: string; phone: string };
+      caregiver?: { id: string; user: { fullName: string; phone: string } } | null;
+    };
+  } | null;
 }
 
 /** PATCH /admin/safety-incidents/:id returns the bare row (no relations). */

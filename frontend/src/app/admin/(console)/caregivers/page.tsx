@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileWarning } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CaregiverDrawer } from "@/features/admin/components/caregivers/caregiver-drawer";
 import { PageHeader } from "@shared/page-header";
@@ -29,10 +30,12 @@ export default function CaregiversPage() {
   const t = useTranslations("adminA.caregivers");
   const f = useFmt();
   const L = useLabels();
+  const searchParams = useSearchParams();
+  const initialQ = searchParams?.get("q") ?? "";
   const [status, setStatus] = useState<VerificationStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdminCaregiver | null>(null);
-  const [qInput, setQInput] = useState("");
+  const [qInput, setQInput] = useState(initialQ);
   const q = useDebouncedValue(qInput.trim());
 
   const list = useQuery({

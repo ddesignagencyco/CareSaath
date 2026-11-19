@@ -1,0 +1,221 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Users } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { PageHeader } from "@shared/page-header";
+import { UserStatusBadge } from "@shared/status";
+import { Badge, type Tone } from "@shared/ui/badge";
+import { Button } from "@shared/ui/button";
+import { Card } from "@shared/ui/card";
+import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
+import { ErrorState, FilterTabs } from "@shared/ui/misc";
+import { Select } from "@shared/ui/select";
+import { UserAvatar } from "@shared/ui/user-avatar";
+import { UserDrawer } from "@/features/admin/components/users/user-drawer";
+import { usersApi } from "@/features/admin/lib/api/admin";
+import { keys } from "@/features/admin/lib/api/hooks";
+import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
+import { useFmt } from "@shared/i18n/use-fmt";
+import type { AdminUser, UserRole, UserStatus } from "@shared/types";
+
+const LIMIT = 15;
+
+const ROLE_TONE: Record<string, Tone> = {
+  CUSTOMER: "neutral",
+  CAREGIVER: "info",
+  ADMIN: "warning",
+};
+
+const STATUS_OPTIONS: { value: UserStatus | "ALL"; label: string }[] = [
+  { value: "ALL", label: "All statuses" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "DEACTIVATED", label: "Deactivated" },
+];
+
+export default function UsersPage() {
+  const t = useTranslations("adminB.customers");
+  const tl = useTranslations("labels");
+  const f = useFmt();
+  const searchParams = useSearchParams();
+  const initialQ = searchParams?.get("q") ?? "";
+
+  const [role, setRole] = useState<UserRole | "ALL">("ALL");
+  const [status, setStatus] = useState<UserStatus | "ALL">("ALL");
+  const [qInput, setQInput] = useState(initialQ);
+  const q = useDebouncedValue(qInput.trim());
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<AdminUser | null>(null);
+
+  const list = useQuery({
+    queryKey: [...keys.users, "list", role, status, q, page],
+    queryFn: () =>
+      usersApi.list({
+        page,
+        limit: LIMIT,
+        ...(role !== "ALL" ? { role } : {}),
+        ...(status !== "ALL" ? { status } : {}),
+        ...(q ? { q } : {}),
+      }),
+  });
+
+  const columns: ColumnDef<AdminUser, unknown>[] = [
+    {
+      id: "user",
+      header: "User",
+      accessorFn: (u) => u.fullName,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <UserAvatar userId={row.original.id} name={row.original.fullName} size="sm" />
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-ink-900">{row.original.fullName || "Unnamed User"}</p>
+            <p className="font-mono text-xs text-ink-400 truncate max-w-[140px]">{row.original.id}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      accessorFn: (u) => u.role,
+      cell: ({ row }) => (
+        <Badge tone={ROLE_TONE[row.original.role] ?? "neutral"}>
+          {tl(`role.${row.original.role}`)}
+        </Badge>
+      ),
+    },
+    {
+      id: "contact",
+      header: t("columns.contact"),
+      meta: { className: "hidden sm:table-cell" },
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <p dir="ltr" className="tabular text-ink-700 font-medium">{row.original.phone}</p>
+          {row.original.email && <p dir="ltr" className="truncate text-xs text-ink-500">{row.original.email}</p>}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: t("columns.status"),
+      accessorFn: (u) => u.status,
+      cell: ({ row }) => <UserStatusBadge status={row.original.status} />,
+    },
+    {
+      id: "lastSeen",
+      header: "Last Seen",
+      meta: { className: "hidden lg:table-cell" },
+      accessorFn: (u) => u.lastLoginAt,
+      cell: ({ row }) => (
+        <span className="text-xs text-ink-500">
+          {row.original.lastLoginAt ? f.relativeTime(row.original.lastLoginAt) : "Never"}
+        </span>
+      ),
+    },
+    {
+      id: "joined",
+      header: t("columns.joined"),
+      meta: { className: "hidden md:table-cell" },
+      accessorFn: (u) => u.createdAt,
+      cell: ({ row }) => <span className="text-xs text-ink-600">{f.date(row.original.createdAt)}</span>,
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelected(row.original);
+          }}
+        >
+          Manage
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="User Management"
+        description="Search, view, suspend, reactivate, or revoke sessions for any user on the platform."
+      />
+
+      <div className="mb-4">
+        <FilterTabs
+          value={role}
+          onChange={(v) => {
+            setRole(v as UserRole | "ALL");
+            setPage(1);
+          }}
+          options={[
+            { value: "ALL", label: "All Roles" },
+            { value: "CUSTOMER", label: "Customers" },
+            { value: "CAREGIVER", label: "Caregivers" },
+            { value: "ADMIN", label: "Admins" },
+          ]}
+        />
+      </div>
+
+      <Card>
+        {list.isError ? (
+          <ErrorState error={list.error} onRetry={() => list.refetch()} />
+        ) : (
+          <DataTable
+            columns={columns}
+            data={list.data?.items ?? []}
+            loading={!list.data}
+            emptyText="No users match these criteria."
+            onRowClick={(row) => setSelected(row)}
+            serverPagination={
+              list.data
+                ? {
+                    page: list.data.page,
+                    limit: list.data.limit,
+                    total: list.data.total,
+                    onPageChange: setPage,
+                  }
+                : undefined
+            }
+            toolbar={() => (
+              <div className="flex flex-1 flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1 sm:max-w-xs">
+                  <Input
+                    value={qInput}
+                    onChange={(e) => {
+                      setQInput(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Search by name, phone or email…"
+                  />
+                </div>
+                <Select<UserStatus | "ALL">
+                  className="w-48"
+                  value={status}
+                  isSearchable={false}
+                  onChange={(v) => {
+                    if (v) {
+                      setStatus(v);
+                      setPage(1);
+                    }
+                  }}
+                  options={STATUS_OPTIONS}
+                />
+              </div>
+            )}
+          />
+        )}
+      </Card>
+
+      {selected && <UserDrawer user={selected} onClose={() => setSelected(null)} />}
+    </>
+  );
+}

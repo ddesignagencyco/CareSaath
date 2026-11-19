@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Scale } from "lucide-react";
+import { ArrowRight, ExternalLink, Scale } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -24,16 +25,27 @@ const PRIORITIES: IncidentPriority[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 function Party({ label, user }: { label: string; user: Dispute["raisedBy"] }) {
   const tl = useTranslations("labels");
+  const isCaregiver = user.role === "CAREGIVER";
+  const profileUrl = isCaregiver
+    ? `/admin/caregivers?q=${encodeURIComponent(user.fullName)}`
+    : `/admin/users?q=${encodeURIComponent(user.fullName)}`;
+
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <Link
+      href={profileUrl}
+      className="group flex min-w-0 items-center gap-2.5 rounded-xl border border-transparent p-1.5 transition-colors hover:border-ink-200 hover:bg-ink-50"
+      title={`View ${user.fullName}'s profile`}
+    >
       <UserAvatar userId={user.id} name={user.fullName} size="sm" />
       <div className="min-w-0">
         <p className="text-[11px] font-bold tracking-wide text-ink-400 uppercase">{label}</p>
-        <p className="truncate text-sm font-semibold text-ink-900">
-          {user.fullName} <span className="font-normal text-ink-500">· {tl(`role.${user.role}`)}</span>
+        <p className="flex items-center gap-1 truncate text-sm font-semibold text-ink-900 group-hover:text-brand-600 group-hover:underline">
+          <span className="truncate">{user.fullName}</span>
+          <span className="font-normal text-ink-500">· {tl(`role.${user.role}`)}</span>
+          <ExternalLink className="size-3 shrink-0 text-ink-400 transition-opacity group-hover:opacity-100" />
         </p>
       </div>
-    </div>
+    </Link>
   );
 }
 

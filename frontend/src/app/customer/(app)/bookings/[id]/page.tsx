@@ -99,7 +99,7 @@ export default function BookingDetailPage() {
               </h1>
               <p className="text-sm text-ink-500">{t("requestedAt", { date: f.dateTime(b.createdAt) })}</p>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
               {/* While REQUESTED, the "Waiting for …" banner below already states the status, so skip the redundant pill. */}
               {b.status !== "REQUESTED" && (
                 <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-sm">
@@ -107,8 +107,13 @@ export default function BookingDetailPage() {
                 </Badge>
               )}
               {hasCancellableVisits(b) && (
-                <Button variant="danger" size="sm" onClick={() => setCancelling(true)}>
-                  <XCircle className="size-4" /> {t("cancelBooking")}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCancelling(true)}
+                  className="border-danger-200 text-danger-700 hover:bg-danger-50 hover:text-danger-800"
+                >
+                  <XCircle className="size-4 text-danger-600" /> {t("cancelBooking")}
                 </Button>
               )}
             </div>

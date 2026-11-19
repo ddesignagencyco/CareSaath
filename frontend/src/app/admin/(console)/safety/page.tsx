@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Phone, Siren, ShieldCheck } from "lucide-react";
+import { ExternalLink, MapPin, Phone, ShieldCheck, Siren } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { PageHeader } from "@shared/page-header";
@@ -133,28 +133,125 @@ function IncidentDrawer({
 
         <p dir="auto" className="rounded-xl border border-ink-100 bg-ink-25 p-4 text-sm leading-relaxed text-ink-800">{incident.description}</p>
 
-        <DetailList
-          items={[
-            {
-              label: t("reportedBy"),
-              value: (
-                <span>
-                  {incident.reportedBy.fullName} <span className="text-ink-500">({tl(`role.${incident.reportedBy.role}`)})</span>
-                </span>
-              ),
-            },
-            {
-              label: t("contact"),
-              value: (
-                <a href={`tel:${incident.reportedBy.phone}`} className="tabular inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline">
-                  <Phone className="size-3.5" /> <span dir="ltr">{f.phone(incident.reportedBy.phone)}</span>
-                </a>
-              ),
-            },
-            { label: t("visit"), value: incident.visitId ? <span dir="ltr">{incident.visitId}</span> : t("noVisit") },
-            { label: t("assignedTo"), value: incident.assignedAdmin?.fullName ?? t("unassigned") },
-          ]}
-        />
+        {(() => {
+          const booking = incident.visit?.booking;
+          const address = booking?.address;
+          const lat = incident.latitude ?? address?.latitude;
+          const lng = incident.longitude ?? address?.longitude;
+          const mapsUrl = lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+          const caregiver = booking?.caregiver;
+          const customer = booking?.customer;
+          const patient = booking?.patient;
+
+          return (
+            <>
+              {incident.source === "SOS" && (
+                <div className="space-y-3 rounded-xl border border-danger-200 bg-danger-50/70 p-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-danger-800">
+                    <Siren className="size-4 text-danger-600" />
+                    <span>Emergency Dispatch Actions</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {mapsUrl && (
+                      <a
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-danger-200 bg-white px-3 py-1.5 text-xs font-semibold text-danger-800 shadow-sm hover:bg-danger-100/50"
+                      >
+                        <MapPin className="size-3.5 text-danger-600" /> Open Live GPS Location <ExternalLink className="size-3 text-danger-500" />
+                      </a>
+                    )}
+                    <a
+                      href="tel:1122"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-danger-700"
+                    >
+                      <Phone className="size-3.5" /> Call Rescue 1122
+                    </a>
+                    <a
+                      href="tel:15"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-800 shadow-sm hover:bg-ink-50"
+                    >
+                      <Phone className="size-3.5 text-ink-600" /> Call Police 15
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <DetailList
+                items={[
+                  {
+                    label: t("reportedBy"),
+                    value: (
+                      <span>
+                        {incident.reportedBy.fullName} <span className="text-ink-500">({tl(`role.${incident.reportedBy.role}`)})</span>
+                      </span>
+                    ),
+                  },
+                  {
+                    label: t("contact"),
+                    value: (
+                      <a href={`tel:${incident.reportedBy.phone}`} className="tabular inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline">
+                        <Phone className="size-3.5" /> <span dir="ltr">{f.phone(incident.reportedBy.phone)}</span>
+                      </a>
+                    ),
+                  },
+                  ...(patient
+                    ? [
+                        {
+                          label: "Patient",
+                          value: (
+                            <span>
+                              {patient.name} {patient.relationship ? <span className="text-ink-500">({patient.relationship})</span> : ""}
+                            </span>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(address
+                    ? [
+                        {
+                          label: "Visit Address",
+                          value: (
+                            <span className="flex items-center gap-1.5">
+                              <MapPin className="size-3.5 shrink-0 text-ink-500" />
+                              <span>{address.addressLine}, {address.city}</span>
+                            </span>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(caregiver
+                    ? [
+                        {
+                          label: "Caregiver",
+                          value: (
+                            <a href={`tel:${caregiver.user.phone}`} className="tabular inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline">
+                              <Phone className="size-3.5" /> {caregiver.user.fullName} <span dir="ltr" className="text-ink-500">({f.phone(caregiver.user.phone)})</span>
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(customer && customer.id !== incident.reportedById
+                    ? [
+                        {
+                          label: "Customer",
+                          value: (
+                            <a href={`tel:${customer.phone}`} className="tabular inline-flex items-center gap-1.5 font-semibold text-brand-700 hover:underline">
+                              <Phone className="size-3.5" /> {customer.fullName} <span dir="ltr" className="text-ink-500">({f.phone(customer.phone)})</span>
+                            </a>
+                          ),
+                        },
+                      ]
+                    : []),
+                  { label: t("visit"), value: incident.visitId ? <span dir="ltr">{incident.visitId}</span> : t("noVisit") },
+                  { label: t("assignedTo"), value: incident.assignedAdmin?.fullName ?? t("unassigned") },
+                ]}
+              />
+            </>
+          );
+        })()}
 
         {incident.status !== "RESOLVED" && (
           <section className="space-y-4 rounded-xl border border-ink-100 p-4">
