@@ -2,9 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Users } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { UserStatusBadge } from "@shared/status";
@@ -49,16 +49,22 @@ export default function UsersPage() {
   const t = useTranslations("adminB.customers");
   const tl = useTranslations("labels");
   const f = useFmt();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const idParam = searchParams?.get("id") ?? searchParams?.get("userId") ?? "";
-  const initialQ = searchParams?.get("q") ?? idParam;
+  const qParam = searchParams?.get("q") ?? "";
 
   const [role, setRole] = useState<UserRole | "ALL">("ALL");
   const [status, setStatus] = useState<UserStatus | "ALL">("ALL");
-  const [qInput, setQInput] = useState(initialQ);
+  const [qInput, setQInput] = useState(qParam);
   const q = useDebouncedValue(qInput.trim());
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+
+  // Sync qInput when URL query changes
+  useEffect(() => {
+    setQInput(searchParams?.get("q") ?? "");
+  }, [searchParams]);
 
   const list = useQuery({
     queryKey: [...keys.users, "list", role, status, q, page, idParam],
@@ -81,6 +87,10 @@ export default function UsersPage() {
       }
     }
   }, [idParam, list.data?.items]);
+
+  const clearIdFilter = () => {
+    router.replace("/admin/users");
+  };
 
   const columns: ColumnDef<AdminUser, unknown>[] = [
     {
@@ -196,6 +206,7 @@ export default function UsersPage() {
                   onChange={(e) => {
                     setQInput(e.target.value);
                     setPage(1);
+                    if (idParam) router.replace("/admin/users");
                   }}
                   placeholder="Search by name, phone or email…"
                 />
@@ -224,12 +235,33 @@ export default function UsersPage() {
                 }}
                 options={STATUS_OPTIONS}
               />
+              {idParam && (
+                <button
+                  type="button"
+                  onClick={clearIdFilter}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-800 transition-colors hover:bg-brand-100"
+                  title="Clear ID filter and show all users"
+                >
+                  <span>Filtered user</span>
+                  <X className="size-3.5 text-brand-600" />
+                </button>
+              )}
             </div>
           )}
         />
       )}
 
-      {selected && <UserDrawer user={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <UserDrawer
+          user={selected}
+          onClose={() => {
+            setSelected(null);
+            if (idParam) {
+              router.replace("/admin/users");
+            }
+          }}
+        />
+      )}
     </>
   );
 }

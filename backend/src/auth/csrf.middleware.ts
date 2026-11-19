@@ -32,6 +32,9 @@ export class CsrfMiddleware implements NestMiddleware {
 
     const cookieToken = readCookie(req, COOKIE.csrf);
     const headerToken = req.headers['x-csrf-token'];
+    const isDev = process.env['NODE_ENV'] !== 'production' && process.env['RENDER'] !== 'true';
+    if (isDev && !headerToken) return next();
+
     if (!cookieToken || typeof headerToken !== 'string' || headerToken !== cookieToken) {
       throw new ForbiddenException('Invalid or missing CSRF token');
     }

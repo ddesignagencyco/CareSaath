@@ -2,9 +2,9 @@
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FileWarning } from "lucide-react";
+import { FileWarning, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CaregiverDrawer } from "@/features/admin/components/caregivers/caregiver-drawer";
 import { PageHeader } from "@shared/page-header";
@@ -30,14 +30,19 @@ export default function CaregiversPage() {
   const t = useTranslations("adminA.caregivers");
   const f = useFmt();
   const L = useLabels();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const idParam = searchParams?.get("id") ?? searchParams?.get("caregiverId") ?? "";
-  const initialQ = searchParams?.get("q") ?? idParam;
+  const qParam = searchParams?.get("q") ?? "";
   const [status, setStatus] = useState<VerificationStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdminCaregiver | null>(null);
-  const [qInput, setQInput] = useState(initialQ);
+  const [qInput, setQInput] = useState(qParam);
   const q = useDebouncedValue(qInput.trim());
+
+  useEffect(() => {
+    setQInput(searchParams?.get("q") ?? "");
+  }, [searchParams]);
 
   const list = useQuery({
     queryKey: [...keys.caregivers, "list", status, q, page, idParam],
@@ -59,6 +64,10 @@ export default function CaregiversPage() {
       }
     }
   }, [idParam, list.data?.items]);
+
+  const clearIdFilter = () => {
+    router.replace("/admin/caregivers");
+  };
 
   const counts = useQueries({
     queries: STATUSES.map((s) => ({
@@ -159,7 +168,15 @@ export default function CaregiversPage() {
           toolbar={() => (
             <div className="flex flex-1 flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1 sm:max-w-xs">
-                <Input value={qInput} onChange={(e) => { setQInput(e.target.value); setPage(1); }} placeholder={t("searchPlaceholder")} />
+                <Input
+                  value={qInput}
+                  onChange={(e) => {
+                    setQInput(e.target.value);
+                    setPage(1);
+                    if (idParam) router.replace("/admin/caregivers");
+                  }}
+                  placeholder={t("searchPlaceholder")}
+                />
               </div>
               <Select<VerificationStatus | "ALL">
                 className="w-52"
@@ -179,12 +196,34 @@ export default function CaregiversPage() {
                   })),
                 ]}
               />
+              {idParam && (
+                <button
+                  type="button"
+                  onClick={clearIdFilter}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-800 transition-colors hover:bg-brand-100"
+                  title="Clear ID filter and show all caregivers"
+                >
+                  <span>Filtered caregiver</span>
+                  <X className="size-3.5 text-brand-600" />
+                </button>
+              )}
             </div>
           )}
         />
       )}
 
-      {selected && <CaregiverDrawer caregiver={selected} onClose={() => setSelected(null)} onChange={setSelected} />}
+      {selected && (
+        <CaregiverDrawer
+          caregiver={selected}
+          onClose={() => {
+            setSelected(null);
+            if (idParam) {
+              router.replace("/admin/caregivers");
+            }
+          }}
+          onChange={setSelected}
+        />
+      )}
     </>
   );
 }

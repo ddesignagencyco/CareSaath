@@ -1,11 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import clsx from "clsx";
 import {
   Bold,
   Code,
-  CornerDownLeft,
-  Eye,
+  FileCode,
   Heading1,
   Heading2,
   Heading3,
@@ -13,19 +15,17 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
-  Mail,
-  MapPin,
   Minus,
-  Phone,
   Quote,
   Redo,
   RemoveFormatting,
   Save,
+  Sparkles,
   Strikethrough,
-  Underline,
+  Underline as UnderlineIcon,
   Undo,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { Button } from "@shared/ui/button";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
@@ -45,13 +45,47 @@ export default function EditorialAdminPage() {
   const [tab, setTab] = useState<"pages" | "contact">("pages");
   const [selectedSlug, setSelectedSlug] = useState<string>("about");
 
-  // Rich Text Editor State
-  const editorRef = useRef<HTMLDivElement>(null);
   const [rawHtmlMode, setRawHtmlMode] = useState(false);
   const [htmlContent, setHtmlContent] = useState("");
 
   // Contact Info State
   const [contact, setContact] = useState<Partial<ContactInfo>>({});
+
+  // TipTap Rich Text Editor Configuration (StarterKit v3 includes link, underline, and undo/redo by default)
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        link: {
+          openOnClick: false,
+          HTMLAttributes: {
+            class: "text-brand-600 underline font-semibold hover:text-brand-700",
+          },
+        },
+      }),
+    ],
+    content: "",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class:
+          "tiptap prose prose-ink max-w-none min-h-[460px] p-6 focus:outline-none leading-relaxed text-ink-900 " +
+          "[&>h1]:text-3xl [&>h1]:font-extrabold [&>h1]:text-ink-950 [&>h1]:mb-4 [&>h1]:mt-6 " +
+          "[&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h2]:mb-3 [&>h2]:mt-6 " +
+          "[&>h3]:text-xl [&>h3]:font-bold [&>h3]:text-ink-900 [&>h3]:mb-2 [&>h3]:mt-4 " +
+          "[&>p]:mb-3 [&>p]:text-base [&>p]:leading-relaxed " +
+          "[&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ul>li]:mb-1 " +
+          "[&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:mb-4 [&>ol>li]:mb-1 " +
+          "[&>blockquote]:border-l-4 [&>blockquote]:border-brand-500 [&>blockquote]:pl-4 [&>blockquote]:italic [&>blockquote]:text-ink-600 [&>blockquote]:my-4 " +
+          "[&>pre]:bg-ink-900 [&>pre]:text-ink-100 [&>pre]:p-4 [&>pre]:rounded-xl [&>pre]:font-mono [&>pre]:text-sm [&>pre]:my-4 " +
+          "[&>code]:bg-ink-100 [&>code]:text-brand-700 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:font-mono [&>code]:text-sm " +
+          "[&>hr]:my-6 [&>hr]:border-ink-200",
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      setHtmlContent(ed.getHTML());
+    },
+  });
 
   // Query Page Content
   const pageQuery = useQuery({
@@ -60,16 +94,16 @@ export default function EditorialAdminPage() {
     enabled: tab === "pages",
   });
 
-  // Sync loaded page content to editor
+  // Sync loaded page content to TipTap editor
   useEffect(() => {
-    if (pageQuery.data) {
+    if (pageQuery.data && editor) {
       const content = pageQuery.data.content || "";
       setHtmlContent(content);
-      if (editorRef.current && !rawHtmlMode) {
-        editorRef.current.innerHTML = content;
+      if (editor.getHTML() !== content) {
+        editor.commands.setContent(content);
       }
     }
-  }, [pageQuery.data, selectedSlug, rawHtmlMode]);
+  }, [pageQuery.data, selectedSlug, editor]);
 
   // Query Contact Info
   const contactQuery = useQuery({
@@ -89,7 +123,7 @@ export default function EditorialAdminPage() {
     () => {
       const finalContent = rawHtmlMode
         ? htmlContent
-        : (editorRef.current?.innerHTML ?? htmlContent);
+        : (editor?.getHTML() ?? htmlContent);
       return editorialApi.updatePage(selectedSlug, { content: finalContent });
     },
     {
@@ -104,49 +138,37 @@ export default function EditorialAdminPage() {
     success: "Platform contact information updated successfully",
   });
 
-  // Execute formatting command on contentEditable
-  const execCmd = (command: string, value: string | undefined = undefined) => {
-    if (rawHtmlMode) return;
-    editorRef.current?.focus();
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      setHtmlContent(editorRef.current.innerHTML);
-    }
-  };
-
   const handleLink = () => {
-    if (rawHtmlMode) return;
-    const url = prompt("Enter URL link (e.g. https://... or mailto:...):");
-    if (url) {
-      execCmd("createLink", url);
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href;
+    const url = prompt("Enter URL link (e.g. https://... or mailto:...):", previousUrl);
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
     }
-  };
-
-  const handleEditorInput = () => {
-    if (editorRef.current) {
-      setHtmlContent(editorRef.current.innerHTML);
-    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
 
   const toggleRawHtml = () => {
     if (rawHtmlMode) {
-      // Switching back to visual editor: sync raw HTML into contentEditable
       setRawHtmlMode(false);
-      setTimeout(() => {
-        if (editorRef.current) {
-          editorRef.current.innerHTML = htmlContent;
-        }
-      }, 0);
+      if (editor) {
+        editor.commands.setContent(htmlContent);
+      }
     } else {
-      // Switching to raw HTML view: capture current innerHTML
-      if (editorRef.current) {
-        setHtmlContent(editorRef.current.innerHTML);
+      if (editor) {
+        setHtmlContent(editor.getHTML());
       }
       setRawHtmlMode(true);
     }
   };
 
   const currentPage = PAGES.find((p) => p.slug === selectedSlug);
+
+  const textContent = editor?.getText() ?? "";
+  const wordCount = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
+  const charCount = textContent.length;
 
   return (
     <>
@@ -194,12 +216,12 @@ export default function EditorialAdminPage() {
             })}
           </div>
 
-          {/* Rich Text Editor Main Card */}
+          {/* TipTap Rich Text Editor Main Card */}
           <div className="lg:col-span-3">
             <Card>
               <CardHeader
                 title={`Editing: ${currentPage?.label ?? selectedSlug}`}
-                description="Use the rich formatting toolbar below to edit headings, bold text, bullet points, and paragraphs."
+                description="Powered by TipTap rich text engine. Use formatting controls below to style headings, lists, links, and text."
                 action={
                   <div className="flex items-center gap-2">
                     <Button
@@ -208,7 +230,7 @@ export default function EditorialAdminPage() {
                       onClick={toggleRawHtml}
                       title="Toggle raw HTML source view"
                     >
-                      <Code className="size-4" /> {rawHtmlMode ? "Visual Editor" : "HTML Source"}
+                      <Code className="size-4" /> {rawHtmlMode ? "TipTap Visual Editor" : "HTML Source"}
                     </Button>
                     <Button
                       size="sm"
@@ -229,106 +251,177 @@ export default function EditorialAdminPage() {
                   </div>
                 ) : (
                   <div>
-                    {/* Rich Text Formatting Toolbar */}
-                    {!rawHtmlMode && (
+                    {/* TipTap Visual Toolbar */}
+                    {!rawHtmlMode && editor && (
                       <div className="flex flex-wrap items-center gap-1 border-b border-ink-100 bg-ink-25/80 px-3 py-2">
-                        {/* Heading / Block Dropdown */}
+                        {/* Heading / Block Controls */}
                         <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
                           <button
                             type="button"
-                            onClick={() => execCmd("formatBlock", "<p>")}
+                            onClick={() => editor.chain().focus().setParagraph().run()}
                             title="Normal Paragraph"
-                            className="rounded-lg px-2 py-1 text-xs font-semibold text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg px-2 py-1 text-xs font-semibold transition-colors",
+                              editor.isActive("paragraph") && !editor.isActive("heading")
+                                ? "bg-brand-100 text-brand-900 font-bold shadow-xs"
+                                : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             Normal
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("formatBlock", "<h2>")}
+                            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                            title="Heading 1"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("heading", { level: 1 })
+                                ? "bg-brand-100 text-brand-900 font-bold shadow-xs"
+                                : "text-ink-700 hover:bg-ink-100"
+                            )}
+                          >
+                            <Heading1 className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                             title="Heading 2"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("heading", { level: 2 })
+                                ? "bg-brand-100 text-brand-900 font-bold shadow-xs"
+                                : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Heading2 className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("formatBlock", "<h3>")}
+                            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
                             title="Heading 3"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("heading", { level: 3 })
+                                ? "bg-brand-100 text-brand-900 font-bold shadow-xs"
+                                : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Heading3 className="size-4" />
                           </button>
                         </div>
 
-                        {/* Inline Formatting */}
+                        {/* Inline Text Formatting */}
                         <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
                           <button
                             type="button"
-                            onClick={() => execCmd("bold")}
+                            onClick={() => editor.chain().focus().toggleBold().run()}
                             title="Bold (Ctrl+B)"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("bold") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Bold className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("italic")}
+                            onClick={() => editor.chain().focus().toggleItalic().run()}
                             title="Italic (Ctrl+I)"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("italic") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Italic className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("underline")}
+                            onClick={() => editor.chain().focus().toggleUnderline().run()}
                             title="Underline (Ctrl+U)"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("underline") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
-                            <Underline className="size-4" />
+                            <UnderlineIcon className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("strikeThrough")}
+                            onClick={() => editor.chain().focus().toggleStrike().run()}
                             title="Strikethrough"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("strike") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Strikethrough className="size-4" />
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => editor.chain().focus().toggleCode().run()}
+                            title="Inline code"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("code") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
+                          >
+                            <Code className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                            title="Code block"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("codeBlock") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
+                          >
+                            <FileCode className="size-4" />
+                          </button>
                         </div>
 
-                        {/* Lists */}
+                        {/* Lists & Quotes */}
                         <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
                           <button
                             type="button"
-                            onClick={() => execCmd("insertUnorderedList")}
+                            onClick={() => editor.chain().focus().toggleBulletList().run()}
                             title="Bullet List"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("bulletList") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <List className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("insertOrderedList")}
+                            onClick={() => editor.chain().focus().toggleOrderedList().run()}
                             title="Numbered List"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("orderedList") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <ListOrdered className="size-4" />
                           </button>
-                        </div>
-
-                        {/* Blockquote & Divider & Link */}
-                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
                           <button
                             type="button"
-                            onClick={() => execCmd("formatBlock", "<blockquote>")}
+                            onClick={() => editor.chain().focus().toggleBlockquote().run()}
                             title="Quote"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("blockquote") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <Quote className="size-4" />
                           </button>
+                        </div>
+
+                        {/* Divider & Link */}
+                        <div className="flex items-center gap-0.5 border-r border-ink-200 pr-2 mr-1">
                           <button
                             type="button"
-                            onClick={() => execCmd("insertHorizontalRule")}
+                            onClick={() => editor.chain().focus().setHorizontalRule().run()}
                             title="Horizontal Divider"
                             className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
                           >
@@ -337,8 +430,11 @@ export default function EditorialAdminPage() {
                           <button
                             type="button"
                             onClick={handleLink}
-                            title="Insert Link"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            title="Insert / Edit Link"
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              editor.isActive("link") ? "bg-brand-100 text-brand-900 font-bold shadow-xs" : "text-ink-700 hover:bg-ink-100"
+                            )}
                           >
                             <LinkIcon className="size-4" />
                           </button>
@@ -348,7 +444,7 @@ export default function EditorialAdminPage() {
                         <div className="flex items-center gap-0.5">
                           <button
                             type="button"
-                            onClick={() => execCmd("removeFormat")}
+                            onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
                             title="Clear Formatting"
                             className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
                           >
@@ -356,17 +452,19 @@ export default function EditorialAdminPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("undo")}
+                            onClick={() => editor.chain().focus().undo().run()}
+                            disabled={!editor.can().undo()}
                             title="Undo (Ctrl+Z)"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100 disabled:opacity-30"
                           >
                             <Undo className="size-4" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => execCmd("redo")}
+                            onClick={() => editor.chain().focus().redo().run()}
+                            disabled={!editor.can().redo()}
                             title="Redo (Ctrl+Y)"
-                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100"
+                            className="rounded-lg p-1.5 text-ink-700 hover:bg-ink-100 disabled:opacity-30"
                           >
                             <Redo className="size-4" />
                           </button>
@@ -384,13 +482,25 @@ export default function EditorialAdminPage() {
                         placeholder="Enter HTML source here..."
                       />
                     ) : (
-                      <div
-                        ref={editorRef}
-                        contentEditable
-                        onInput={handleEditorInput}
-                        className="min-h-[420px] p-6 focus:outline-none text-ink-900 leading-relaxed [&>h2]:text-2xl [&>h2]:font-bold [&>h2]:text-ink-950 [&>h2]:mt-6 [&>h2]:mb-3 [&>h3]:text-lg [&>h3]:font-bold [&>h3]:text-ink-900 [&>h3]:mt-5 [&>h3]:mb-2 [&>p]:mb-3 [&>p]:text-base [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:mb-4 [&>li]:mb-1.5 [&>blockquote]:border-l-4 [&>blockquote]:border-brand-500 [&>blockquote]:pl-4 [&>blockquote]:italic [&>blockquote]:text-ink-600 [&>blockquote]:my-4 [&>hr]:my-6 [&>hr]:border-ink-200"
-                      />
+                      <div className="min-h-[460px] bg-white">
+                        <EditorContent editor={editor} />
+                      </div>
                     )}
+
+                    {/* Editor Status Bar */}
+                    <div className="flex flex-wrap items-center justify-between border-t border-ink-100 bg-ink-25/60 px-4 py-2 text-xs text-ink-500">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200">
+                          <Sparkles className="size-3 text-brand-600" /> TipTap WYSIWYG
+                        </span>
+                        <span>ProseMirror document engine</span>
+                      </div>
+                      <div className="flex items-center gap-3 tabular-nums font-mono">
+                        <span>{wordCount} words</span>
+                        <span>·</span>
+                        <span>{charCount} characters</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardBody>
@@ -404,15 +514,6 @@ export default function EditorialAdminPage() {
           <CardHeader
             title="Official Contact Details"
             description="Essential contact information displayed to users across the website and support channels."
-            action={
-              <Button
-                size="sm"
-                loading={saveContact.isPending}
-                onClick={() => saveContact.mutate(undefined)}
-              >
-                <Save className="size-4" /> Save Contact Details
-              </Button>
-            }
           />
           <CardBody>
             {contactQuery.isLoading ? (
