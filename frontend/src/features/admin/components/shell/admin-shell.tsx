@@ -86,7 +86,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           collapsed ? "w-20" : "w-64",
         )}
       >
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={collapsed} enabled={hydrated && !!current} />
       </aside>
 
       {menuOpen && (

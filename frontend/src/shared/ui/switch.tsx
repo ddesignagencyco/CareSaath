@@ -14,7 +14,7 @@ export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrim
       )}
       {...props}
     >
-      <SwitchPrimitive.Thumb className="pointer-events-none block size-6 translate-x-0.5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform data-[state=checked]:translate-x-[22px] rtl:data-[state=checked]:-translate-x-[22px] rtl:-scale-x-100" />
+      <SwitchPrimitive.Thumb className="pointer-events-none block size-6 ltr:translate-x-0.5 rtl:-translate-x-0.5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ltr:data-[state=checked]:translate-x-[22px] rtl:data-[state=checked]:-translate-x-[22px]" />
     </SwitchPrimitive.Root>
   );
 }

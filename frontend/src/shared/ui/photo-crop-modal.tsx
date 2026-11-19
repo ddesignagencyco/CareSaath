@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./dialog";
 import { useToast } from "./toast";
 
 const VIEWPORT_SIZE = 280; // px on screen
+const GUIDE_DIAMETER = 240; // px circular guide diameter (r=120)
 const OUTPUT_SIZE = 512; // px square export
 const MAX_EXPORT_BYTES = 10 * 1024 * 1024;
 
@@ -22,8 +23,18 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
   const t = useTranslations("common.photo");
   const toast = useToast();
 
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const toastRef = useRef(toast);
+  const tRef = useRef(t);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    toastRef.current = toast;
+    tRef.current = t;
+  });
+
+  const [prevFile, setPrevFile] = useState<File | null>(null);
+  const [loaded, setLoaded] = useState<{ file: File; url: string; width: number; height: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -31,33 +42,52 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [processing, setProcessing] = useState(false);
 
-  // Load image file into an object URL
-  useEffect(() => {
-    if (!file) {
-      setImageSrc(null);
-      setNaturalSize(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setImageSrc(url);
+  if (file !== prevFile) {
+    setPrevFile(file);
     setZoom(1);
     setRotation(0);
     setOffset({ x: 0, y: 0 });
+  }
+
+  const imageSrc = loaded && loaded.file === file ? loaded.url : null;
+  const naturalSize = loaded && loaded.file === file ? { width: loaded.width, height: loaded.height } : null;
+
+  // Load image file into an object URL
+  useEffect(() => {
+    if (!file) return;
+    let cancelled = false;
+    const url = URL.createObjectURL(file);
 
     const img = new Image();
     img.onload = () => {
-      setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+      if (!cancelled) setLoaded({ file, url, width: img.naturalWidth, height: img.naturalHeight });
     };
     img.onerror = () => {
-      toast.error(t("invalid"));
-      onClose();
+      if (!cancelled) {
+        toastRef.current.error(tRef.current("invalid"));
+        onCloseRef.current();
+      }
     };
     img.src = url;
 
     return () => {
+      cancelled = true;
       URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  // Attach non-passive wheel listener so zooming prevents background scroll without console errors.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!open || !el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY * -0.002;
+      setZoom((z) => Math.min(3, Math.max(1, Number((z + delta).toFixed(2)))));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [open]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -85,12 +115,6 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
     }
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY * -0.002;
-    setZoom((z) => Math.min(3, Math.max(1, Number((z + delta).toFixed(2)))));
-  };
-
   const rotateCw = () => setRotation((r) => (r + 90) % 360);
   const resetAll = () => {
     setZoom(1);
@@ -103,7 +127,6 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
   const effectiveWidth = naturalSize ? (isRotated90or270 ? naturalSize.height : naturalSize.width) : VIEWPORT_SIZE;
   const effectiveHeight = naturalSize ? (isRotated90or270 ? naturalSize.width : naturalSize.height) : VIEWPORT_SIZE;
   const baseScale = Math.max(VIEWPORT_SIZE / (effectiveWidth || 1), VIEWPORT_SIZE / (effectiveHeight || 1));
-  const finalScale = baseScale * zoom;
 
   const handleApply = async () => {
     if (!imageSrc || !file || !naturalSize) return;
@@ -128,7 +151,8 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-      const ratio = OUTPUT_SIZE / VIEWPORT_SIZE;
+      // Match the 240px circular guide so the exported avatar matches the user's framing 1:1.
+      const ratio = OUTPUT_SIZE / GUIDE_DIAMETER;
 
       // Transform to match viewport center
       ctx.save();
@@ -177,15 +201,16 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
         <div className="flex flex-col items-center gap-4">
           {/* Crop Viewport with Circular Avatar Mask */}
           <div
+            ref={viewportRef}
             className="relative size-[280px] overflow-hidden rounded-2xl bg-ink-900 select-none touch-none shadow-inner"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            onWheel={handleWheel}
           >
             {/* The transformed image */}
             {imageSrc && naturalSize && (
+              // eslint-disable-next-line @next/next/no-img-element -- local blob preview for interactive canvas crop
               <img
                 src={imageSrc}
                 alt=""
@@ -280,7 +305,6 @@ export function PhotoCropModal({ open, file, onClose, onCrop }: PhotoCropModalPr
             {t("cancel")}
           </Button>
           <Button variant="primary" onClick={handleApply} loading={processing}>
-            {processing ? <Loader2 className="size-4 animate-spin me-2" /> : null}
             {t("apply")}
           </Button>
         </div>

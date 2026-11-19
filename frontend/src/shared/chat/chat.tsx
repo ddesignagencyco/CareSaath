@@ -108,8 +108,11 @@ function UploadBar({ onDone, mine }: { onDone: () => void; mine: boolean }) {
 function preview(m: ChatMessage, t: (key: "deleted" | "photo" | "video" | "file" | "voice" | "callOutgoing" | "callIncoming" | "callMissed" | "callRejected") => string): string {
   if (m.deleted) return t("deleted");
   if (m.type === "call") {
-    const status = m.call?.status ?? "INITIATED";
-    return status === "MISSED" ? `📞 ${t("callMissed")}` : status === "REJECTED" ? `📞 ${t("callRejected")}` : `📞 ${t("callOutgoing")}`;
+    // CALL rows carry the caller id, so unlike a generic preview we do know
+    // which side placed it — use the same wording as the in-thread call row.
+    if (m.sender === "me") return `📞 ${t("callOutgoing")}`;
+    const status = m.call?.status;
+    return status === "MISSED" ? `📞 ${t("callMissed")}` : status === "REJECTED" ? `📞 ${t("callRejected")}` : `📞 ${t("callIncoming")}`;
   }
   if (m.type === "image") return `📷 ${t("photo")}`;
   if (m.type === "video") return `🎥 ${t("video")}`;
@@ -223,26 +226,29 @@ function MessageBubble({
     onOpenActions(active ? null : message.id, bTop - cTop < 56);
   };
 
-  // Calls are CallLog rows surfaced in the chat timeline — a centred,
-  // tappable system line like WhatsApp (not a chat bubble).
+  // Calls are CallLog rows surfaced in the chat timeline — a centred
+  // system line like WhatsApp (not a chat bubble).
   if (message.type === "call") {
-    const status = message.call?.status ?? "INITIATED";
-    const missed = !mine && (status === "MISSED" || status === "REJECTED");
+    // Mobile semantics: caller sees outgoing, the other party sees
+    // incoming / missed / declined, and a connected call carries mm:ss.
+    const status = message.call?.status;
+    const missed = !mine && status === "MISSED";
+    const rejected = !mine && status === "REJECTED";
     const label = mine
       ? t("callOutgoing")
-      : status === "MISSED"
+      : missed
         ? t("callMissed")
-        : status === "REJECTED"
+        : rejected
           ? t("callRejected")
           : t("callIncoming");
-    const Icon = mine ? PhoneOutgoing : missed ? PhoneMissed : PhoneIncoming;
+    const Icon = mine ? PhoneOutgoing : rejected ? PhoneOff : missed ? PhoneMissed : PhoneIncoming;
     const dur = message.call?.durationSec;
     return (
       <div className="flex justify-center py-2">
         <span
           className={clsx(
             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
-            missed
+            missed || rejected
               ? "border-danger-200 bg-danger-50 text-danger-700"
               : "border-ink-100 bg-white text-ink-500",
           )}
@@ -251,9 +257,10 @@ function MessageBubble({
           <span>{label}</span>
           {status === "ENDED" && dur != null && (
             <span className="tabular">
-              · {Math.floor(dur / 60)}:{String(dur % 60).padStart(2, "0")}
+              · {String(Math.floor(dur / 60)).padStart(2, "0")}:{String(dur % 60).padStart(2, "0")}
             </span>
           )}
+          <span className="tabular opacity-70">{clock(message.createdAt)}</span>
         </span>
       </div>
     );
@@ -494,9 +501,10 @@ function Composer({ onSend, replyTo, onCancelReply }: { onSend: (input: SendInpu
         // MediaRecorder often reports "audio/webm;codecs=opus" (or mp4 with a
         // codec suffix); the backend whitelist expects a bare mime type.
         const mime = (rec.mimeType || "audio/webm").split(";")[0].trim();
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
         const blob = new Blob(chunksRef.current, { type: mime });
         const reader = new FileReader();
-        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: "voice-note.webm" });
+        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: `voice-note.${ext}` });
         reader.readAsDataURL(blob);
         onCancelReply();
       };

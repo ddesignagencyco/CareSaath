@@ -35,8 +35,8 @@ interface NavItem {
 }
 
 /** Badge counts come from `total` on page-size-1 list calls. */
-function useNavCounts() {
-  const opts = { refetchInterval: 60_000 };
+function useNavCounts(enabled: boolean) {
+  const opts = { refetchInterval: 60_000, enabled };
   const pending = useQuery({
     queryKey: [...keys.caregivers, "count", "PENDING"],
     queryFn: () => caregiversApi.list({ status: "PENDING", limit: 1 }),
@@ -65,9 +65,9 @@ function useNavCounts() {
   };
 }
 
-export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+export function Sidebar({ onNavigate, collapsed = false, enabled = true }: { onNavigate?: () => void; collapsed?: boolean; enabled?: boolean }) {
   const pathname = usePathname();
-  const counts = useNavCounts();
+  const counts = useNavCounts(enabled);
   const t = useTranslations("adminA");
   const tNav = useTranslations("common.nav");
 

@@ -146,7 +146,8 @@ function RequestPayout({ available, accounts, onClose }: { available: number; ac
               <Input
                 id={id}
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
+                step="0.01"
                 dir="ltr"
                 min={1}
                 className="tabular h-12 ps-10 text-lg font-bold"
@@ -231,7 +232,6 @@ function AccountCard({ account, onEdit }: { account: PayoutAccount; onEdit: () =
 export default function EarningsPage() {
   const t = useTranslations("caregiverB.earnings");
   const tc = useTranslations("common.actions");
-  const f = useFmt();
   const earnings = useQuery({ queryKey: keys.earnings, queryFn: moneyApi.earnings });
   const accounts = useQuery({ queryKey: keys.accounts, queryFn: moneyApi.accounts });
   const payouts = useQuery({ queryKey: [...keys.payouts, "list"], queryFn: () => moneyApi.payouts({ limit: 20 }) });

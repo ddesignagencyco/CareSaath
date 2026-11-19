@@ -25,7 +25,7 @@ import { Reveal } from "./reveal";
 import { SiteFooter } from "./site-footer";
 
 export const metadata: Metadata = {
-  title: "CareSaath — Verified home nursing & physiotherapy in Pakistan",
+  title: { absolute: "CareSaath — Verified home nursing & physiotherapy in Pakistan" },
   description:
     "Book a licence-verified nurse or physiotherapist to visit you at home. Live visit tracking, OTP check-in, SOS safety, and cash or digital payment — in Urdu or English.",
 };
@@ -126,7 +126,7 @@ export default function Home() {
           <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 size-80 rounded-full bg-accent-200/25 blur-3xl" />
           <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
             {/* Nav */}
-            <nav className="grid h-20 grid-cols-[1fr_auto_1fr] items-center">
+            <nav className="flex h-20 items-center justify-between md:grid md:grid-cols-[1fr_auto_1fr]">
               <Link href="/" aria-label="CareSaath home" className="justify-self-start">
                 <Logo subtitle="Home care" />
               </Link>
@@ -138,17 +138,24 @@ export default function Home() {
                 ))}
               </div>
               <div className="flex items-center gap-1 justify-self-end sm:gap-2">
-                <Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-semibold text-ink-700 transition-colors hover:text-ink-900">
+                <Link href="/login" className="rounded-full px-3 py-2 text-sm font-semibold text-ink-700 transition-colors hover:text-ink-900 sm:px-4 sm:py-2.5">
                   Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="inline-flex items-center rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+                  className="inline-flex items-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 sm:px-5 sm:py-2.5"
                 >
                   Sign up
                 </Link>
               </div>
             </nav>
+            <div className="flex items-center justify-center gap-6 pb-3 text-xs font-medium text-ink-600 md:hidden">
+              {NAV.map(({ label, href }) => (
+                <Link key={label} href={href} className="hover:text-ink-900">
+                  {label}
+                </Link>
+              ))}
+            </div>
 
             {/* Hero body */}
             <div className="flex flex-wrap items-center gap-x-14 gap-y-10 pt-4 pb-14 sm:pt-6">

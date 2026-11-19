@@ -9,6 +9,11 @@ import { IconButton } from "./button";
 
 const FOCUSABLE = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+// Module-level stack so nested Modal-over-Drawer only closes the topmost overlay
+// on Escape and restores body scroll only when the last overlay closes.
+const overlayStack: symbol[] = [];
+let savedBodyOverflow: string | null = null;
+
 /** Scroll-lock, Escape-to-close, initial focus, focus trap, and focus restore on close. */
 function useOverlay(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
   // Keep onClose current without re-running the focus effect (it's usually an inline fn),
@@ -19,10 +24,15 @@ function useOverlay(open: boolean, onClose: () => void, ref: React.RefObject<HTM
   });
   useEffect(() => {
     if (!open) return;
+    const token = Symbol("overlay");
+    if (overlayStack.length === 0) {
+      savedBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    overlayStack.push(token);
+
     const container = ref.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
 
     const items = () => (container ? Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null) : []);
     // Respect a field's own autoFocus: only take focus if it isn't already inside the dialog.
@@ -31,6 +41,7 @@ function useOverlay(open: boolean, onClose: () => void, ref: React.RefObject<HTM
     }
 
     const onKey = (e: KeyboardEvent) => {
+      if (overlayStack[overlayStack.length - 1] !== token) return;
       if (e.key === "Escape") {
         onCloseRef.current();
         return;
@@ -55,7 +66,12 @@ function useOverlay(open: boolean, onClose: () => void, ref: React.RefObject<HTM
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      const idx = overlayStack.lastIndexOf(token);
+      if (idx !== -1) overlayStack.splice(idx, 1);
+      if (overlayStack.length === 0 && savedBodyOverflow !== null) {
+        document.body.style.overflow = savedBodyOverflow;
+        savedBodyOverflow = null;
+      }
       window.removeEventListener("keydown", onKey);
       previouslyFocused?.focus?.();
     };
@@ -82,7 +98,7 @@ export function Modal({
   const ref = useRef<HTMLDivElement>(null);
   useOverlay(open, onClose, ref);
   const t = useTranslations("common.actions");
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-ink-900/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
@@ -137,7 +153,7 @@ export function Drawer({
   const titleId = useId();
   useOverlay(open, onClose, ref);
   const t = useTranslations("common.actions");
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-ink-900/30" onClick={onClose} aria-hidden />

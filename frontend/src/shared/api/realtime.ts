@@ -26,6 +26,8 @@ export function useRealtime(opts: {
   const { session, queryClient, notificationsKey, refresh, enabled } = opts;
   const refreshRef = useRef(refresh);
   const notifKeyRef = useRef(notificationsKey);
+  /** Coalesces bursts of entity.updated / reconnect events into one global refetch. */
+  const refetchAllTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     refreshRef.current = refresh;
     notifKeyRef.current = notificationsKey;
@@ -41,6 +43,16 @@ export function useRealtime(opts: {
       ...(API_ACCESS_KEY ? { query: { apiKey: API_ACCESS_KEY } } : {}),
     });
     const refetchAll = () => void queryClient.invalidateQueries();
+    // Several entity.updated events often arrive back-to-back (e.g. a visit
+    // transition emits `visit` + `booking`). Without a debounce each one
+    // invalidates every cached query and the screen shows a permanent spinner.
+    const scheduleRefetchAll = () => {
+      if (refetchAllTimer.current) return;
+      refetchAllTimer.current = setTimeout(() => {
+        refetchAllTimer.current = null;
+        refetchAll();
+      }, 250);
+    };
     const refetchNotifs = () => void queryClient.invalidateQueries({ queryKey: notifKeyRef.current });
     // Chat is the hot path (a message per keystroke-send): only refetch the chat
     // threads for those, not every query on the current screen.
@@ -52,7 +64,7 @@ export function useRealtime(opts: {
       } else {
         // booking / visit / payment / user(photo, name) / caregiver — refresh
         // every cached identity and list so no screen keeps showing stale data.
-        refetchAll();
+        scheduleRefetchAll();
       }
     };
 
@@ -68,9 +80,21 @@ export function useRealtime(opts: {
     socket.on("visit.location", (p?: { visitId?: string }) => {
       if (p?.visitId) queryClient.setQueryData(["visit-location", p.visitId], p);
     });
+    let disposed = false;
+    let authErrorRetried = false;
+
+    socket.on("connect", () => {
+      authErrorRetried = false;
+    });
     // Bad/inactive token: attempt one refresh before closing permanently
     socket.on("auth.error", async () => {
+      if (authErrorRetried) {
+        socket.close();
+        return;
+      }
+      authErrorRetried = true;
       const refreshed = await refreshRef.current().catch(() => false);
+      if (disposed) return;
       if (refreshed) {
         socket.connect();
       } else {
@@ -80,17 +104,25 @@ export function useRealtime(opts: {
     // Token expired: refresh first, then reconnect with the new access cookie.
     socket.on("auth.expired", async () => {
       const refreshed = await refreshRef.current().catch(() => false);
+      if (disposed) return;
       if (refreshed) {
         socket.disconnect();
         socket.connect();
+      } else {
+        socket.close();
       }
     });
-    socket.io.on("reconnect", refetchAll);
-    // Also refetch when the socket finishes authenticating (first connect or a
-    // fresh token after expiry) — events sent while disconnected are lost.
-    socket.on("ready", refetchAll);
+    // Events emitted while the socket was down are recovered here. `ready`
+    // intentionally does NOT refetch: it fires on the initial connect too,
+    // right after the page's queries have loaded, and invalidating everything
+    // there made every screen reload on mount.
+    socket.io.on("reconnect", scheduleRefetchAll);
 
     return () => {
+      disposed = true;
+      if (refetchAllTimer.current) clearTimeout(refetchAllTimer.current);
+      refetchAllTimer.current = null;
+      socket.io?.off?.("reconnect", scheduleRefetchAll);
       socket.removeAllListeners();
       socket.close();
     };

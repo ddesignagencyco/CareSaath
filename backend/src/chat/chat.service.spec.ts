@@ -122,7 +122,7 @@ describe('ChatService', () => {
     prisma.chatMessage.count.mockResolvedValue(1);
     prisma.chatMessage.findMany.mockResolvedValue([{ id: 'msg-1', mediaKey: null }]);
     await expect(service.list(customer, 'b-1', { page: 1, limit: 50 })).resolves.toEqual({
-      items: [{ id: 'msg-1', mediaKey: null, url: null }],
+      items: [{ id: 'msg-1', mediaKey: null, url: null, fileName: null }],
       page: 1,
       limit: 50,
       total: 1,
@@ -134,10 +134,14 @@ describe('ChatService', () => {
     prisma.booking.findFirst.mockResolvedValue(booking);
     prisma.chatMessage.count.mockResolvedValue(1);
     prisma.chatMessage.findMany.mockResolvedValue([
-      { id: 'msg-1', mediaKey: 'bookings/b-1/media/1-note.webm' },
+      { id: 'msg-1', mediaKey: 'bookings/b-1/media/1732000000000-note.webm' },
     ]);
     const result = await service.list(customer, 'b-1', { page: 1, limit: 50 });
-    expect(result.items[0]).toMatchObject({ id: 'msg-1', url: 'https://files.test/note.webm' });
+    expect(result.items[0]).toMatchObject({
+      id: 'msg-1',
+      url: 'https://files.test/note.webm',
+      fileName: 'note.webm',
+    });
     expect(storage.presignedGet).toHaveBeenCalled();
   });
 

@@ -138,7 +138,7 @@ export function NotificationBell({
       {open && (
         <div
           role="menu"
-          className="absolute end-0 z-50 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-pop"
+          className="fixed inset-x-4 top-16 z-50 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-pop sm:absolute sm:inset-x-auto sm:top-auto sm:end-0 sm:mt-2 sm:w-[22rem]"
         >
           <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
             <p className="text-sm font-bold text-ink-900">{labels.title}</p>
@@ -166,7 +166,7 @@ export function NotificationBell({
               <ul className="divide-y divide-ink-100">
                 {items.slice(0, 8).map((n) => {
                   const v = describe(n);
-                  const isNew = n.createdAt > seenBefore;
+                  const isNew = !n.readAt && n.createdAt > seenBefore;
                   const inner = (
                     <>
                       <span className={clsx("mt-1.5 size-2.5 shrink-0 rounded-full", DOT[v.tone], !isNew && "opacity-40")} aria-hidden />
@@ -187,7 +187,7 @@ export function NotificationBell({
                           {inner}
                         </Link>
                       ) : (
-                        <div className="flex gap-3 px-4 py-3">{inner}</div>
+                        <div className={clsx("flex gap-3 px-4 py-3", isNew && "bg-brand-50/40")}>{inner}</div>
                       )}
                     </li>
                   );

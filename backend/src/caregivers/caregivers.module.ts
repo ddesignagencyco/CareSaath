@@ -1476,7 +1476,9 @@ export class PublicCaregiverController {
   })
   async nearby(@Query() query: SearchQueryDto, @Res({ passthrough: true }) res: Response) {
     res.setHeader('x-cache', 'BYPASS');
-    return this.caregivers.searchNearbyNow({ ...query, immediate: true });
+    return this.caregivers.searchNearbyNow(
+      Object.assign(new SearchQueryDto(), query, { immediate: true }),
+    );
   }
 
   @Get(':id')

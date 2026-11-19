@@ -68,8 +68,9 @@ export function PayoutAccountForm({ account, onClose }: { account: PayoutAccount
       : numberErr.kind === "iban"
         ? t("ibanError")
         : t("accountError");
-  // Editing: number may be left blank to keep the existing one.
-  const numberOk = account ? !number || (checked !== null && "value" in checked) : checked !== null && "value" in checked;
+  // Editing: number may be left blank only when keeping the same account type.
+  const typeChanged = !!account && type !== account.type;
+  const numberOk = account && !typeChanged ? !number || (checked !== null && "value" in checked) : checked !== null && "value" in checked;
   const valid = provider.length >= 2 && title.trim().length >= 2 && numberOk;
 
   const save = useAction(

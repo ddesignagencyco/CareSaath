@@ -40,18 +40,21 @@ function ReturnInner() {
   const bookingId = payment.data?.visit.bookingId;
   const bookingHref = bookingId ? `/customer/bookings/${bookingId}` : "/customer/bookings";
 
-  const state: "cancelled" | "paid" | "confirming" | "unknown" = cancelled
+  const state: "cancelled" | "paid" | "failed" | "confirming" | "unknown" = cancelled
     ? "cancelled"
     : payment.data?.status === "PAID"
       ? "paid"
-      : payment.data?.status === "PENDING"
-        ? "confirming"
-        : paymentId
+      : payment.isError || payment.data?.status === "FAILED" || payment.data?.status === "REFUNDED"
+        ? "failed"
+        : payment.data?.status === "PENDING"
           ? "confirming"
-          : "unknown";
+          : paymentId
+            ? "confirming"
+            : "unknown";
 
   const view = {
     cancelled: { Icon: XCircle, tone: "text-danger-600 bg-danger-50", title: t("cancelledTitle"), body: t("cancelledBody") },
+    failed: { Icon: XCircle, tone: "text-danger-600 bg-danger-50", title: t("cancelledTitle"), body: t("cancelledBody") },
     paid: { Icon: CheckCircle2, tone: "text-success-700 bg-success-50", title: t("paidTitle"), body: t("paidBody") },
     confirming: { Icon: Clock, tone: "text-accent-700 bg-accent-50", title: t("confirmingTitle"), body: t("confirmingBody") },
     unknown: { Icon: Clock, tone: "text-ink-600 bg-ink-50", title: t("genericTitle"), body: t("genericBody") },
@@ -76,8 +79,16 @@ function ReturnInner() {
         )}
 
         <div className="mt-8 flex flex-col gap-3">
-          <Link href={bookingHref}>
-            <Button className="w-full">{state === "cancelled" ? t("tryAgain") : t("viewBooking")}</Button>
+          {state === "failed" && payment.isError && (
+            <Button variant="secondary" className="w-full" onClick={() => payment.refetch()}>
+              {t("tryAgain")}
+            </Button>
+          )}
+          <Link
+            href={bookingHref}
+            className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+          >
+            {state === "cancelled" || state === "failed" ? t("tryAgain") : t("viewBooking")}
           </Link>
           <Link href="/customer/bookings" className="text-sm font-semibold text-brand-700 hover:underline">
             {t("myBookings")}

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Check, ChevronDown, X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useId } from "react";
 import ReactSelect, {
   components,
@@ -127,10 +127,12 @@ export function Select<T extends string>({
 }) {
   // Stable id keeps SSR and client markup in sync.
   const instanceId = useId();
+  const locale = useLocale();
   const t = useTranslations("common.states");
   return (
     <ReactSelect<Opt, false>
       {...common}
+      isRtl={locale === "ur"}
       instanceId={instanceId}
       inputId={inputId}
       aria-label={ariaLabel}
@@ -168,10 +170,12 @@ export function MultiSelect<T extends string>({
   closeMenuOnSelect?: boolean;
 }) {
   const instanceId = useId();
+  const locale = useLocale();
   const t = useTranslations("common.states");
   return (
     <ReactSelect<Opt, true>
       {...common}
+      isRtl={locale === "ur"}
       isMulti
       closeMenuOnSelect={closeMenuOnSelect}
       hideSelectedOptions={false}

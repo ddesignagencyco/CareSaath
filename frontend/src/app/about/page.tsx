@@ -6,7 +6,7 @@ import { SiteFooter } from "../site-footer";
 import { SiteNav } from "../site-nav";
 
 export const metadata: Metadata = {
-  title: "About CareSaath — Verified home care for Pakistan",
+  title: "About — Verified home care for Pakistan",
   description:
     "CareSaath is a two-sided marketplace connecting families with licence-verified nurses and physiotherapists for home visits. Learn how verification, safety and payments work.",
 };

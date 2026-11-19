@@ -104,34 +104,42 @@ async function parse<T>(res: Response): Promise<T> {
 }
 
 // Shared refresh promise across all HTTP instances and bootstrap calls in this tab.
-let sharedRefreshing: Promise<boolean> | null = null;
+type RefreshOutcome = "ok" | "auth-failed" | "network-error";
+let sharedRefreshing: Promise<RefreshOutcome> | null = null;
 
-async function executeRefresh(store?: SessionStore): Promise<boolean> {
+async function executeRefresh(): Promise<RefreshOutcome> {
   // The refresh token is an httpOnly cookie; the backend reads it and sets a
   // fresh access cookie. The browser swaps the cookies for us — nothing to store,
   // but it returns a rotated CSRF token which we capture for subsequent requests.
   const res = await send("POST", buildUrl("/auth/refresh"), {}).catch(() => null);
   if (!res) {
     // Network failure (offline, timeout) — keep session intact, do not log out.
-    return false;
+    return "network-error";
   }
   if (!res.ok) {
     // Only clear the session if the refresh token was explicitly rejected.
     if (res.status === 400 || res.status === 401 || res.status === 403) {
-      store?.clear();
+      return "auth-failed";
     }
-    return false;
+    return "network-error";
   }
   captureCsrf(await res.json().catch(() => null));
-  return true;
+  return "ok";
+}
+
+function runSharedRefresh(store?: SessionStore): Promise<boolean> {
+  sharedRefreshing ??= executeRefresh().finally(() => {
+    sharedRefreshing = null;
+  });
+  return sharedRefreshing.then((outcome) => {
+    if (outcome === "auth-failed") store?.clear();
+    return outcome === "ok";
+  });
 }
 
 export function createHttp(store: SessionStore) {
   function refresh(): Promise<boolean> {
-    sharedRefreshing ??= executeRefresh(store).finally(() => {
-      sharedRefreshing = null;
-    });
-    return sharedRefreshing;
+    return runSharedRefresh(store);
   }
 
   async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
@@ -208,9 +216,7 @@ export async function bootstrapSession(): Promise<{ phone: string; role: string 
   };
   let d = await read();
   if (!d) {
-    const ok = await (sharedRefreshing ??= executeRefresh().finally(() => {
-      sharedRefreshing = null;
-    }));
+    const ok = await runSharedRefresh();
     if (ok) {
       d = await read();
     }

@@ -240,6 +240,21 @@ export class ChatService {
    * A media message's `mediaKey` becomes a viewable `url`; the raw key is never
    * exposed. A deleted message is a tombstone: `deletedAt` set, no body/media.
    */
+  /** Extract a human-readable filename from a Cloudinary/local mediaKey (`.../<ts>-<name>`). */
+  private filenameFromMediaKey(
+    mediaKey: string | null | undefined,
+    mimeType?: string | null,
+  ): string | null {
+    if (!mediaKey) return null;
+    const segment = mediaKey.split('/').pop() ?? '';
+    const cleaned = segment.replace(/^\d{10,}-/, '').trim();
+    if (!cleaned) return null;
+    if (mimeType === 'application/pdf' && !cleaned.toLowerCase().endsWith('.pdf')) {
+      return `${cleaned}.pdf`;
+    }
+    return cleaned;
+  }
+
   private async present<
     T extends {
       mediaKey: string | null;
@@ -254,17 +269,18 @@ export class ChatService {
     }
     if (message.deletedAt) {
       const { mediaKey: _mediaKey, ...rest } = message;
-      return { ...rest, body: null, mimeType: null, sizeBytes: null, url: null };
+      return { ...rest, body: null, mimeType: null, sizeBytes: null, url: null, fileName: null };
     }
     if (!message.mediaKey || !this.storage) {
-      return { ...message, url: null };
+      return { ...message, url: null, fileName: null };
     }
     const { url } = await withFileUrl(this.storage, {
       fileKey: message.mediaKey,
       mimeType: message.mimeType,
     });
+    const fileName = this.filenameFromMediaKey(message.mediaKey, message.mimeType);
     const { mediaKey: _mediaKey, ...rest } = message;
-    return { ...rest, url };
+    return { ...rest, url, fileName };
   }
 
   /**
@@ -294,6 +310,7 @@ export class ChatService {
       mimeType: null,
       sizeBytes: null,
       url: null,
+      fileName: null,
       readAt: null,
       deletedAt: null,
       reactions: [],

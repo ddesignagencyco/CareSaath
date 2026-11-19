@@ -91,7 +91,20 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
           </div>
           <p dir="auto" className="mt-0.5 text-sm text-ink-500">{item.description}</p>
         </div>
-        <Switch checked={on} onCheckedChange={(v) => save.mutate(v ? 1 : 0)} disabled={save.isPending} aria-label={meta.title} />
+        <div className="flex items-center gap-2">
+          {item.overridden && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title={t("reset", { value: item.envDefault })}
+              loading={reset.isPending}
+              onClick={() => reset.mutate(undefined)}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+          )}
+          <Switch checked={on} onCheckedChange={(v) => save.mutate(v ? 1 : 0)} disabled={save.isPending} aria-label={meta.title} />
+        </div>
       </li>
     );
   }
@@ -129,15 +142,16 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
           <span className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 text-xs text-ink-400">{meta.unit}</span>
         </div>
         <span className="tabular w-14 text-xs text-ink-500">{friendly && t("approx", { value: friendly })}</span>
-        {item.overridden && item.value !== item.envDefault && (
+        {item.overridden && (
           <Button
             variant="ghost"
             size="sm"
             title={t("reset", { value: item.envDefault })}
             loading={reset.isPending}
             onClick={() => {
-              setValue(String(item.envDefault));
-              reset.mutate(undefined);
+              reset.mutate(undefined, {
+                onSuccess: () => setValue(String(item.envDefault)),
+              });
             }}
           >
             <RotateCcw className="size-3.5" />

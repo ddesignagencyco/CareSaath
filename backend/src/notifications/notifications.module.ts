@@ -276,6 +276,8 @@ export class NotificationsService {
             title,
             message: input.message,
             event: input.event,
+            payload: (input.payload ?? null) as Record<string, unknown> | null,
+            role: recipient.role,
           });
           const sent = await this.prisma.notification.update({
             where: { id: created.id },

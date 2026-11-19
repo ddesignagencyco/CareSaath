@@ -127,7 +127,7 @@ export default function PayoutsPage() {
           <div className="flex items-center gap-2">
             <PayoutStatusBadge status={p.status} />
             {(p.status === "TRANSFERRED" || p.status === "PAID") && (
-              <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
+              <Button size="sm" variant="ghost" loading={receipt.isPending && receipt.variables === p.id} onClick={() => receipt.mutate(p.id)}>
                 {t("receipt")}
               </Button>
             )}
