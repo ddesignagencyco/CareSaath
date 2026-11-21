@@ -9,7 +9,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { UserRole } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -269,7 +269,16 @@ export class EditorialService {
 
   async updateContactInfo(admin: AuthUser, dto: UpdateContactInfoDto) {
     const existing = await this.getContactInfo();
-    const updated = { ...existing, ...dto };
+    const updated = {
+      ...existing,
+      ...(dto.email !== undefined ? { email: dto.email } : {}),
+      ...(dto.caregiverEmail !== undefined ? { caregiverEmail: dto.caregiverEmail } : {}),
+      ...(dto.pressEmail !== undefined ? { pressEmail: dto.pressEmail } : {}),
+      ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+      ...(dto.whatsapp !== undefined ? { whatsapp: dto.whatsapp } : {}),
+      ...(dto.address !== undefined ? { address: dto.address } : {}),
+      ...(dto.hours !== undefined ? { hours: dto.hours } : {}),
+    };
     await this.prisma.platformConfig.upsert({
       where: { key: 'editorial.contactInfo' },
       update: { value: updated },

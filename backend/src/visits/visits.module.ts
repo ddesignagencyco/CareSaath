@@ -403,7 +403,7 @@ export class VisitsService {
   ): Promise<void> {
     const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
     if (radius <= 0 || !visit.booking.address) return;
-    if (process.env.NODE_ENV !== 'production' && process.env.ENFORCE_GEOFENCE_DEV !== 'true') {
+    if (process.env.NODE_ENV === 'development' && process.env.ENFORCE_GEOFENCE_DEV !== 'true') {
       return;
     }
 
