@@ -14,6 +14,7 @@ import { UserRole } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
@@ -69,71 +70,132 @@ export class UpdateContactInfoDto {
 const DEFAULT_PAGES: Record<string, { title: string; content: string }> = {
   about: {
     title: 'About CareSaath',
-    content: `<h2>Trusted Home Healthcare for Pakistan</h2>
-<p>CareSaath is Pakistan's premier verified home healthcare marketplace, connecting patients and families with licensed nurses, certified physiotherapists, and medical attendants for safe, compassionate clinical care at home.</p>
+    content: `<h2>Trusted Home Healthcare, Built for Pakistani Families</h2>
+<p>CareSaath is a verified home healthcare marketplace connecting patients and families across Pakistan with licence-verified nurses, physiotherapists, post-surgery caregivers, elderly-care attendants, and home-visiting doctors. Whether you need an immediate nearby visit or a recurring multi-week recovery schedule, CareSaath brings clinical accountability to your doorstep.</p>
 
-<h3>How We Verify Caregivers</h3>
+<h3>How We Verify Every Caregiver</h3>
 <ul>
-  <li><strong>PNC & PMDC Credential Check:</strong> Every caregiver's government license and qualifications are verified against official medical registers.</li>
-  <li><strong>Identity & Background:</strong> Nadra CNIC validation, background checks, and residential address verification.</li>
-  <li><strong>In-Person Clinical Screening:</strong> Hands-on evaluation of nursing and rehabilitation competencies by clinical supervisors.</li>
-  <li><strong>Periodic Re-verification:</strong> Annual credential re-checks ensuring that all active caregivers remain in full compliance.</li>
+  <li><strong>PNC &amp; PMDC Credential Check:</strong> Every caregiver submits their CNIC (stored encrypted at rest), professional licence number, expiry date, and qualification certificates for verification against Pakistan Nursing Council (PNC) or Pakistan Medical &amp; Dental Council (PMDC) registers.</li>
+  <li><strong>Manual Admin Approval:</strong> No caregiver profile appears to families automatically. Our compliance team reviews every document before approving activation.</li>
+  <li><strong>Periodic Re-Verification &amp; Accountability:</strong> Active profiles undergo periodic credential reviews and may be suspended or deactivated for policy violations or unresolved safety incidents.</li>
 </ul>
 
-<h3>Safety & Patient Trust</h3>
-<p>Every home visit is monitored with real-time GPS geofencing, one-time passcode (OTP) check-in, and an in-app SOS emergency escalation protocol directly linked to Rescue 1122 and our clinical response team.</p>`,
+<h3>Safety, Communication &amp; Visit Transparency</h3>
+<ul>
+  <li><strong>Live Visit Lifecycle:</strong> Follow every visit from confirmation and en-route status to GPS or OTP doorstep check-in, clinical visit notes, and completion.</li>
+  <li><strong>In-App Chat &amp; Calls:</strong> Communicate directly with your assigned caregiver via secure in-app messaging and audio/video calls, and share prescriptions or medical orders safely.</li>
+  <li><strong>One-Tap SOS &amp; Dispute Mediation:</strong> Every active visit includes an in-app SOS alert to our safety team alongside structured dispute resolution.</li>
+</ul>
+
+<h3>Built for Pakistan</h3>
+<ul>
+  <li><strong>Bilingual App:</strong> Full Urdu and English experience across customer, caregiver, and family workflows.</li>
+  <li><strong>Flexible Local Payments &amp; Receipts:</strong> Pay in cash on the visit or digitally via Card, JazzCash, or Easypaisa, with downloadable PDF receipts and promo code support.</li>
+  <li><strong>Encrypted Health Records:</strong> Prescriptions, CNICs, payout accounts, and patient profiles are encrypted in transit and at rest with full audit logging.</li>
+</ul>`,
   },
   terms: {
     title: 'Terms of Service',
-    content: `<h2>Terms of Service</h2>
-<p>These terms govern your use of the CareSaath application, verified healthcare professional bookings, and home visits across Pakistan. By booking a visit, you agree to these terms.</p>
+    content: `<p>These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of the CareSaath web and mobile applications, verified caregiver bookings, and home-visit coordination services across Pakistan. By creating an account or booking a visit, you agree to be bound by these Terms. Please read the safety and liability sections carefully.</p>
 
-<h3>1. Healthcare Marketplace Platform</h3>
-<p>CareSaath connects customers with independent, credential-verified nurses, physiotherapists, and caregivers. CareSaath facilitates bookings, safety monitoring, and payments — clinical care is the direct professional responsibility of the attending caregiver.</p>
+<h2>1. What CareSaath Is</h2>
+<p>CareSaath operates a two-sided digital marketplace connecting customers and families with independent, credential-verified nurses, physiotherapists, post-surgery caregivers, elderly-care attendants, and home-visiting doctors. CareSaath facilitates caregiver discovery, credential verification, scheduling, in-app chat/calls, safety tooling (GPS/OTP check-in and SOS escalation), and payment processing. <strong>CareSaath does not itself practise medicine or directly provide clinical care</strong>; clinical care delivered during a visit is the independent professional responsibility of the attending caregiver.</p>
 
-<h3>2. Accounts & Booking Eligibility</h3>
+<h2>2. Accounts &amp; Eligibility</h2>
 <ul>
-  <li>Accounts are verified via phone number and one-time passcode (OTP).</li>
-  <li>Customers must provide accurate patient information and medical history context.</li>
-  <li>Family members may book care on behalf of relatives with their consent.</li>
+  <li>Accounts are authenticated via your mobile phone number and a one-time passcode (OTP) delivered via WhatsApp, SMS, or email. You are responsible for all activity under your account.</li>
+  <li>You must be at least 18 years old to create an account and must provide accurate personal details and honest medical context for every patient profile.</li>
+  <li>You may book home care for yourself or on behalf of a family member, provided you are authorised to share their health and address details.</li>
 </ul>
 
-<h3>3. Caregiver Conduct & Safety</h3>
+<h2>3. Verified Caregivers</h2>
 <ul>
-  <li>Caregivers set their specialties, verified visit rates, and availability.</li>
-  <li>In-app SOS buttons and incident reporting tools are active throughout every visit.</li>
-  <li>Zero-tolerance policy for harassment, misconduct, or policy violations.</li>
+  <li>Caregivers submit their CNIC, professional licence (PNC, PMDC, or relevant board), and qualification certificates for manual admin review before their profile is activated.</li>
+  <li>Caregivers manage their service areas, weekly availability schedule, and live &ldquo;Available Now&rdquo; status for immediate nearby requests.</li>
+  <li>CareSaath reserves the right to issue strikes, suspend, or permanently deactivate any caregiver for misconduct, misrepresentation of credentials, harassment, or an unresolved safety incident.</li>
 </ul>
 
-<h3>4. Emergency Disclaimer</h3>
-<p>CareSaath is not a critical emergency dispatch service. In life-threatening emergencies, immediately contact Rescue 1122 or proceed to the nearest hospital emergency room.</p>`,
+<h2>4. Bookings, Payments &amp; Cancellations</h2>
+<ul>
+  <li>You may book a single visit, an immediate nearby visit (when a caregiver is available now), or a recurring weekly schedule. The full visit fee in PKR and any eligible promo discount are displayed before you confirm.</li>
+  <li>Payments may be settled in <strong>Cash</strong> on the visit or digitally via <strong>Card</strong>, <strong>JazzCash</strong>, or <strong>Easypaisa</strong>, with downloadable PDF receipts for completed payments.</li>
+  <li>CareSaath retains a platform commission per specialty from completed visits; net earnings are disbursed to the caregiver&rsquo;s verified Bank or Mobile Wallet (JazzCash/Easypaisa) payout account.</li>
+  <li>Cancellations and rescheduling are permitted in accordance with the booking notice rules shown in the app.</li>
+</ul>
+
+<h2>5. Conduct, Safety &amp; SOS Protocol</h2>
+<ul>
+  <li>Both families and caregivers must treat each other with dignity, privacy, and professional respect at all times.</li>
+  <li>Visits use GPS geofencing or OTP verification at check-in and check-out to maintain a tamper-evident audit trail.</li>
+  <li>An in-app SOS button is available throughout every active visit to alert the CareSaath safety desk and your emergency contact.</li>
+</ul>
+
+<h2>6. Disputes &amp; Resolution</h2>
+<p>If an issue arises regarding visit quality, billing, or conduct, either the customer or the caregiver may open a formal dispute tied to the visit. CareSaath admin staff review visit logs, check-in timestamps, chat records, and supporting evidence to record a documented mediation decision.</p>
+
+<h2>7. Medical Emergencies &amp; Limitation of Liability</h2>
+<p><strong>CareSaath is not an emergency medical dispatch service.</strong> In any life-threatening emergency (such as chest pain, severe bleeding, stroke symptoms, or acute respiratory distress), immediately call local emergency services (<strong>Rescue 1122</strong>) or proceed to the nearest hospital emergency department. CareSaath&rsquo;s liability is limited to the extent permitted under applicable laws of Pakistan, including the Contract Act, 1872.</p>
+
+<h2>8. Governing Law &amp; Contact</h2>
+<p>We may update these Terms as CareSaath grows; continued use constitutes acceptance of the current version. These Terms are governed by the laws of the Islamic Republic of Pakistan. Questions regarding these Terms may be directed to <a href="mailto:info@caresaath.com">info@caresaath.com</a>.</p>`,
   },
   privacy: {
     title: 'Privacy Policy',
-    content: `<h2>Privacy Policy</h2>
-<p>CareSaath connects families with verified caregivers. Because home healthcare involves sensitive personal information, protecting your medical and personal data is central to our platform architecture.</p>
+    content: `<p>CareSaath connects families across Pakistan with verified home-visiting nurses, physiotherapists, doctors, and caregivers. Because home healthcare involves sensitive personal and medical information, protecting your privacy is foundational to our platform. This Privacy Policy explains what data we collect, how we use and safeguard it, when it is shared, and the choices you have.</p>
 
-<h3>1. Information We Collect</h3>
+<h2>1. Information We Collect</h2>
 <ul>
-  <li><strong>Account & Identity:</strong> Phone number, full name, and preferred communication language.</li>
-  <li><strong>Patient Profiles:</strong> Patient name, age, relationship, and basic health context required for clinical visits.</li>
-  <li><strong>Location & Addresses:</strong> Service addresses and GPS geofencing coordinates for visit check-in and check-out verification.</li>
-  <li><strong>Prescriptions & Care Plans:</strong> Clinical notes and medical documents uploaded by customers or attending caregivers.</li>
+  <li><strong>Account &amp; Identity Details:</strong> Your mobile phone number (used for OTP sign-in and visit notifications), full name, optional email address, and preferred language (Urdu or English).</li>
+  <li><strong>Patient Profiles &amp; Health Context:</strong> Patient name, relationship (self or family member), date of birth, and basic medical context you provide for safe care delivery.</li>
+  <li><strong>Service Addresses &amp; Location Data:</strong> Home addresses, map pins, and GPS coordinates captured during caregiver visit check-in, check-out, nearby immediate bookings, and SOS alerts.</li>
+  <li><strong>Medical &amp; Verification Documents:</strong> Prescriptions, medical orders, and visit notes uploaded for care coordination, as well as caregiver CNICs, PNC/PMDC licences, and qualification certificates.</li>
+  <li><strong>Communications &amp; Visit History:</strong> Booking schedules, visit status transitions, in-app chat messages, call logs, ratings, reviews, and any dispute or safety incident records.</li>
+  <li><strong>Payment &amp; Payout Information:</strong> Selected payment method (Cash, Card, JazzCash, or Easypaisa), gateway transaction references, and encrypted caregiver Bank/Mobile Wallet payout details. Card payments are processed by licensed payment providers — CareSaath does not store full card numbers.</li>
 </ul>
 
-<h3>2. How We Protect Your Data</h3>
-<p>All sensitive health documents and personal information are encrypted in transit (TLS 1.3) and at rest (AES-256). Access is strictly restricted to the assigned caregiver during active bookings and authorized compliance personnel.</p>
+<h2>2. How We Use Your Information</h2>
+<ul>
+  <li>To match you with verified caregivers in your service area, coordinate single, recurring, or immediate visits, and share essential patient context with the assigned caregiver.</li>
+  <li>To verify caregiver identities and professional credentials against PNC and PMDC registers before activation and during periodic reviews.</li>
+  <li>To process customer payments, promo codes, refunds, PDF receipts, and caregiver payouts.</li>
+  <li>To operate safety controls including GPS/OTP check-in, in-app SOS alerts, safety investigations, and dispute resolution.</li>
+  <li>To deliver transactional OTPs and booking updates via WhatsApp, SMS, email, and push notifications based on your notification preferences.</li>
+  <li>To comply with applicable Pakistani legal, regulatory, and audit obligations.</li>
+</ul>
 
-<h3>3. Information Sharing</h3>
-<p>We do not sell personal data. Information is shared only with the assigned caregiver for scheduled visit delivery, licensed payment gateways (SBP regulated), and regulatory authorities where mandated by law.</p>`,
+<h2>3. How We Protect Your Data</h2>
+<p>Sensitive fields including caregiver CNIC numbers, payout account details, and medical data are encrypted at rest, and all traffic is protected in transit via TLS. Access to patient details is strictly restricted to the assigned caregiver during an active booking and authorised CareSaath admin personnel. Credential approvals, visit check-ins/check-outs, and safety events are logged in an audit trail with actor and timestamp.</p>
+
+<h2>4. When We Share Information</h2>
+<ul>
+  <li><strong>Assigned Caregiver:</strong> Only the patient profile, address, prescriptions, and visit details required to safely perform the confirmed visit.</li>
+  <li><strong>Payment Providers:</strong> Licensed payment gateways (Card, JazzCash, Easypaisa) solely to process transactions you initiate.</li>
+  <li><strong>Safety &amp; Emergency Escalation:</strong> Designated emergency contacts or public emergency responders (such as Rescue 1122) if an SOS alert is triggered during a visit.</li>
+  <li><strong>Legal &amp; Regulatory Authorities:</strong> Where required by Pakistani law, court order, or statutory compliance (including PECA 2016).</li>
+</ul>
+<p><strong>We never sell or rent your personal or health information to third parties or advertisers.</strong></p>
+
+<h2>5. Data Retention &amp; Your Choices</h2>
+<ul>
+  <li>You can view and update your account details, patient profiles, and saved addresses directly in the CareSaath app at any time.</li>
+  <li>You can switch between Urdu and English and manage WhatsApp, SMS, email, and push notification preferences in your settings.</li>
+  <li>You may remove a patient profile or address when it is not linked to an active booking, or contact support for account deactivation or privacy inquiries.</li>
+  <li>Audit logs and statutory financial/safety records are retained only as required by law and clinical accountability standards.</li>
+</ul>
+
+<h2>6. Contacting Us</h2>
+<p>We may update this Privacy Policy as CareSaath evolves; material changes will be published on this page with an updated revision date. Questions about your privacy or data rights can be sent to <a href="mailto:info@caresaath.com">info@caresaath.com</a>.</p>`,
   },
 };
 
 const DEFAULT_CONTACT_INFO = {
-  email: 'support@caresaath.com',
+  email: 'info@caresaath.com',
+  caregiverEmail: 'caregivers@caresaath.pk',
+  pressEmail: 'hello@caresaath.pk',
   phone: '+92 42 111 227 372',
   whatsapp: '+92 300 2273728',
-  address: 'Gulberg III, Lahore, Pakistan',
+  address: 'Main Gulberg III, Lahore, Pakistan',
+  hours: 'Mon – Sat: 9:00 AM – 9:00 PM PKT (24/7 Visit SOS Support)',
 };
 
 @Injectable()
@@ -224,6 +286,7 @@ export class EditorialService {
 }
 
 @ApiTags('Public - Editorial')
+@Public()
 @Controller('editorial')
 export class EditorialPublicController {
   constructor(private readonly editorial: EditorialService) {}

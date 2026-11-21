@@ -537,7 +537,31 @@ export default function EditorialAdminPage() {
                       type="email"
                       value={contact.email ?? ""}
                       onChange={(e) => setContact({ ...contact, email: e.target.value })}
-                      placeholder="support@caresaath.com"
+                      placeholder="info@caresaath.com"
+                    />
+                  )}
+                </Field>
+
+                <Field label="Caregiver Onboarding Email">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      type="email"
+                      value={contact.caregiverEmail ?? ""}
+                      onChange={(e) => setContact({ ...contact, caregiverEmail: e.target.value })}
+                      placeholder="caregivers@caresaath.pk"
+                    />
+                  )}
+                </Field>
+
+                <Field label="Business & Press Email">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      type="email"
+                      value={contact.pressEmail ?? ""}
+                      onChange={(e) => setContact({ ...contact, pressEmail: e.target.value })}
+                      placeholder="hello@caresaath.pk"
                     />
                   )}
                 </Field>
@@ -571,7 +595,18 @@ export default function EditorialAdminPage() {
                       rows={2}
                       value={contact.address ?? ""}
                       onChange={(e) => setContact({ ...contact, address: e.target.value })}
-                      placeholder="Gulberg III, Lahore, Pakistan"
+                      placeholder="Main Gulberg III, Lahore, Pakistan"
+                    />
+                  )}
+                </Field>
+
+                <Field label="Support Hours">
+                  {(id) => (
+                    <Input
+                      id={id}
+                      value={contact.hours ?? ""}
+                      onChange={(e) => setContact({ ...contact, hours: e.target.value })}
+                      placeholder="Mon – Sat: 9:00 AM – 9:00 PM PKT"
                     />
                   )}
                 </Field>

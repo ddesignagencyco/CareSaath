@@ -1,26 +1,18 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { HeroArt } from "./hero-art";
-
 /**
- * Hero visual. Shows the original illustration by default, and swaps in a real
- * photo the moment one exists at `public/hero.jpg` (it preloads it and only
- * switches if it loads, so a missing file never shows a broken image).
- * Drop a licensed image at frontend/public/hero.jpg to use a real photo.
+ * Clean photorealistic editorial hero frame for the CareSaath landing page.
+ * No floating badges or AI-style stickers obscuring the photography.
  */
 export function HeroVisual({ className }: { className?: string }) {
-  const [photo, setPhoto] = useState(false);
-
-  useEffect(() => {
-    const img = new window.Image();
-    img.onload = () => setPhoto(true);
-    img.src = "/hero.jpg";
-  }, []);
-
-  if (!photo) return <HeroArt className={className} />;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/hero.jpg" alt="A verified caregiver visiting a patient at home" className={`aspect-[4/5] w-full rounded-[1.5rem] object-cover ${className ?? ""}`} />
+    <div className={`relative ${className ?? ""}`}>
+      <div className="relative overflow-hidden rounded-[1.75rem] bg-brand-950 shadow-2xl shadow-brand-950/40 ring-1 ring-white/15">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/hero-home-care.jpg"
+          alt="A verified Pakistani registered nurse gently checking blood pressure for an elderly patient at home"
+          className="aspect-[4/3.5] w-full object-cover object-center transition-transform duration-700 hover:scale-[1.02]"
+        />
+      </div>
+    </div>
   );
 }
