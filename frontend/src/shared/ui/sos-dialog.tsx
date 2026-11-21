@@ -87,7 +87,7 @@ export function SosDialog({
             <Button variant="secondary" onClick={onClose}>
               {tc("cancel")}
             </Button>
-            <Button variant="danger" size="lg" loading={sos.isPending} onClick={() => sos.mutate()}>
+            <Button variant="danger" loading={sos.isPending} onClick={() => sos.mutate()}>
               <Siren className="size-4" /> {t("send")}
             </Button>
           </>

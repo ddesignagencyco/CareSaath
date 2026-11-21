@@ -65,4 +65,27 @@ describe('AdminCustomersService', () => {
     await service.reactivate(admin, 'u-1');
     expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u-1' }, data: { status: 'ACTIVE' } });
   });
+
+  it('suspends an account and audits it', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'u-1' });
+    prisma.user.update.mockResolvedValue({});
+    const audit = createAuditMock();
+    service = new AdminCustomersService(prisma as never, audit as never);
+    await service.suspend(admin, 'u-1', { reason: 'suspicious activity' });
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'u-1' }, data: { status: 'SUSPENDED' } });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.suspended' }),
+    );
+  });
+
+  it('revokes sessions and logs it', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'u-1', fullName: 'Ali' });
+    const audit = createAuditMock();
+    service = new AdminCustomersService(prisma as never, audit as never);
+    const res = await service.revokeSessions(admin, 'u-1');
+    expect(res.ok).toBe(true);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.sessions_revoked' }),
+    );
+  });
 });

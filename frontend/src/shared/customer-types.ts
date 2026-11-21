@@ -66,15 +66,6 @@ export interface AddressInput {
   longitude: string;
 }
 
-export interface EmergencyContact {
-  id: string;
-  userId: string;
-  name: string;
-  phone: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /* ---- Bookings ------------------------------------------------------------ */
 
 export interface CreateBookingInput {

@@ -82,7 +82,7 @@ describe('EmailChannelAdapter', () => {
           patient: { name: 'Fatima Bibi', relationship: 'Mother' },
           caregiver: { user: { fullName: 'Nurse Sarah' } },
           customer: { fullName: 'Ali Khan' },
-          address: { city: 'Lahore', area: 'Gulberg III' },
+          address: { city: 'Lahore', addressLine: 'Gulberg III' },
         }),
       },
     };
@@ -124,7 +124,7 @@ describe('EmailChannelAdapter', () => {
             patient: { name: 'Ahmed Khan' },
             caregiver: { user: { fullName: 'Dr. Zeeshan' } },
             customer: { fullName: 'Ali Khan' },
-            address: { city: 'Karachi', area: 'Clifton' },
+            address: { city: 'Karachi', addressLine: 'Clifton' },
           },
         }),
       },

@@ -403,6 +403,9 @@ export class VisitsService {
   ): Promise<void> {
     const radius = await this.config.getNumber('visit.geofenceRadiusMeters');
     if (radius <= 0 || !visit.booking.address) return;
+    if (process.env.NODE_ENV === 'development' && process.env.ENFORCE_GEOFENCE_DEV !== 'true') {
+      return;
+    }
 
     // Primary source: the per-visit GPS stream written by POST
     // /caregiver/visits/:id/location. Mobile sends this every ~12s while
@@ -823,7 +826,8 @@ export class VisitsService {
       entityType: 'Visit',
       entityId: id,
     });
-    return { ttlSeconds, sentTo: visit.booking.customer.phone };
+    const devCode = process.env.NODE_ENV !== 'production' ? code : undefined;
+    return { ttlSeconds, sentTo: visit.booking.customer.phone, ...(devCode ? { devCode } : {}) };
   }
 
   /** Validate and consume a check-in OTP; throws on mismatch or expiry. */

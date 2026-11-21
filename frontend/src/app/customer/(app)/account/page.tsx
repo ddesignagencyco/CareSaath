@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Phone, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -26,7 +26,6 @@ const MOBILE_LINKS = [
   { href: "/customer/messages", key: "messages", icon: MessagesSquare },
   { href: "/customer/account/patients", key: "patients", icon: Users },
   { href: "/customer/account/addresses", key: "addresses", icon: MapPin },
-  { href: "/customer/account/contacts", key: "contacts", icon: Phone },
   { href: "/customer/account/disputes", key: "disputes", icon: Scale },
   { href: "/customer/account/payments", key: "payments", icon: Wallet },
   { href: "/customer/notifications", key: "notifications", icon: Bell },
@@ -136,7 +135,7 @@ export default function AccountPage() {
             <Link key={href} href={href} className="flex items-center gap-3 px-5 py-4 text-sm font-semibold text-ink-800 hover:bg-ink-25">
               <Icon className="size-5 text-ink-400" />
               <span className="flex-1">
-                {key === "notifications" ? tc("nav.notifications") : key === "contacts" ? ts("items.contacts") : t(`links.${key}`)}
+                {key === "notifications" ? tc("nav.notifications") : t(`links.${key}`)}
               </span>
               <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
             </Link>

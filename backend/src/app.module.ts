@@ -45,6 +45,7 @@ import { RealtimeModule } from './realtime/realtime.module.js';
 import { EmailModule } from './email/email.module.js';
 import { FirebaseModule } from './firebase/firebase.module.js';
 import { WhatsAppModule } from './whatsapp/whatsapp.module.js';
+import { EditorialModule } from './editorial/editorial.module.js';
 
 /**
  * Global request throttle (a blanket DoS/abuse guard, in addition to the stricter
@@ -100,6 +101,7 @@ const THROTTLE_LIMIT = Number(process.env['THROTTLE_LIMIT'] ?? 600);
     EmailModule,
     FirebaseModule,
     WhatsAppModule,
+    EditorialModule,
   ],
   controllers: [AppController],
   providers: [

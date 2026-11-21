@@ -206,7 +206,7 @@ export class EmailChannelAdapter implements NotificationChannelAdapter {
           booking: {
             include: {
               patient: { select: { name: true, relationship: true } },
-              address: { select: { area: true, city: true } },
+              address: { select: { addressLine: true, city: true } },
               caregiver: { include: { user: { select: { fullName: true } } } },
               customer: { select: { fullName: true } },
             },
@@ -216,7 +216,7 @@ export class EmailChannelAdapter implements NotificationChannelAdapter {
 
       if (visit) {
         const isCaregiver = delivery.role === UserRole.CAREGIVER;
-        const location = [visit.booking.address?.area, visit.booking.address?.city].filter(Boolean).join(', ');
+        const location = [visit.booking.address?.addressLine, visit.booking.address?.city].filter(Boolean).join(', ');
         const schedule = `${formatDate(visit.scheduledDate)}${
           visit.timeWindowStart && visit.timeWindowEnd ? ` · ${visit.timeWindowStart} – ${visit.timeWindowEnd}` : ''
         }`;
@@ -252,7 +252,7 @@ export class EmailChannelAdapter implements NotificationChannelAdapter {
         where: { id: bookingId },
         include: {
           patient: { select: { name: true, relationship: true } },
-          address: { select: { area: true, city: true } },
+          address: { select: { addressLine: true, city: true } },
           caregiver: { include: { user: { select: { fullName: true } } } },
           customer: { select: { fullName: true } },
         },
@@ -260,7 +260,7 @@ export class EmailChannelAdapter implements NotificationChannelAdapter {
 
       if (booking) {
         const isCaregiver = delivery.role === UserRole.CAREGIVER;
-        const location = [booking.address?.area, booking.address?.city].filter(Boolean).join(', ');
+        const location = [booking.address?.addressLine, booking.address?.city].filter(Boolean).join(', ');
         const totalAmount = booking.rateSnapshot
           ? `Rs ${Math.max(0, (booking.rateSnapshot - (booking.discountAmount ?? 0)) / 100).toLocaleString()}`
           : null;

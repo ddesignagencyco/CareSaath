@@ -30,6 +30,9 @@ export const BOOKING_TONE: Record<CaregiverBookingStatus, Tone> = {
 
 export const ACTIVE_VISIT: VisitStatus[] = ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT"];
 
+export { SOS_ELIGIBLE_STATUSES } from "@shared/lib/visit";
+
+
 /**
  * The backend now sets a booking to COMPLETED when its last open visit completes,
  * and that status is passed straight through. As a fallback (and for older data),

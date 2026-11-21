@@ -1,86 +1,71 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Bullets, LegalShell, Section } from "../legal";
+import { fetchEditorialPage } from "@shared/api/editorial";
+import { Bullets, EditorialHtml, formatUpdatedDate, LegalShell, Section } from "../legal";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — CareSaath",
   description: "How CareSaath collects, uses and protects your personal and health-related information.",
 };
 
-export default function Privacy() {
+async function PrivacyContent() {
+  const page = await fetchEditorialPage("privacy");
+
+  if (page?.content) {
+    return (
+      <LegalShell
+        title={page.title || "Privacy Policy"}
+        updated={formatUpdatedDate(page.updatedAt)}
+        activeSlug="privacy"
+        intro="How CareSaath collects, encrypts, uses, and protects your personal and patient health information across Pakistan."
+      >
+        <EditorialHtml html={page.content} />
+      </LegalShell>
+    );
+  }
+
   return (
     <LegalShell
       title="Privacy Policy"
-      updated="October 2026"
-      intro="CareSaath connects families with verified home-visiting caregivers. Because home care involves sensitive health information, protecting your data is central to how the service is built. This policy explains what we collect, how we use it, and the choices you have. We will update it as the service grows."
+      updated="November 2026"
+      activeSlug="privacy"
+      intro="CareSaath connects families across Pakistan with verified home-visiting nurses, physiotherapists, and caregivers. Because home healthcare involves sensitive personal and medical information, protecting your privacy is foundational to our platform."
     >
       <Section title="Information we collect">
         <Bullets
           items={[
-            "Account details: your phone number (used for OTP sign-in), name and preferred language.",
-            "Patient profiles: the patient's name, relationship, date of birth and the basic medical context you choose to add.",
-            "Addresses and location: service addresses with a map pin, and the GPS coordinates used to confirm a caregiver's check-in and check-out.",
-            "Documents: prescriptions or care plans you upload, and a caregiver&rsquo;s licence and certificate documents.",
-            "Bookings and visits: visit schedules, status history, visit notes and your ratings and reviews.",
+            "Account details: your phone number (used for OTP sign-in), full name, email address, and preferred language.",
+            "Patient profiles: the patient's name, relationship, date of birth, and basic medical context you choose to add.",
+            "Addresses and location: service addresses with a map pin, and GPS coordinates used strictly to confirm caregiver check-in, check-out, and SOS safety events.",
+            "Documents: prescriptions or care plans you upload, and a caregiver's CNIC, PNC/PMDC licence, and certificate documents.",
+            "Bookings and visits: visit schedules, status history, clinical visit notes, and your ratings and reviews.",
             "Payment information: the method you choose and transaction references. Card and wallet payments are processed by licensed gateways — we do not store full card numbers.",
-          ]}
-        />
-      </Section>
-
-      <Section title="How we use your information">
-        <Bullets
-          items={[
-            "To provide the service: match you with caregivers, schedule visits and share what a caregiver needs for the visit.",
-            "To verify caregivers against the PNC or PMDC register before they can appear to customers.",
-            "To process payments and caregiver payouts.",
-            "For safety: run OTP and GPS check-in, handle SOS alerts, and manage safety incidents and disputes.",
-            "To send you SMS, WhatsApp and push notifications about your visits.",
-            "To meet legal, regulatory and audit obligations.",
           ]}
         />
       </Section>
 
       <Section title="How we protect it">
         <p>
-          Patient medical documents and personal data are encrypted in transit and at rest. Access to a patient&rsquo;s details is limited to the
-          assigned caregiver and authorised admin staff. Credential approvals, visit check-ins and check-outs, and safety incidents are
-          logged with a timestamp and the actor, so sensitive actions are auditable.
+          Patient medical documents and personal data are encrypted in transit (TLS 1.3) and at rest (AES-256). Access to a patient&rsquo;s
+          details is strictly limited to the assigned caregiver during an active booking and authorised admin compliance staff.
         </p>
       </Section>
 
       <Section title="When we share information">
         <Bullets
           items={[
-            "With your assigned caregiver — only what they need to carry out the booked visit.",
-            "With payment providers (card, JazzCash, Easypaisa, Raast) to process a transaction you initiate.",
-            "With CareSaath admin and compliance staff for verification, safety and dispute handling.",
-            "Where required by law or to respond to a safety emergency.",
+            "With your assigned caregiver — only what they need to carry out the booked visit safely.",
+            "With licensed payment providers (Card, JazzCash, Easypaisa) to process a transaction you initiate.",
+            "With CareSaath admin and compliance staff for verification, safety, and dispute handling.",
+            "Where required by Pakistani law or to respond to a safety emergency (such as Rescue 1122).",
           ]}
         />
-        <p>We do not sell your personal information.</p>
+        <p>We never sell or rent your personal or health information.</p>
       </Section>
 
-      <Section title="Your choices">
-        <Bullets
-          items={[
-            "View and update your profile, patient profiles, addresses and emergency contacts in the app.",
-            "Switch the app language between Urdu and English at any time.",
-            "Remove a patient profile or address when it is not tied to an active booking.",
-            "Contact us to ask about the data held about you.",
-          ]}
-        />
-      </Section>
-
-      <Section title="Payments and compliance">
+      <Section title="Contact">
         <p>
-          Digital payments are handled by licensed gateways in line with State Bank of Pakistan rules. CareSaath follows applicable
-          health-data and consumer-protection norms, and verifies caregiver licences before activation.
-        </p>
-      </Section>
-
-      <Section title="Changes and contact">
-        <p>
-          We may update this policy as CareSaath expands to new cities and features; material changes will be reflected here with a new
-          date. Questions about your privacy can be sent to{" "}
+          Questions about your privacy or data rights can be sent to{" "}
           <a href="mailto:info@caresaath.com" className="font-semibold text-brand-700 hover:underline">
             info@caresaath.com
           </a>
@@ -88,5 +73,28 @@ export default function Privacy() {
         </p>
       </Section>
     </LegalShell>
+  );
+}
+
+export default function Privacy() {
+  return (
+    <Suspense
+      fallback={
+        <LegalShell
+          title="Privacy Policy"
+          updated="November 2026"
+          activeSlug="privacy"
+          intro="How CareSaath collects, encrypts, uses, and protects your personal and patient health information across Pakistan."
+        >
+          <div className="space-y-4">
+            <div className="h-6 w-1/3 animate-pulse rounded-lg bg-ink-100" />
+            <div className="h-4 w-full animate-pulse rounded bg-ink-100" />
+            <div className="h-4 w-5/6 animate-pulse rounded bg-ink-100" />
+          </div>
+        </LegalShell>
+      }
+    >
+      <PrivacyContent />
+    </Suspense>
   );
 }

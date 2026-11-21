@@ -7,13 +7,19 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Prisma, UserRole } from '../generated/prisma/client.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class ListCallLogsQueryDto {
+  @ApiPropertyOptional({ example: 'Fatima', description: 'Search by caller or callee name, phone, or visit ID' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  q?: string;
+
   @ApiPropertyOptional({ format: 'uuid', description: 'Only calls for this visit' })
   @IsOptional()
   @IsUUID()
@@ -46,7 +52,27 @@ export class AdminCallLogsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ListCallLogsQueryDto): Promise<Paginated<unknown>> {
-    const where: Prisma.CallLogWhereInput = query.visitId ? { visitId: query.visitId } : {};
+    const isUuid = Boolean(query.q && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.q.trim()));
+    const where: Prisma.CallLogWhereInput = {
+      ...(query.visitId ? { visitId: query.visitId } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              ...(isUuid
+                ? [
+                    { visitId: query.q.trim() },
+                    { callerId: query.q.trim() },
+                    { calleeId: query.q.trim() },
+                  ]
+                : []),
+              { caller: { fullName: { contains: query.q, mode: 'insensitive' } } },
+              { caller: { phone: { contains: query.q } } },
+              { callee: { fullName: { contains: query.q, mode: 'insensitive' } } },
+              { callee: { phone: { contains: query.q } } },
+            ],
+          }
+        : {}),
+    };
     const [total, items] = await this.prisma.$transaction([
       this.prisma.callLog.count({ where }),
       this.prisma.callLog.findMany({

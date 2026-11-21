@@ -107,7 +107,7 @@ describe('FeedbackService', () => {
     );
   });
 
-  it('raises a CRITICAL SOS incident and alerts admins + emergency contacts', async () => {
+  it('raises a CRITICAL SOS incident and alerts admins', async () => {
     prisma.visit.findFirst.mockResolvedValue({
       id: 'v-1',
       status: 'IN_PROGRESS',
@@ -116,7 +116,6 @@ describe('FeedbackService', () => {
         customer: {
           id: 'u-cust',
           fullName: 'Ali',
-          emergencyContacts: [{ name: 'Sara', phone: '+923009999999' }],
         },
         address: { addressLine: '12 Mall Rd', city: 'Lahore' },
       },
@@ -137,12 +136,8 @@ describe('FeedbackService', () => {
       }),
     );
     expect(result.notifiedAdmins).toBe(1);
-    expect(result.notifiedContacts).toBe(1);
     expect(notifications.notify).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'safety_incident.sos' }),
-    );
-    expect(notifications.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'safety_incident.sos.contact', phone: '+923009999999' }),
     );
   });
 
@@ -150,7 +145,7 @@ describe('FeedbackService', () => {
     prisma.visit.findFirst.mockResolvedValue({
       id: 'v-1',
       status: 'COMPLETED',
-      booking: { customerId: 'u-cust', customer: { emergencyContacts: [] } },
+      booking: { customerId: 'u-cust', customer: {} },
     });
     await expect(service.raiseSos(customer, { visitId: 'v-1' })).rejects.toBeInstanceOf(
       BadRequestException,

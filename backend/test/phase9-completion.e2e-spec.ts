@@ -108,7 +108,6 @@ describe('Phase 9 completions (e2e)', () => {
     await prisma.booking.deleteMany({ where: { customerId } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: customerId } });
     await prisma.address.deleteMany({ where: { userId: customerId } });
-    await prisma.emergencyContact.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.caregiverDocument.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.credentialReview.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
@@ -288,11 +287,6 @@ describe('Phase 9 completions (e2e)', () => {
   });
 
   it('raises an SOS that becomes a CRITICAL incident and alerts admins (FR-C14)', async () => {
-    await request(app.getHttpServer())
-      .post('/api/v1/customer/emergency-contacts')
-      .set(bearer(customerToken))
-      .send({ name: 'Next of Kin', phone: '+923001112233' });
-
     const res = await request(app.getHttpServer())
       .post('/api/v1/sos')
       .set(bearer(customerToken))
@@ -300,7 +294,6 @@ describe('Phase 9 completions (e2e)', () => {
     expect(res.status).toBe(201);
     expect(res.body.incident.priority).toBe('CRITICAL');
     expect(res.body.incident.source).toBe('SOS');
-    expect(res.body.notifiedContacts).toBeGreaterThanOrEqual(1);
 
     const adminList = await request(app.getHttpServer())
       .get('/api/v1/admin/safety-incidents?status=OPEN')

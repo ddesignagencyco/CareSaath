@@ -94,7 +94,7 @@ async function bootstrap() {
       'bearer',
     )
     .addTag('Auth', 'Phone OTP login, token refresh, and logout')
-    .addTag('Customer - Profile', 'Customer account management, language preferences, emergency contacts')
+    .addTag('Customer - Profile', 'Customer account management and language preferences')
     .addTag('Customer - Patients', 'Patient profiles (self and family) with AES-256 encrypted medical context')
     .addTag('Customer - Addresses', 'Saved home/office addresses with geographic latitude/longitude')
     .addTag('Customer - Discovery', 'Public search for approved caregivers and public profile lookups')

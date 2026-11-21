@@ -1,22 +1,40 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
-import { Bullets, LegalShell, Section } from "../legal";
+import { fetchEditorialPage } from "@shared/api/editorial";
+import { Bullets, EditorialHtml, formatUpdatedDate, LegalShell, Section } from "../legal";
 
 export const metadata: Metadata = {
   title: "Terms of Service — CareSaath",
   description: "The terms that govern your use of the CareSaath home-care marketplace.",
 };
 
-export default function Terms() {
+async function TermsContent() {
+  const page = await fetchEditorialPage("terms");
+
+  if (page?.content) {
+    return (
+      <LegalShell
+        title={page.title || "Terms of Service"}
+        updated={formatUpdatedDate(page.updatedAt)}
+        activeSlug="terms"
+        intro="The terms, safety protocols, and responsibilities governing verified home-care bookings on CareSaath."
+      >
+        <EditorialHtml html={page.content} />
+      </LegalShell>
+    );
+  }
+
   return (
     <LegalShell
       title="Terms of Service"
-      updated="October 2026"
-      intro="These terms govern your use of CareSaath. By creating an account or booking a visit, you agree to them. Please read the safety and liability sections carefully."
+      updated="November 2026"
+      activeSlug="terms"
+      intro="These Terms of Service govern your use of CareSaath across Pakistan. By creating an account or booking a visit, you agree to them. Please read the safety and liability sections carefully."
     >
       <Section title="What CareSaath is">
         <p>
-          CareSaath is a marketplace that connects customers with independent, verified nurses, physiotherapists and caregivers for home
-          visits. CareSaath facilitates bookings, payments and safety tooling — it does not itself provide medical care. Clinical care is the
+          CareSaath is a marketplace that connects customers with independent, verified nurses, physiotherapists, and caregivers for home
+          visits. CareSaath facilitates bookings, payments, and safety tooling — it does not itself practise medicine. Clinical care is the
           professional responsibility of the caregiver who attends the visit.
         </p>
       </Section>
@@ -31,53 +49,10 @@ export default function Terms() {
         />
       </Section>
 
-      <Section title="Caregivers">
-        <Bullets
-          items={[
-            "Caregivers are verified against the PNC or PMDC register and approved by CareSaath before they appear to customers.",
-            "Caregivers set their own specialty, service area, availability and rate per visit.",
-            "A caregiver may be suspended or deactivated for a policy violation or an unresolved safety complaint.",
-          ]}
-        />
-      </Section>
-
-      <Section title="Bookings, payments and cancellations">
-        <Bullets
-          items={[
-            "You can book a single visit or a recurring schedule, and you will see the rate before you confirm.",
-            "Payment can be made in cash on the visit, or by card, JazzCash, Easypaisa or Raast.",
-            "CareSaath retains a commission from the visit fee; the rest is paid out to the caregiver.",
-            "You may cancel or reschedule a visit within the notice window shown in the app.",
-          ]}
-        />
-      </Section>
-
-      <Section title="Conduct and safety">
-        <p>
-          Treat caregivers and customers with respect. An in-app SOS button is available during an active visit and alerts the CareSaath
-          team and your emergency contact. You can raise a safety concern tied to a specific visit, which is escalated to admin.
-        </p>
-      </Section>
-
-      <Section title="Disputes">
-        <p>
-          If something goes wrong with a visit, either party can raise a dispute. CareSaath admin mediates and records a documented decision.
-        </p>
-      </Section>
-
       <Section title="Medical emergencies and liability">
         <p>
-          CareSaath is not an emergency service. In a medical emergency, call your local emergency services or ambulance (for example 1122)
-          and the nearest hospital. CareSaath&rsquo;s role is limited to facilitating the connection, payment and safety tooling between customers
-          and caregivers; it does not guarantee medical outcomes, and liability is limited to the extent permitted by applicable Pakistani
-          law.
-        </p>
-      </Section>
-
-      <Section title="Changes, law and contact">
-        <p>
-          We may update these terms as the service grows; continued use means you accept the current version. These terms are governed by the
-          laws of Pakistan. Questions can be sent to{" "}
+          CareSaath is not an emergency service. In a life-threatening medical emergency, call your local emergency services (Rescue 1122)
+          and proceed to the nearest hospital. These terms are governed by the laws of Pakistan. Questions can be sent to{" "}
           <a href="mailto:info@caresaath.com" className="font-semibold text-brand-700 hover:underline">
             info@caresaath.com
           </a>
@@ -85,5 +60,28 @@ export default function Terms() {
         </p>
       </Section>
     </LegalShell>
+  );
+}
+
+export default function Terms() {
+  return (
+    <Suspense
+      fallback={
+        <LegalShell
+          title="Terms of Service"
+          updated="November 2026"
+          activeSlug="terms"
+          intro="The terms, safety protocols, and responsibilities governing verified home-care bookings on CareSaath."
+        >
+          <div className="space-y-4">
+            <div className="h-6 w-1/3 animate-pulse rounded-lg bg-ink-100" />
+            <div className="h-4 w-full animate-pulse rounded bg-ink-100" />
+            <div className="h-4 w-5/6 animate-pulse rounded bg-ink-100" />
+          </div>
+        </LegalShell>
+      }
+    >
+      <TermsContent />
+    </Suspense>
   );
 }

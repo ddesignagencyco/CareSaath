@@ -223,7 +223,6 @@ model User {
   caregiverProfile        CaregiverProfile?
   notifications           Notification[]
   auditLogs               AuditLog[]
-  emergencyContacts       EmergencyContact[]
   bookings                Booking[]
   uploadedPrescriptions   PrescriptionDocument[]   @relation("PrescriptionUploader")
   reportedIncidents       SafetyIncident[]         @relation("IncidentReporter")
@@ -259,19 +258,6 @@ model OtpCode {
   visit Visit? @relation(fields: [visitId], references: [id])
 
   @@index([phone, purpose])
-}
-
-model EmergencyContact {
-  id        String   @id @default(uuid())
-  userId    String
-  name      String
-  phone     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------
