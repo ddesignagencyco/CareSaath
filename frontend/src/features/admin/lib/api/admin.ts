@@ -6,6 +6,7 @@ import type {
   AdminCaregiver,
   AdminCaregiverRecord,
   AdminBookingListItem,
+  AdminBookingDetail,
   AdminCustomer,
   AdminCustomerDetail,
   AdminUser,
@@ -16,6 +17,7 @@ import type {
   AdminPayment,
   AdminPayoutRequest,
   AdminVisitListItem,
+  AdminVisitDetail,
   BookingStatus,
   AnalyticsOverview,
   AnalyticsRange,
@@ -260,12 +262,12 @@ export const adminBookingsApi = {
   listBookings: (q: PageQuery & { status?: BookingStatus; isImmediate?: boolean; customerId?: string; caregiverId?: string }) =>
     http.get<Paginated<AdminBookingListItem>>("/admin/bookings", q),
   /** GET /admin/bookings/:id */
-  getBooking: (id: string) => http.get<AdminBookingListItem>(`/admin/bookings/${id}`),
+  getBooking: (id: string) => http.get<AdminBookingDetail>(`/admin/bookings/${id}`),
   /** GET /admin/visits?status=&bookingId=&from=&to=&sort=&page=&limit= */
   listVisits: (q: PageQuery & { status?: VisitStatus; bookingId?: string; from?: string; to?: string; sort?: "asc" | "desc" }) =>
     http.get<Paginated<AdminVisitListItem>>("/admin/visits", q),
   /** GET /admin/visits/:id */
-  getVisit: (id: string) => http.get<AdminVisitListItem>(`/admin/visits/${id}`),
+  getVisit: (id: string) => http.get<AdminVisitDetail>(`/admin/visits/${id}`),
 };
 
 /** Admin customer directory + support actions. */

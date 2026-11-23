@@ -4,7 +4,7 @@
  * arrive as strings; money is integer minor units (paisa).
  */
 
-import type { Booking, Language, PatientRelation, PaymentMethod, PaymentStatus, Visit, VisitStatusHistory } from "./caregiver-types";
+import type { Booking, CheckMethod, Language, PatientRelation, PaymentMethod, PaymentStatus, Visit, VisitStatusHistory } from "./caregiver-types";
 
 export type UserRole = "CUSTOMER" | "CAREGIVER" | "ADMIN";
 export type UserStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
@@ -231,6 +231,157 @@ export interface AdminVisitListItem extends Visit {
     address: { id: string; addressLine: string; city: string };
   };
   statusHistory: VisitStatusHistory[];
+}
+
+export interface AdminBookingDetail extends Booking {
+  customer: {
+    id: string;
+    fullName: string;
+    phone: string;
+    email: string | null;
+    photoKey?: string | null;
+    createdAt?: string;
+  };
+  caregiver: {
+    id: string;
+    specialty: Specialty;
+    experienceYears?: number | null;
+    licenseBody?: LicenseBody;
+    licenseNumber?: string;
+    ratePerVisit?: number;
+    user: {
+      id: string;
+      fullName: string;
+      phone: string;
+      email?: string | null;
+      photoKey?: string | null;
+    };
+  };
+  patient: {
+    id: string;
+    name: string;
+    relationship: PatientRelation;
+    dateOfBirth?: string | null;
+    gender?: string | null;
+    medicalContext?: string | null;
+  };
+  address: {
+    id: string;
+    label?: string | null;
+    addressLine: string;
+    city: string;
+    latitude: string | number;
+    longitude: string | number;
+  };
+  visits: {
+    id: string;
+    status: VisitStatus;
+    scheduledDate: string;
+    timeWindowStart: string;
+    timeWindowEnd: string;
+    enRouteAt?: string | null;
+    checkInAt?: string | null;
+    checkOutAt?: string | null;
+    checkInMethod?: CheckMethod | null;
+    checkOutMethod?: CheckMethod | null;
+    checkInLat?: string | number | null;
+    checkInLng?: string | number | null;
+    checkOutLat?: string | number | null;
+    checkOutLng?: string | number | null;
+    note?: { id: string; summary: string; submittedAt: string } | null;
+  }[];
+  prescriptions: {
+    id: string;
+    fileKey: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdAt: string;
+  }[];
+  promoCode?: {
+    id: string;
+    code: string;
+    discountType?: string;
+    discountValue?: number;
+  } | null;
+}
+
+export interface AdminVisitDetail extends Visit {
+  booking: {
+    id: string;
+    status: BookingStatus;
+    isImmediate: boolean;
+    serviceType: Specialty;
+    rateSnapshot: number;
+    discountAmount: number;
+    startDate: string;
+    endDate: string;
+    timeWindowStart: string;
+    timeWindowEnd: string;
+    cancelledAt: string | null;
+    cancelledById: string | null;
+    cancelReason: string | null;
+    customer: {
+      id: string;
+      fullName: string;
+      phone: string;
+      email?: string | null;
+      photoKey?: string | null;
+    };
+    caregiver: {
+      id: string;
+      specialty: Specialty;
+      experienceYears?: number | null;
+      licenseBody?: LicenseBody;
+      licenseNumber?: string;
+      user: {
+        id: string;
+        fullName: string;
+        phone: string;
+        email?: string | null;
+        photoKey?: string | null;
+      };
+    };
+    patient: {
+      id: string;
+      name: string;
+      relationship: PatientRelation;
+      dateOfBirth?: string | null;
+      gender?: string | null;
+      medicalContext?: string | null;
+    };
+    address: {
+      id: string;
+      label?: string | null;
+      addressLine: string;
+      city: string;
+      latitude: string | number;
+      longitude: string | number;
+    };
+  };
+  statusHistory: VisitStatusHistory[];
+  note?: { id: string; summary: string; submittedAt: string } | null;
+  payments?: {
+    id: string;
+    amount: number;
+    status: string;
+    method: string;
+    createdAt: string;
+    paidAt?: string | null;
+  }[];
+  safetyIncidents?: {
+    id: string;
+    description: string;
+    priority: string;
+    status: string;
+    createdAt: string;
+  }[];
+  disputes?: {
+    id: string;
+    description: string;
+    priority: string;
+    status: string;
+    createdAt: string;
+  }[];
 }
 
 /**

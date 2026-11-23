@@ -114,6 +114,95 @@ const ADMIN_BOOKING_INCLUDE = {
   visits: { select: { id: true, status: true, scheduledDate: true } },
 } satisfies Prisma.BookingInclude;
 
+const ADMIN_BOOKING_DETAIL_INCLUDE = {
+  customer: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      email: true,
+      photoKey: true,
+      createdAt: true,
+    },
+  },
+  caregiver: {
+    select: {
+      id: true,
+      specialty: true,
+      experienceYears: true,
+      licenseBody: true,
+      licenseNumber: true,
+      ratePerVisit: true,
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          phone: true,
+          email: true,
+          photoKey: true,
+        },
+      },
+    },
+  },
+  patient: {
+    select: {
+      id: true,
+      name: true,
+      relationship: true,
+      dateOfBirth: true,
+      gender: true,
+      medicalContext: true,
+    },
+  },
+  address: {
+    select: {
+      id: true,
+      label: true,
+      addressLine: true,
+      city: true,
+      latitude: true,
+      longitude: true,
+    },
+  },
+  visits: {
+    select: {
+      id: true,
+      status: true,
+      scheduledDate: true,
+      timeWindowStart: true,
+      timeWindowEnd: true,
+      enRouteAt: true,
+      checkInAt: true,
+      checkOutAt: true,
+      checkInMethod: true,
+      checkOutMethod: true,
+      checkInLat: true,
+      checkInLng: true,
+      checkOutLat: true,
+      checkOutLng: true,
+      note: { select: { id: true, summary: true, submittedAt: true } },
+    },
+    orderBy: { scheduledDate: 'asc' as const },
+  },
+  prescriptions: {
+    select: {
+      id: true,
+      fileKey: true,
+      mimeType: true,
+      sizeBytes: true,
+      createdAt: true,
+    },
+  },
+  promoCode: {
+    select: {
+      id: true,
+      code: true,
+      discountType: true,
+      discountValue: true,
+    },
+  },
+} satisfies Prisma.BookingInclude;
+
 const ADMIN_VISIT_INCLUDE = {
   booking: {
     select: {
@@ -129,6 +218,90 @@ const ADMIN_VISIT_INCLUDE = {
     },
   },
   statusHistory: { orderBy: { at: 'asc' as const } },
+} satisfies Prisma.VisitInclude;
+
+const ADMIN_VISIT_DETAIL_INCLUDE = {
+  booking: {
+    include: {
+      customer: {
+        select: {
+          id: true,
+          fullName: true,
+          phone: true,
+          email: true,
+          photoKey: true,
+        },
+      },
+      caregiver: {
+        select: {
+          id: true,
+          specialty: true,
+          experienceYears: true,
+          licenseBody: true,
+          licenseNumber: true,
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              email: true,
+              photoKey: true,
+            },
+          },
+        },
+      },
+      patient: {
+        select: {
+          id: true,
+          name: true,
+          relationship: true,
+          dateOfBirth: true,
+          gender: true,
+          medicalContext: true,
+        },
+      },
+      address: {
+        select: {
+          id: true,
+          label: true,
+          addressLine: true,
+          city: true,
+          latitude: true,
+          longitude: true,
+        },
+      },
+    },
+  },
+  statusHistory: { orderBy: { at: 'asc' as const } },
+  note: { select: { id: true, summary: true, submittedAt: true } },
+  payments: {
+    select: {
+      id: true,
+      amount: true,
+      status: true,
+      method: true,
+      createdAt: true,
+      paidAt: true,
+    },
+  },
+  safetyIncidents: {
+    select: {
+      id: true,
+      description: true,
+      priority: true,
+      status: true,
+      createdAt: true,
+    },
+  },
+  disputes: {
+    select: {
+      id: true,
+      description: true,
+      priority: true,
+      status: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.VisitInclude;
 
 /**
@@ -163,7 +336,7 @@ export class AdminBookingsService {
   async getBooking(id: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id },
-      include: ADMIN_BOOKING_INCLUDE,
+      include: ADMIN_BOOKING_DETAIL_INCLUDE,
     });
     if (!booking) {
       throw new NotFoundException('Booking not found');
@@ -196,7 +369,7 @@ export class AdminBookingsService {
   async getVisit(id: string) {
     const visit = await this.prisma.visit.findUnique({
       where: { id },
-      include: ADMIN_VISIT_INCLUDE,
+      include: ADMIN_VISIT_DETAIL_INCLUDE,
     });
     if (!visit) {
       throw new NotFoundException('Visit not found');
