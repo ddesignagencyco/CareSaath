@@ -197,8 +197,8 @@ const ADMIN_BOOKING_DETAIL_INCLUDE = {
     select: {
       id: true,
       code: true,
-      discountPercent: true,
-      maxDiscount: true,
+      discountType: true,
+      discountValue: true,
     },
   },
 } satisfies Prisma.BookingInclude;

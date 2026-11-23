@@ -300,8 +300,8 @@ export interface AdminBookingDetail extends Booking {
   promoCode?: {
     id: string;
     code: string;
-    discountPercent: number;
-    maxDiscount: number | null;
+    discountType?: string;
+    discountValue?: number;
   } | null;
 }
 
