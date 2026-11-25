@@ -87,6 +87,9 @@ export const NOTIFICATION_EVENTS: Record<string, NotificationEventDefinition> = 
 
   // ---- Doctor-authored medical orders (diagnosis / medicines / lab tests)
   'medical_order.created': { audience: CUSTOMER, title: 'New prescription from your visit' },
+
+  // ---- WhatsApp OTP gateway lifecycle (admin-only)
+  'whatsapp.session_expiring': { audience: ADMIN, title: 'WhatsApp OTP session expiring soon' },
 };
 
 export function eventDefinition(event: string): NotificationEventDefinition | undefined {
