@@ -16,7 +16,7 @@ import { LOGO_CID } from './logo.js';
 
 const BRAND = 'CareSaath';
 export const SUPPORT_EMAIL = 'info@caresaath.com';
-export const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
+export const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath.onrender.com').replace(/\/+$/, '');
 
 const C = {
   brand: '#167267',

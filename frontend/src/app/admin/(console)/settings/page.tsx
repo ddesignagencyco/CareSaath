@@ -15,6 +15,7 @@ import { PhotoPicker } from "@shared/ui/photo-picker";
 import { formatPkMobile } from "@shared/lib/phone";
 import { configApi, meApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
+import { WhatsAppOtpSection } from "@/features/admin/components/whatsapp-otp-section";
 import type { PlatformConfigItem } from "@shared/types";
 
 type Unit = "minutes" | "seconds" | "days" | "meters" | "strikes";
@@ -202,6 +203,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card>
+      <WhatsAppOtpSection />
       {config.isError ? (
         <Card>
           <ErrorState error={config.error} onRetry={() => config.refetch()} />

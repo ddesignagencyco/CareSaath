@@ -47,7 +47,7 @@ function wsCorsOrigin(
 ): void {
   // Non-browser clients (mobile apps, curl, server-to-server) send no Origin header.
   if (!origin) return cb(null, true);
-  const allowed = (process.env['CORS_ORIGINS'] ?? 'https://caresaath-ui.vercel.app')
+  const allowed = (process.env['CORS_ORIGINS'] ?? 'https://caresaath.onrender.com')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);

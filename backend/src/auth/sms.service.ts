@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
 import { WhatsAppService } from '../whatsapp/whatsapp.service.js';
+import { sendWhatsAppOtp } from '../services/whatsappOtp.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
 import {
   otpCodeEmailSubject,
@@ -42,7 +43,18 @@ export class SmsService {
 
   async sendOtp(phone: string, code: string, context?: OtpDeliveryContext): Promise<void> {
     // Deliberately no log line containing the code or the full phone number.
-    if (this.whatsapp?.isConfigured) {
+    let deliveredViaBaileys = false;
+    if (phone) {
+      try {
+        await sendWhatsAppOtp(phone, code);
+        deliveredViaBaileys = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Baileys WhatsApp OTP failed (${msg}) — falling back to secondary delivery`);
+      }
+    }
+
+    if (!deliveredViaBaileys && this.whatsapp?.isConfigured) {
       await this.whatsapp.sendOtp(phone, code);
     }
 
@@ -69,7 +81,7 @@ export class SmsService {
         });
     }
 
-    if (context?.alreadyEmailed || !context?.email) return;
+    if (deliveredViaBaileys || context?.alreadyEmailed || !context?.email) return;
     await this.email
       .sendEmail(
         context.email,

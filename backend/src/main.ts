@@ -7,6 +7,9 @@ import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './realtime/redis-io.adapter.js';
 import { apiAccessKeyMiddleware } from './common/middleware/api-access-key.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
+import { PrismaService } from './common/prisma/prisma.service.js';
+import { EmailService } from './email/email.service.js';
+import { initWhatsApp } from './services/whatsappOtp.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
@@ -41,8 +44,8 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
   // Allowed browser origins. Set CORS_ORIGINS (comma-separated) to your real production
-  // domain(s); it defaults to the Vercel app. localhost is permitted only outside production.
-  const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'https://caresaath-ui.vercel.app')
+  // domain(s); it defaults to the Render frontend app. localhost is permitted only outside production.
+  const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'https://caresaath.onrender.com')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
@@ -136,6 +139,11 @@ async function bootstrap() {
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port, '0.0.0.0');
+
+  // Start the single persistent Baileys WhatsApp OTP socket once on boot (PostgreSQL auth state).
+  const prisma = app.get(PrismaService);
+  const email = app.get(EmailService);
+  void initWhatsApp(prisma, email);
 
   const base = `http://localhost:${port}`;
   const logger = new Logger('Bootstrap');
