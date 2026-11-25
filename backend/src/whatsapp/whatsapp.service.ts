@@ -4,9 +4,9 @@ import { ConfigService } from '@nestjs/config';
 /**
  * Normalizes a phone number to WhatsApp international standard (E.164 without leading +).
  * Example:
- *   "+923152224435" -> "923152224435"
- *   "03152224435"   -> "923152224435"
- *   "3152224435"    -> "923152224435"
+ *   "+923001234567" -> "923001234567"
+ *   "03001234567"   -> "923001234567"
+ *   "3001234567"    -> "923001234567"
  */
 export function normalizeWhatsAppNumber(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -29,7 +29,7 @@ export interface WhatsAppSendResult {
 export class WhatsAppService {
   private readonly logger = new Logger(WhatsAppService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) { }
 
   /** Whether WhatsApp Cloud API is configured and enabled in environment. */
   get isConfigured(): boolean {

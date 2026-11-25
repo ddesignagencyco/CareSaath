@@ -24,7 +24,7 @@ function loadEnv() {
             }
           }
         }
-      } catch {}
+      } catch { }
     }
   }
 }
@@ -43,7 +43,7 @@ loadEnv();
 
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '1458147487380503';
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
-const TO_PHONE = process.env.WHATSAPP_TEST_RECIPIENT || '923152224435';
+const TO_PHONE = process.env.WHATSAPP_TEST_RECIPIENT || '923001234567';
 const TEMPLATE_NAME = process.env.WHATSAPP_OTP_TEMPLATE || 'hello_world';
 const API_VERSION = process.env.WHATSAPP_API_VERSION || 'v21.0';
 

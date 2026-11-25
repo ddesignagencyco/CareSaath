@@ -4,17 +4,17 @@ import { normalizeWhatsAppNumber, WhatsAppService } from './whatsapp.service.js'
 
 describe('normalizeWhatsAppNumber', () => {
   it('converts Pakistani local numbers (03xx) to 923xx', () => {
-    expect(normalizeWhatsAppNumber('03152224435')).toBe('923152224435');
+    expect(normalizeWhatsAppNumber('03001234567')).toBe('923001234567');
     expect(normalizeWhatsAppNumber('03001234567')).toBe('923001234567');
   });
 
   it('handles international numbers with + prefix', () => {
-    expect(normalizeWhatsAppNumber('+923152224435')).toBe('923152224435');
+    expect(normalizeWhatsAppNumber('+923001234567')).toBe('923001234567');
     expect(normalizeWhatsAppNumber('+1 (555) 123-4567')).toBe('15551234567');
   });
 
   it('prepends 92 if 10 digits without leading 0', () => {
-    expect(normalizeWhatsAppNumber('3152224435')).toBe('923152224435');
+    expect(normalizeWhatsAppNumber('3001234567')).toBe('923001234567');
   });
 });
 
@@ -55,7 +55,7 @@ describe('WhatsAppService', () => {
 
   it('returns failure result if not configured without making network call', async () => {
     const service = createService({ WHATSAPP_ENABLED: 'false' });
-    const result = await service.sendOtp('+923152224435', '123456');
+    const result = await service.sendOtp('+923001234567', '123456');
     expect(result.success).toBe(false);
     expect(result.error).toBe('WHATSAPP_NOT_CONFIGURED');
   });
