@@ -3,7 +3,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 import type { Me } from "@shared/caregiver-types";
-import type { TokenPair } from "@shared/types";
 import { sessionReady, subscribeBootstrap } from "@shared/api/session";
 import { authApi, meApi } from "./api/customer";
 import { keys } from "./api/keys";

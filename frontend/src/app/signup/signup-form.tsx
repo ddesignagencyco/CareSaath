@@ -100,7 +100,7 @@ export function SignupForm({ initialRole }: { initialRole: "customer" | "caregiv
       verifyOtp={async (phone, code, name, email) => {
         // Email-OTP path: the backend already has name/email/role from /auth/signup.
         // Firebase path: no prior /auth/signup call, so carry name/email/role to firebase/verify.
-        const tokens = await tokensFromOtp({
+        await tokensFromOtp({
           code,
           firebaseVerify: authApi.firebaseVerify,
           backendVerify: () => authApi.signupVerify(phone, code),

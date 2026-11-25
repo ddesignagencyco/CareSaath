@@ -154,7 +154,7 @@ generated enums/types are imported from `../generated/prisma/client.js`.
 | Module | Path prefix(es) | Responsibility |
 |---|---|---|
 | auth | `/auth` | Phone + OTP login, JWT access/refresh, current user |
-| users | `/customer` | Profile + emergency contacts |
+| users | `/customer` | Profile |
 | patients | `/customer/patients` | Patient profiles (FR-C2) |
 | addresses | `/customer/addresses` | Saved addresses with lat/lng |
 | caregivers | `/caregiver`, `/caregivers` | Register, profile, photo, public search/profile |
@@ -180,7 +180,7 @@ resolve as Redis cache → `PlatformConfig` row → env fallback.
 ```
 /health
 /auth                        phone OTP, refresh
-/customer/...                me, emergency-contacts, patients, addresses, bookings, payments, visits
+/customer/...                me, patients, addresses, bookings, payments, visits
 /caregiver/...               register, profile, photo, availability, bookings, visits, payments, payout-accounts, earnings, payouts, safety-reports
 /caregivers                  public search + profile
 /disputes                    raise / list own (customer + caregiver)

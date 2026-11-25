@@ -2,15 +2,16 @@
 
 import type { QueryKey } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Check, Car, KeyRound, LocateFixed, LogIn, LogOut, MapPinned, NotebookPen, Star } from "lucide-react";
+import { Check, Car, KeyRound, Loader2, LocateFixed, LogIn, LogOut, MapPinned, NotebookPen, Star } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAction, useApiErrorText } from "@shared/api/use-action";
 import { Button } from "@shared/ui/button";
 import { OtpInput } from "@shared/ui/otp-input";
 import { Textarea } from "@shared/ui/field";
 import { formatPkMobile } from "@shared/lib/phone";
 import type { CaregiverVisitDetail } from "@shared/caregiver-types";
+import type { VisitStatus } from "@shared/types";
 import { useNow } from "@shared/hooks/use-now";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { visitsApi } from "@/features/caregiver/lib/api/caregiver";
@@ -59,7 +60,7 @@ function stepIndex(status: CaregiverVisitDetail["status"]): number {
   }
 }
 
-function Stepper({ current }: { current: number }) {
+function Stepper({ current, status }: { current: number; status: VisitStatus }) {
   const t = useTranslations("caregiverB.flow");
   return (
     <ol className="grid grid-cols-4 gap-1" aria-label={t("progress")}>
@@ -73,8 +74,9 @@ function Stepper({ current }: { current: number }) {
               <span
                 className={clsx(
                   "flex size-9 shrink-0 items-center justify-center rounded-full transition-colors",
-                  done && "bg-brand-600 text-white",
-                  now && "bg-brand-600 text-white ring-4 ring-brand-100",
+                  done && "bg-success-600 text-white",
+                  now && status === "EN_ROUTE" && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  now && status !== "EN_ROUTE" && "bg-brand-600 text-white ring-4 ring-brand-100",
                   !done && !now && "bg-ink-100 text-ink-400",
                 )}
                 aria-current={now ? "step" : undefined}
@@ -83,7 +85,7 @@ function Stepper({ current }: { current: number }) {
               </span>
               <span className={clsx("h-0.5 flex-1", i === STEPS.length - 1 ? "invisible" : done ? "bg-brand-400" : "bg-ink-200")} />
             </span>
-            <span className={clsx("text-[11px] font-semibold sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{t(`steps.${key}`)}</span>
+            <span className={clsx("text-[11px] font-semibold leading-tight break-words max-w-full sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{t(`steps.${key}`)}</span>
           </li>
         );
       })}
@@ -104,9 +106,16 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
   const [mode, setMode] = useState<"gps" | "otp">("gps");
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ sentTo: string; at: number } | null>(null);
+  const [sent, setSent] = useState<{ sentTo: string; at: number; devCode?: string } | null>(null);
+  const [resendIn, setResendIn] = useState(0);
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setInterval(() => setResendIn((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
 
   const checkIn = useAction((dto: Parameters<typeof visitsApi.checkIn>[1]) => visitsApi.checkIn(visit.id, dto), {
     invalidate,
@@ -122,9 +131,10 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
   });
   const sendCode = useAction(() => visitsApi.checkInOtp(visit.id), {
     invalidate: [],
-    success: null,
+    success: t("codeSentToast"),
     onSuccess: (r) => {
-      setSent({ sentTo: r.sentTo, at: Date.now() });
+      setSent({ sentTo: r.sentTo, at: Date.now(), devCode: (r as { devCode?: string }).devCode });
+      setResendIn(60);
       setOtpError(null);
       setCode("");
     },
@@ -217,10 +227,27 @@ function CheckIn({ visit, invalidate }: { visit: CaregiverVisitDetail; invalidat
             autoFocus
           />
           {otpError && <p className="text-sm font-medium text-danger-600">{otpError}</p>}
+          {sent.devCode && (
+            <p className="rounded-lg bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-800">
+              {t("mockCode", { code: sent.devCode })}
+            </p>
+          )}
           <div className="flex items-center justify-between">
-            <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => sendCode.mutate(undefined)}>
-              {t("newCode")}
-            </button>
+            {resendIn > 0 ? (
+              <span className="tabular text-xs font-semibold text-ink-500">
+                {t("resendIn", { time: `0:${String(resendIn).padStart(2, "0")}` })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={sendCode.isPending}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline disabled:opacity-50"
+                onClick={() => sendCode.mutate(undefined)}
+              >
+                {sendCode.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                {t("newCode")}
+              </button>
+            )}
             <Button loading={checkIn.isPending} disabled={code.length !== 6} onClick={() => checkIn.mutate({ method: "OTP", code })}>
               {t("checkIn")}
             </Button>
@@ -239,9 +266,16 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
   const [mode, setMode] = useState<"gps" | "otp">("gps");
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ sentTo: string } | null>(null);
+  const [sent, setSent] = useState<{ sentTo: string; at?: number; devCode?: string } | null>(null);
+  const [resendIn, setResendIn] = useState(0);
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setInterval(() => setResendIn((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
 
   const checkOut = useAction((dto: Parameters<typeof visitsApi.checkOut>[1]) => visitsApi.checkOut(visit.id, dto), {
     invalidate,
@@ -256,9 +290,10 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
   });
   const sendCode = useAction(() => visitsApi.checkInOtp(visit.id), {
     invalidate: [],
-    success: null,
+    success: t("codeSentToast"),
     onSuccess: (r) => {
-      setSent({ sentTo: r.sentTo });
+      setSent({ sentTo: r.sentTo, at: Date.now(), devCode: (r as { devCode?: string }).devCode });
+      setResendIn(60);
       setOtpError(null);
       setCode("");
     },
@@ -346,10 +381,27 @@ function CheckOut({ visit, invalidate }: { visit: CaregiverVisitDetail; invalida
             autoFocus
           />
           {otpError && <p className="text-sm font-medium text-danger-600">{otpError}</p>}
+          {sent.devCode && (
+            <p className="rounded-lg bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-800">
+              {t("mockCode", { code: sent.devCode })}
+            </p>
+          )}
           <div className="flex items-center justify-between">
-            <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => sendCode.mutate(undefined)}>
-              {t("newCode")}
-            </button>
+            {resendIn > 0 ? (
+              <span className="tabular text-xs font-semibold text-ink-500">
+                {t("resendIn", { time: `0:${String(resendIn).padStart(2, "0")}` })}
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={sendCode.isPending}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline disabled:opacity-50"
+                onClick={() => sendCode.mutate(undefined)}
+              >
+                {sendCode.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                {t("newCode")}
+              </button>
+            )}
             <Button loading={checkOut.isPending} disabled={code.length !== 6} onClick={() => checkOut.mutate({ method: "OTP", code })}>
               {t("checkOutConfirm")}
             </Button>
@@ -443,7 +495,7 @@ export function VisitFlow({ visit }: { visit: CaregiverVisitDetail }) {
 
   return (
     <div className="space-y-6">
-      <Stepper current={current} />
+      <Stepper current={current} status={visit.status} />
 
       {visit.status === "CONFIRMED" && (
         <div className="space-y-3">

@@ -140,13 +140,19 @@ export default function BookPage() {
       const fmt = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
       const fromAt = new Date(now);
       fromAt.setMinutes((Math.floor(fromAt.getMinutes() / 5) + 1) * 5, 0, 0); // next 5-min slot from now
+      if (localDayKey(fromAt.getTime()) !== today) {
+        setFrom("23:50");
+        setTo("23:59");
+        return;
+      }
       const toAt = new Date(fromAt.getTime() + 60 * 60_000);
       setFrom(fmt(fromAt));
-      setTo(fmt(toAt));
+      setTo(localDayKey(toAt.getTime()) !== today ? "23:59" : fmt(toAt));
     }
   };
   const maxEnd = start ? new Date(new Date(`${start}T00:00:00Z`).getTime() + MAX_RANGE_DAYS * 86_400_000).toISOString().slice(0, 10) : "";
   const dates = countVisits(type, start, end, weekdays);
+  const visitCount = immediate ? 1 : dates.length;
   const offDays = c && dates.length ? outsideHours(c, dates, from, to) : [];
   const patient = patients.data?.find((p) => p.id === patientId);
   const address = addresses.data?.find((a) => a.id === addressId);
@@ -181,8 +187,10 @@ export default function BookPage() {
   const book = useAction(
     async () => {
       const startNow = new Date();
+      const startDay = localDayKey(startNow.getTime());
       const endAt = new Date(startNow.getTime() + 60 * 60_000);
       const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const immediateEnd = localDayKey(endAt.getTime()) !== startDay ? "23:59" : hhmm(endAt);
       const payload: CreateBookingInput = immediate
         ? {
             patientId: patientId!,
@@ -190,10 +198,10 @@ export default function BookPage() {
             addressId: addressId!,
             type: "SINGLE",
             isImmediate: true,
-            startDate: localDayKey(startNow.getTime()),
-            endDate: localDayKey(startNow.getTime()),
+            startDate: startDay,
+            endDate: startDay,
             timeWindowStart: hhmm(startNow),
-            timeWindowEnd: hhmm(endAt),
+            timeWindowEnd: immediateEnd,
             ...(promo.trim() ? { promoCode: promo.trim().toUpperCase() } : {}),
           }
         : {
@@ -280,7 +288,7 @@ export default function BookPage() {
         <Skeleton className="h-20 rounded-2xl" />
       ) : (
         <Card className="flex items-center gap-3 p-4">
-          <Avatar name={c.user.fullName} />
+          <Avatar name={c.user.fullName} src={c.photoUrl} />
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-ink-900">{t("title", { name: c.user.fullName })}</p>
             <div className="flex flex-wrap items-center gap-x-3 text-sm text-ink-500">
@@ -517,7 +525,15 @@ export default function BookPage() {
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
                     {rx.name} <span className="font-normal text-ink-500">· {formatBytes(rx.size)}</span>
                   </span>
-                  <button aria-label={t("review.removeFile")} onClick={() => setRx(null)} className="text-ink-400 hover:text-ink-700">
+                  <button
+                    type="button"
+                    aria-label={t("review.removeFile")}
+                    onClick={() => {
+                      setRx(null);
+                      if (fileInput.current) fileInput.current.value = "";
+                    }}
+                    className="text-ink-400 hover:text-ink-700"
+                  >
                     <X className="size-4" />
                   </button>
                 </div>
@@ -576,18 +592,18 @@ export default function BookPage() {
 
             <div className="space-y-1.5 rounded-xl bg-ink-25 p-4 text-sm">
               <div className="flex justify-between">
-                <span className="text-ink-600">{t("review.price", { price: formatMoney(perVisit), count: dates.length })}</span>
-                <span className={clsx("tabular", applied ? "text-ink-400 line-through" : "font-bold text-ink-900")}>{formatMoney(perVisit * dates.length)}</span>
+                <span className="text-ink-600">{t("review.price", { price: formatMoney(perVisit), count: visitCount })}</span>
+                <span className={clsx("tabular", applied ? "text-ink-400 line-through" : "font-bold text-ink-900")}>{formatMoney(perVisit * visitCount)}</span>
               </div>
               {applied && (
                 <>
                   <div className="flex justify-between text-success-700">
                     <span>{t("review.promoLine", { code: applied.code })}</span>
-                    <span className="tabular">−{formatMoney(applied.discountAmount * dates.length)}</span>
+                    <span className="tabular">−{formatMoney(applied.discountAmount * visitCount)}</span>
                   </div>
                   <div className="flex justify-between border-t border-ink-100 pt-1.5">
                     <span className="font-semibold text-ink-900">{t("review.total")}</span>
-                    <span className="tabular font-bold text-ink-900">{formatMoney(effectivePerVisit * dates.length)}</span>
+                    <span className="tabular font-bold text-ink-900">{formatMoney(effectivePerVisit * visitCount)}</span>
                   </div>
                 </>
               )}

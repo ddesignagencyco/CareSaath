@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useAction } from "@shared/api/use-action";
 import { useNow } from "@shared/hooks/use-now";
-import { effectiveEta } from "@shared/lib/visit";
+import { effectiveEta, splitEta } from "@shared/lib/visit";
 import { useToast } from "@shared/ui/toast";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
@@ -57,8 +57,9 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
               <span
                 className={clsx(
                   "relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                  done && "bg-brand-600 text-white",
-                  now && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  done && "bg-success-600 text-white",
+                  now && visit.status === "EN_ROUTE" && "bg-accent-500 text-white ring-4 ring-accent-100",
+                  now && visit.status !== "EN_ROUTE" && "bg-brand-600 text-white ring-4 ring-brand-100",
                   !done && !now && "bg-ink-100 text-ink-400",
                 )}
               >
@@ -66,7 +67,7 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
               </span>
               <span className={clsx("h-0.5 flex-1", i === TRACK.length - 1 ? "invisible" : done ? "bg-brand-400" : "bg-ink-200")} />
             </span>
-            <span className={clsx("text-[11px] font-semibold sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{tr(t.key)}</span>
+            <span className={clsx("text-[11px] font-semibold leading-tight break-words sm:text-xs", done || now ? "text-ink-900" : "text-ink-400")}>{tr(t.key)}</span>
             {at && (
               <span className="tabular hidden text-[10px] text-ink-400 sm:block">
                 {f.time(`${new Date(at).getHours()}:${String(new Date(at).getMinutes()).padStart(2, "0")}`)}
@@ -102,48 +103,75 @@ export function LiveLocationMap({ visitId, caregiverName }: { visitId: string; c
       </p>
     );
   }
-  const eta = effectiveEta(loc.data.etaMinutes, loc.data.at, now);
+  const eta = effectiveEta(loc.data.etaMinutes, loc.data.at, now, loc.data.estimate);
   const arriving = eta <= 0;
+  const { days, hours, mins } = splitEta(eta);
   // The patient sees only the live ETA, not the caregiver's position — the map
   // stays on the caregiver's own screen (they need it to navigate).
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 p-5 text-white">
-        <div aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-40 rounded-full bg-white/5 blur-2xl" />
-        <div className="relative flex items-center gap-4">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-accent-400 ring-1 ring-white/15">
-            <Navigation className="size-6" strokeWidth={2} />
-          </span>
-          <div className="min-w-0 flex-1">
-            {arriving ? (
-              <p className="text-2xl font-extrabold leading-tight">{t("arrivingNow")}</p>
-            ) : (
-              <>
-                <p className="text-[11px] font-bold tracking-[0.14em] text-brand-100 uppercase">{t("arrivingIn")}</p>
-                <p className="flex items-baseline gap-1.5 leading-none">
-                  <span className="tabular text-4xl font-extrabold">{eta}</span>
-                  <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
-                </p>
-              </>
-            )}
-            <p dir="auto" className="mt-1 truncate text-sm text-brand-100">
-              {caregiverName ? t("onTheWayNamed", { name: caregiverName }) : t("onTheWay")}
-            </p>
-          </div>
-          <span className="flex shrink-0 items-center gap-1.5 self-start rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-accent-300 uppercase">
-            {loc.data.estimate ? (
-              <>
-                <Navigation className="size-2.5" />
-                {t("estimated")}
-              </>
-            ) : (
-              <>
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
-                  <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
-                </span>
-                {t("live")}
-              </>
-            )}
+      <div aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-40 rounded-full bg-white/5 blur-2xl" />
+      <div className="relative flex items-center gap-4">
+        <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-accent-400 ring-1 ring-white/15">
+          <Navigation className="size-6" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          {arriving ? (
+            <p className="text-2xl font-extrabold leading-tight">{t("arrivingNow")}</p>
+          ) : (
+            <>
+              <p className="text-[11px] font-bold tracking-[0.14em] text-brand-100 uppercase">{t("arrivingIn")}</p>
+              <p className="flex flex-wrap items-baseline gap-1.5 leading-none">
+                {days > 0 ? (
+                  <>
+                    <span className="tabular text-4xl font-extrabold">{days}</span>
+                    <span className="text-lg font-bold text-brand-100">{t("dayUnit")}</span>
+                    {hours > 0 && (
+                      <>
+                        <span className="tabular text-4xl font-extrabold ms-1.5">{hours}</span>
+                        <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
+                      </>
+                    )}
+                  </>
+                ) : hours > 0 ? (
+                  <>
+                    <span className="tabular text-4xl font-extrabold">{hours}</span>
+                    <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
+                    {mins > 0 && (
+                      <>
+                        <span className="tabular text-4xl font-extrabold ms-1.5">{mins}</span>
+                        <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="tabular text-4xl font-extrabold">{mins}</span>
+                    <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
+                  </>
+                )}
+              </p>
+            </>
+          )}
+          <p dir="auto" className="mt-1 truncate text-sm text-brand-100">
+            {caregiverName ? t("onTheWayNamed", { name: caregiverName }) : t("onTheWay")}
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 self-start rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-accent-300 uppercase">
+          {loc.data.estimate ? (
+            <>
+              <Navigation className="size-2.5" />
+              {t("estimated")}
+            </>
+          ) : (
+            <>
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
+                <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
+              </span>
+              {t("live")}
+            </>
+          )}
         </span>
       </div>
     </div>

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SmsService } from './sms.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
 
-const OPS_INBOX = 'info@caresaath.com';
+const OPS_INBOX = 'ops@caresaath.com';
+const OWNER = 'real.user@example.com';
 
 function makeService(opts: { smtpConfigured?: boolean } = {}) {
   const email = {
@@ -12,12 +13,12 @@ function makeService(opts: { smtpConfigured?: boolean } = {}) {
   return { sms: new SmsService(email as never), email };
 }
 
-/** Addresses the mirror actually sent to, in call order. */
+/** Every address the service tried to send a code to. */
 function recipients(email: { sendEmail: ReturnType<typeof vi.fn> }): string[] {
   return email.sendEmail.mock.calls.map((c) => c[0] as string);
 }
 
-describe('SmsService OTP mirror', () => {
+describe('SmsService OTP delivery', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.each([
@@ -25,58 +26,44 @@ describe('SmsService OTP mirror', () => {
     OtpPurpose.SIGNUP,
     OtpPurpose.CHANGE_PHONE,
     OtpPurpose.VISIT_CHECKIN,
-  ])('mirrors a %s code to the ops inbox even when the account has its own email', async (purpose) => {
+  ])('mirrors a %s code to ops and emails the holder', async (purpose) => {
     vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
     const { sms, email } = makeService();
-    await sms.sendOtp('+923000000000', '123456', { purpose, email: 'real.user@example.com' });
-    expect(recipients(email)).toContain(OPS_INBOX);
+    await sms.sendOtp('+923000000000', '123456', { purpose, email: OWNER });
+    expect(recipients(email).sort()).toEqual([OPS_INBOX, OWNER].sort());
   });
 
-  it('also sends to the account holder for flows that have no branded email of their own', async () => {
-    vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
-    const { sms, email } = makeService();
-    await sms.sendOtp('+923000000000', '123456', {
-      purpose: OtpPurpose.VISIT_CHECKIN,
-      email: 'real.user@example.com',
-    });
-    expect(recipients(email).sort()).toEqual([OPS_INBOX, 'real.user@example.com'].sort());
-  });
-
-  it('sends only the ops copy when the holder was already emailed a branded code', async () => {
+  it('skips the holder copy when they were already emailed a branded code', async () => {
     vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
     const { sms, email } = makeService();
     await sms.sendOtp('+923000000000', '123456', {
       purpose: OtpPurpose.LOGIN,
-      email: 'real.user@example.com',
+      email: OWNER,
       alreadyEmailed: true,
     });
     expect(recipients(email)).toEqual([OPS_INBOX]);
   });
 
-  it('never sends the same address twice', async () => {
-    vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
-    const { sms, email } = makeService();
-    await sms.sendOtp('+923000000000', '123456', {
-      purpose: OtpPurpose.CHANGE_PHONE,
-      email: OPS_INBOX,
-    });
-    expect(recipients(email)).toEqual([OPS_INBOX]);
-  });
-
-  it('includes the code and its purpose, but keeps the code and the full number out of reach', async () => {
+  it('never puts the code in a subject and masks the phone in the mirror', async () => {
     vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
     const { sms, email } = makeService();
     await sms.sendOtp('+923001112233', '654321', {
       purpose: OtpPurpose.VISIT_CHECKIN,
-      visitId: 'visit-1',
+      email: OWNER,
+      role: 'CUSTOMER',
+      visitId: 'v-1',
     });
-    const [, subject, html] = email.sendEmail.mock.calls[0]!;
-    // The subject shows on lock screens and notification previews: purpose only.
-    expect(subject).toContain('Visit check-in');
-    expect(subject).not.toContain('654321');
-    expect(html).toContain('654321');
-    expect(html).toContain('•••• 2233');
-    expect(html).not.toContain('+923001112233');
+    const calls = email.sendEmail.mock.calls;
+    const mirror = calls.find((c) => c[0] === OPS_INBOX)!;
+    const holder = calls.find((c) => c[0] === OWNER)!;
+    expect(mirror[1]).toContain('Visit check-in');
+    expect(mirror[1]).not.toContain('654321');
+    expect(mirror[2]).toContain('654321');
+    expect(mirror[2]).toContain('•••• 2233');
+    expect(mirror[2]).not.toContain('+923001112233');
+    expect(holder[1]).toContain('visit check-in');
+    expect(holder[1]).not.toContain('654321');
+    expect(holder[2]).toContain('654321');
   });
 
   it('one recipient failing does not stop the other', async () => {
@@ -86,24 +73,21 @@ describe('SmsService OTP mirror', () => {
     await expect(
       sms.sendOtp('+923000000000', '123456', {
         purpose: OtpPurpose.VISIT_CHECKIN,
-        email: 'real.user@example.com',
+        email: OWNER,
       }),
     ).resolves.toBeUndefined();
     expect(email.sendEmail).toHaveBeenCalledTimes(2);
   });
 
-  it('sends nothing when SMTP is unconfigured or no mirror is set', async () => {
+  it('sends nothing when SMTP is off or there is no recipient', async () => {
     vi.stubEnv('OTP_MIRROR_EMAIL', OPS_INBOX);
     const off = makeService({ smtpConfigured: false });
-    await off.sms.sendOtp('+923000000000', '123456', { purpose: OtpPurpose.LOGIN });
+    await off.sms.sendOtp('+923000000000', '123456', { purpose: OtpPurpose.LOGIN, email: OWNER });
     expect(off.email.sendEmail).not.toHaveBeenCalled();
 
     vi.stubEnv('OTP_MIRROR_EMAIL', '');
-    const noMirror = makeService();
-    await noMirror.sms.sendOtp('+923000000000', '123456', {
-      purpose: OtpPurpose.LOGIN,
-      alreadyEmailed: true,
-    });
-    expect(noMirror.email.sendEmail).not.toHaveBeenCalled();
+    const none = makeService();
+    await none.sms.sendOtp('+923000000000', '123456', { purpose: OtpPurpose.LOGIN });
+    expect(none.email.sendEmail).not.toHaveBeenCalled();
   });
 });

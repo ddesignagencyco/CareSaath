@@ -22,12 +22,17 @@ export const EMBEDDED_URL_TTL_SECONDS = 30 * 60;
  * so clients can show uploads straight from list/detail responses. A failure to
  * build one yields `url: null` rather than failing the whole response.
  */
-export async function withFileUrl<T extends { fileKey: string }>(
+export async function withFileUrl<T extends { fileKey: string; mimeType?: string | null }>(
   storage: Pick<StorageService, 'presignedGet'>,
   record: T,
 ): Promise<T & { url: string | null }> {
   try {
-    return { ...record, url: await storage.presignedGet(record.fileKey, EMBEDDED_URL_TTL_SECONDS) };
+    // Audio/video keys lose their extension in Cloudinary's public_id, so the
+    // mime type is the only reliable way to pick the right resource type.
+    return {
+      ...record,
+      url: await storage.presignedGet(record.fileKey, EMBEDDED_URL_TTL_SECONDS, record.mimeType),
+    };
   } catch {
     return { ...record, url: null };
   }
@@ -156,12 +161,14 @@ export class StorageService implements OnModuleInit {
     return 'image';
   }
 
-  /** URL to view a stored file; PDFs get a signed download link valid for `ttlSeconds`. */
-  async presignedGet(fileKey: string, ttlSeconds = 300): Promise<string> {
+  /** URL to view a stored file; PDFs get a signed download link valid for `ttlSeconds`.
+   *  `mimeType` (when known) wins over the key extension — Cloudinary strips
+   *  extensions from audio/video public_ids, so inference alone breaks playback. */
+  async presignedGet(fileKey: string, ttlSeconds = 300, mimeType?: string | null): Promise<string> {
     if (!this.configured) {
       return `https://storage.local/${fileKey}?expires=${ttlSeconds}`;
     }
-    const resourceType = this.resourceTypeFor(fileKey);
+    const resourceType = mimeType ? this.resourceTypeForMime(mimeType) : this.resourceTypeFor(fileKey);
     if (resourceType === 'raw') {
       return cloudinary.utils.private_download_url(fileKey, '', {
         resource_type: 'raw',
@@ -171,7 +178,17 @@ export class StorageService implements OnModuleInit {
     }
     if (resourceType === 'video') {
       // Cloudinary serves both audio and video notes under the 'video' resource type.
-      return cloudinary.url(fileKey, { resource_type: 'video', type: 'upload', secure: true });
+      // An explicit format keeps the delivered URL extensioned (`.m4a`/`.webm`),
+      // which some players need; the public_id itself has no extension.
+      const format = mimeType
+        ? ({ 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'video/mp4': 'mp4', 'video/webm': 'webm' } as Record<string, string>)[mimeType]
+        : undefined;
+      return cloudinary.url(fileKey, {
+        resource_type: 'video',
+        type: 'upload',
+        secure: true,
+        ...(format ? { format } : {}),
+      });
     }
     // Keys stored before extensions were stripped still end in one; it must be given as the format.
     const legacyExt = IMAGE_EXTENSIONS.find((ext) => fileKey.toLowerCase().endsWith(`.${ext}`));
@@ -200,8 +217,10 @@ export class StorageService implements OnModuleInit {
     }
   }
 
-  /** Chat attachments: images, PDFs, voice notes, and short videos. */
+  /** Chat attachments: images, PDFs, voice notes, and short videos.
+   *  Browsers send codec suffixes (`audio/webm;codecs=opus`) — normalize first. */
   validateChatMediaUpload(mimetype: string, size: number): void {
+    mimetype = mimetype.split(';')[0].trim();
     if (!CHAT_MEDIA_MIME_TYPES.includes(mimetype)) {
       throw new BadRequestException('Unsupported attachment type for chat');
     }

@@ -14,7 +14,7 @@ import { SosDialog as SharedSosDialog } from "@shared/ui/sos-dialog";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { getPosition } from "@shared/lib/geo";
 
-export function SosDialog({ visitId, familyPhone, onClose }: { visitId: string; familyPhone?: string | null; onClose: () => void }) {
+export function SosDialog({ visitId, onClose }: { visitId: string; onClose: () => void }) {
   const t = useTranslations("caregiverB.safety");
   // Start locating as soon as the dialog opens; the alert never waits for it.
   const coords = useRef<{ lat: number; lng: number } | null>(null);
@@ -28,7 +28,6 @@ export function SosDialog({ visitId, familyPhone, onClose }: { visitId: string; 
   return (
     <SharedSosDialog
       description={t("sosDescription")}
-      contact={familyPhone ? { label: t("family"), phone: familyPhone } : undefined}
       send={(note) =>
         safetyApi.sos({
           visitId,

@@ -70,7 +70,7 @@ async function bootstrap() {
     '     - **Admin:** `+923000000000`',
     '     - **Customer:** `+923001110001` (Ayesha Khan) or `+923001110002` (Bilal Ahmed)',
     '     - **Caregiver:** `+923001110011` (Fatima Noor - Nurse) or `+923001110012` (Ali Raza - Physio)',
-    '   - **Step 2:** The OTP is captured locally in **MailHog** at http://localhost:18025 or logged in your server console.',
+    '   - **Step 2:** The OTP is delivered to the account holder via their configured channel (SMS / WhatsApp / email). Codes are never logged.',
     '   - **Step 3:** Call `POST /api/v1/auth/otp/verify` with the phone and OTP to obtain the `accessToken`.',
     '   - **Step 4:** Click the green **Authorize** button at the top right of this page and enter `Bearer <accessToken>`.',
     '',
@@ -94,7 +94,7 @@ async function bootstrap() {
       'bearer',
     )
     .addTag('Auth', 'Phone OTP login, token refresh, and logout')
-    .addTag('Customer - Profile', 'Customer account management, language preferences, emergency contacts')
+    .addTag('Customer - Profile', 'Customer account management and language preferences')
     .addTag('Customer - Patients', 'Patient profiles (self and family) with AES-256 encrypted medical context')
     .addTag('Customer - Addresses', 'Saved home/office addresses with geographic latitude/longitude')
     .addTag('Customer - Discovery', 'Public search for approved caregivers and public profile lookups')
@@ -119,17 +119,20 @@ async function bootstrap() {
     .addTag('System & Notifications', 'Dispatched SMS, Push, and WhatsApp notifications')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none',
-      filter: true,
-      displayRequestDuration: true,
-      tryItOutEnabled: true,
-    },
-    customSiteTitle: 'CareSaath API Docs',
-  });
+  const enableSwagger = !isProduction || process.env['SWAGGER_ENABLED'] === 'true';
+  if (enableSwagger) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'none',
+        filter: true,
+        displayRequestDuration: true,
+        tryItOutEnabled: true,
+      },
+      customSiteTitle: 'CareSaath API Docs',
+    });
+  }
 
   const port = process.env['PORT'] ?? 3000;
   await app.listen(port, '0.0.0.0');
@@ -137,7 +140,9 @@ async function bootstrap() {
   const base = `http://localhost:${port}`;
   const logger = new Logger('Bootstrap');
   logger.log(`API base:       ${base}/api/v1`);
-  logger.log(`Swagger UI:     ${base}/docs`);
-  logger.log(`OpenAPI JSON:   ${base}/docs-json`);
+  if (enableSwagger) {
+    logger.log(`Swagger UI:     ${base}/docs`);
+    logger.log(`OpenAPI JSON:   ${base}/docs-json`);
+  }
 }
 await bootstrap();

@@ -9,8 +9,10 @@ import { PageHeader } from "@shared/page-header";
 import { Badge, type Tone } from "@shared/ui/badge";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
+import { Input } from "@shared/ui/field";
 import { EmptyState, ErrorState } from "@shared/ui/misc";
 import { CAN_CALL_LOGS, callLogsApi } from "@/features/admin/lib/api/admin";
+import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
 import { useFmt } from "@shared/i18n/use-fmt";
 import type { CallLogEntry, CallStatus } from "@shared/types";
 
@@ -29,10 +31,12 @@ export default function CallLogsPage() {
   const t = useTranslations("adminB.callLogs");
   const f = useFmt();
   const [page, setPage] = useState(1);
+  const [qInput, setQInput] = useState("");
+  const q = useDebouncedValue(qInput.trim());
 
   const list = useQuery({
-    queryKey: ["admin-call-logs", page],
-    queryFn: () => callLogsApi.list({ page, limit: LIMIT }),
+    queryKey: ["admin-call-logs", page, q],
+    queryFn: () => callLogsApi.list({ page, limit: LIMIT, ...(q ? { q } : {}) }),
     enabled: CAN_CALL_LOGS,
   });
 
@@ -100,6 +104,20 @@ export default function CallLogsPage() {
           loading={!list.data}
           emptyText={t("empty")}
           serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
+          toolbar={() => (
+            <div className="flex flex-1 items-center gap-2">
+              <div className="min-w-0 flex-1 sm:max-w-xs">
+                <Input
+                  value={qInput}
+                  onChange={(e) => {
+                    setQInput(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search by caller, callee, phone or visit ID…"
+                />
+              </div>
+            </div>
+          )}
         />
       )}
     </>

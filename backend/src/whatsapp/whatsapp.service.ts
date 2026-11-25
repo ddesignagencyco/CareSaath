@@ -65,7 +65,7 @@ export class WhatsAppService {
    */
   async sendOtp(phone: string, code: string): Promise<WhatsAppSendResult> {
     if (!this.isConfigured) {
-      this.logger.debug(`[WHATSAPP-SKIPPED] WhatsApp not configured/enabled; skipping OTP to ${phone}`);
+      this.logger.debug('[WHATSAPP-SKIPPED] WhatsApp not configured/enabled; skipping OTP');
       return { success: false, error: 'WHATSAPP_NOT_CONFIGURED' };
     }
 
@@ -76,7 +76,8 @@ export class WhatsAppService {
     const textMsg = `🔐 CareSaath: Your verification code is ${code}. It will expire in 5 minutes.`;
     const textTry = await this.sendTextMessage(cleanPhone, textMsg);
     if (textTry.success) {
-      this.logger.log(`[WHATSAPP-OTP] Sent dynamic text OTP to +${cleanPhone}: ${code}`);
+      // Never log the code itself — delivery success is enough.
+      this.logger.log('[WHATSAPP-OTP] Sent dynamic text OTP');
       return textTry;
     }
 
@@ -107,7 +108,7 @@ export class WhatsAppService {
 
       const firstTry = await this.postMessagesApi(payloadWithButton);
       if (firstTry.success) {
-        this.logger.log(`[WHATSAPP-OTP] Sent OTP code to +${cleanPhone} (template: ${template})`);
+        this.logger.log(`[WHATSAPP-OTP] Sent OTP via template: ${template}`);
         return firstTry;
       }
 
@@ -131,7 +132,7 @@ export class WhatsAppService {
 
       const secondTry = await this.postMessagesApi(payloadBodyOnly);
       if (secondTry.success) {
-        this.logger.log(`[WHATSAPP-OTP] Sent OTP code to +${cleanPhone} (body-only template: ${template})`);
+        this.logger.log(`[WHATSAPP-OTP] Sent OTP via body-only template: ${template}`);
         return secondTry;
       }
     }

@@ -130,6 +130,12 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     envDefault: 15,
     description: 'Minutes past the visit time window start a caregiver may check in without it counting as a late-arrival strike.',
   },
+  {
+    key: 'visit.earlyArrivalGraceMinutes',
+    envVar: 'VISIT_EARLY_ARRIVAL_GRACE_MINUTES',
+    envDefault: 15,
+    description: 'Minutes before the visit time window start a caregiver may check in. Earlier check-ins are rejected on both web and mobile. 0 disables the check.',
+  },
 ];
 
 const CONFIG_CACHE_TTL_SECONDS = 60;

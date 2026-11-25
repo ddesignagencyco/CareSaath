@@ -39,7 +39,7 @@ export default function AddressesPage() {
       accessorKey: "label",
       header: t("columns.label"),
       accessorFn: (a) => a.label || a.city,
-      cell: ({ row, getValue }) => (
+      cell: ({ getValue }) => (
         <div className="flex items-center gap-3">
           <MapPin className="size-4 shrink-0 text-brand-600" />
           <span className="font-semibold text-ink-900">{getValue() as string}</span>

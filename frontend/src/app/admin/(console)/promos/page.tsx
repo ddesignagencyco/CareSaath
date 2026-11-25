@@ -32,7 +32,11 @@ function promoState(p: PromoCode): { key: PromoStateKey; tone: Tone } {
   return { key: "live", tone: "success" };
 }
 
-const toDateInput = (iso: string) => iso.slice(0, 10);
+const toDateInput = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 interface FormState {
   code: string;

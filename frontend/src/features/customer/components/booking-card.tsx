@@ -47,7 +47,7 @@ export function BookingCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar name={name} />
+          <Avatar name={name} src={caregiver?.photoUrl} />
           <div className="min-w-0">
             <p className="truncate font-bold text-ink-900">{name}</p>
             <p className="truncate text-sm text-ink-500">

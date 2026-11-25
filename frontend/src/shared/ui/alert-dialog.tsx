@@ -18,7 +18,7 @@ export function AlertDialogContent({ className, children, ...props }: ComponentP
       <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
       <AlertDialogPrimitive.Content
         className={cn(
-          "fixed start-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-100 bg-white p-6 shadow-pop focus:outline-none rtl:translate-x-1/2",
+          "fixed start-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-ink-100 bg-white p-6 shadow-pop focus:outline-none rtl:translate-x-1/2",
           className,
         )}
         {...props}

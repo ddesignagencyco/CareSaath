@@ -1,5 +1,6 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   ConnectedSocket,
   MessageBody,
@@ -13,6 +14,7 @@ import type { Server, Socket } from 'socket.io';
 import { UserStatus } from '../generated/prisma/client.js';
 import type { UserRole } from '../generated/prisma/client.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
+import { StorageService } from '../common/storage/storage.module.js';
 import { RealtimeService, roleRoom, userRoom } from './realtime.service.js';
 import { CallSignalingService } from './call-signaling.service.js';
 import { CallRingingService, RING_SECONDS } from './call-ringing.service.js';
@@ -39,7 +41,25 @@ interface SocketData {
  * access token expires (event `auth.expired`), so the client refreshes its token
  * and reconnects; a revoked or deactivated account cannot stay subscribed.
  */
-@WebSocketGateway({ cors: { origin: true, credentials: true } })
+function wsCorsOrigin(
+  origin: string | undefined,
+  cb: (err: Error | null, allow?: boolean) => void,
+): void {
+  // Non-browser clients (mobile apps, curl, server-to-server) send no Origin header.
+  if (!origin) return cb(null, true);
+  const allowed = (process.env['CORS_ORIGINS'] ?? 'https://caresaath-ui.vercel.app')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (allowed.includes(origin)) return cb(null, true);
+  if (process.env['NODE_ENV'] !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
+    return cb(null, true);
+  }
+  return cb(null, false);
+}
+
+@SkipThrottle()
+@WebSocketGateway({ cors: { origin: wsCorsOrigin, credentials: true } })
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
 
@@ -49,6 +69,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     private readonly realtime: RealtimeService,
     private readonly calls: CallSignalingService,
     private readonly ringing: CallRingingService,
+    @Optional() private readonly storage?: StorageService,
   ) {}
 
   afterInit(server: Server): void {
@@ -134,23 +155,39 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       const call = await this.calls.startCall(body.visitId, callerId, calleeId);
       const caller = await this.prisma.user.findUnique({
         where: { id: callerId },
-        select: { fullName: true },
+        select: { fullName: true, photoKey: true },
       });
+      // The avatar is cosmetic — a signed-URL failure must never abort the
+      // invite and leave the doctor's phone silent.
+      let callerPhotoUrl: string | null = null;
+      if (caller?.photoKey && this.storage) {
+        try {
+          callerPhotoUrl = await this.storage.presignedGet(caller.photoKey);
+        } catch (err) {
+          this.logger.warn(`Could not sign caller photo for call: ${(err as Error).message}`);
+        }
+      }
       const incoming = {
         callId: call.id,
         visitId: body.visitId,
         callerId,
         callerName: body.callerName ?? caller?.fullName ?? '',
+        callerPhotoUrl,
         sdp: body.sdp,
       };
-      // Ring like a phone call even when the other person is offline: their
-      // devices get a push, and opening the app in time picks the call up.
+      // Deliver to the user room unconditionally. Socket.IO drops it when the
+      // room is empty, but a device that connects from the push immediately
+      // asks for a replay with `call:sync`, so this avoids a race where the
+      // room looked empty for a few milliseconds and nobody ever got the call.
       const calleeOnline = this.realtime.isUserConnected(calleeId);
-      if (calleeOnline) {
-        this.realtime.emit({ users: [calleeId] }, 'call:incoming', incoming);
-      }
+      this.realtime.emit({ users: [calleeId] }, 'call:incoming', incoming);
       await this.ringing.ring(calleeId, incoming);
-      client.emit('call:outgoing', { callId: call.id, calleeOnline, ringSeconds: RING_SECONDS });
+      client.emit('call:outgoing', {
+        callId: call.id,
+        calleeOnline,
+        pushSent: true,
+        ringSeconds: RING_SECONDS,
+      });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
@@ -185,6 +222,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       await this.calls.markConnected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:answered', { callId: call.id, sdp: body.sdp });
+      client.broadcast.to(userRoom(userId)).emit('call:ended', { callId: call.id });
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
@@ -218,7 +256,7 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
-      await this.ringing.settle(call.id, call.calleeId);
+      await this.ringing.settle(call.id, call.calleeId, 'call.ended');
       // Hanging up before it was answered is a missed call for the callee, not a call.
       if (call.status === 'INITIATED' && call.callerId === userId) {
         await this.calls.markMissed(call.id);
@@ -227,6 +265,11 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       }
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:ended', { callId: call.id });
+      // Calls now live in the chat timeline — refresh both parties' threads.
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId: call.id } },
+      );
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }
@@ -241,10 +284,15 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!userId) return;
     try {
       const call = await this.calls.loadForRouting(body.callId, userId);
-      await this.ringing.settle(call.id, call.calleeId);
+      await this.ringing.settle(call.id, call.calleeId, 'call.rejected');
       await this.calls.markRejected(call.id);
       const otherUserId = call.callerId === userId ? call.calleeId : call.callerId;
       this.realtime.emit({ users: [otherUserId] }, 'call:rejected', { callId: call.id });
+      client.broadcast.to(userRoom(userId)).emit('call:rejected', { callId: call.id });
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId: call.id } },
+      );
     } catch (err) {
       client.emit('call:error', { message: (err as Error).message });
     }

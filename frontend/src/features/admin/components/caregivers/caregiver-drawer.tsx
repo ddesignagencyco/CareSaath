@@ -7,7 +7,8 @@ import { ReasonDialog } from "@shared/reason-dialog";
 import { UserStatusBadge, VerificationBadge } from "@shared/status";
 import { Button } from "@shared/ui/button";
 import { Field, Input } from "@shared/ui/field";
-import { Avatar, DetailList } from "@shared/ui/misc";
+import { DetailList } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Drawer } from "@shared/ui/overlay";
 import { Select } from "@shared/ui/select";
 import { TierBadge } from "@shared/ui/tier-badge";
@@ -138,7 +139,7 @@ export function CaregiverDrawer({
         onClose={onClose}
         title={
           <span className="flex items-center gap-3">
-            <Avatar name={name} />
+            <UserAvatar userId={caregiver.user.id} name={name} />
             <span className="min-w-0">
               <span className="block truncate">{name}</span>
               <span className="tabular block text-sm font-medium text-ink-500">{f.phone(caregiver.user.phone)}</span>

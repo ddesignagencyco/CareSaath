@@ -6,7 +6,13 @@ function makeService(
   opts: { smtpConfigured?: boolean } = {},
 ) {
   const redis = {
-    client: { incr: vi.fn().mockResolvedValue(1), expire: vi.fn(), set: vi.fn(), get: vi.fn() },
+    client: {
+      incr: vi.fn().mockResolvedValue(1),
+      expire: vi.fn(),
+      set: vi.fn(),
+      get: vi.fn(),
+      del: vi.fn(),
+    },
   };
   const prisma = { user: { findUnique: vi.fn().mockResolvedValue(user) }, otpCode: { create: vi.fn() } };
   const sms = { sendOtp: vi.fn() };
@@ -38,7 +44,7 @@ describe('AuthService.requestOtp — email delivery', () => {
     );
   });
 
-  it('tells the mirror the user was already emailed, so the code is not sent twice', async () => {
+  it('skips the duplicate email when the holder was already emailed a branded code', async () => {
     const { service, sms } = makeService({ id: 'u-1', email: 'info@caresaath.com' });
     await service.requestOtp('+923000000000');
     expect(sms.sendOtp.mock.calls[0]![2]).toMatchObject({ alreadyEmailed: true });

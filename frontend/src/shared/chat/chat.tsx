@@ -1,12 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, Ban, CheckCheck, ChevronLeft, ChevronRight, CornerUpLeft, Download, FileText, ImageIcon, Mic, MicOff, Paperclip, Pause, Phone, PhoneOff, Play, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, CheckCheck, ChevronLeft, ChevronRight, CornerUpLeft, Download, FileText, ImageIcon, Mic, MicOff, Paperclip, Pause, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play, Send, Smile, Trash2, Video, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { formatBytes } from "@shared/lib/format";
-import { Avatar } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import type { ChatConversation, ChatMessage, SendInput } from "./types";
 import { useCallOptional } from "./call-context";
 
@@ -105,8 +105,15 @@ function UploadBar({ onDone, mine }: { onDone: () => void; mine: boolean }) {
 }
 
 /** Short preview of a message for lists / reply quotes. */
-function preview(m: ChatMessage, t: (key: "deleted" | "photo" | "video" | "file" | "voice") => string): string {
+function preview(m: ChatMessage, t: (key: "deleted" | "photo" | "video" | "file" | "voice" | "callOutgoing" | "callIncoming" | "callMissed" | "callRejected") => string): string {
   if (m.deleted) return t("deleted");
+  if (m.type === "call") {
+    // CALL rows carry the caller id, so unlike a generic preview we do know
+    // which side placed it — use the same wording as the in-thread call row.
+    if (m.sender === "me") return `📞 ${t("callOutgoing")}`;
+    const status = m.call?.status;
+    return status === "MISSED" ? `📞 ${t("callMissed")}` : status === "REJECTED" ? `📞 ${t("callRejected")}` : `📞 ${t("callIncoming")}`;
+  }
   if (m.type === "image") return `📷 ${t("photo")}`;
   if (m.type === "video") return `🎥 ${t("video")}`;
   if (m.type === "file") return `📎 ${t("file")}`;
@@ -147,7 +154,7 @@ export function ConversationList({
               className={clsx("flex w-full items-center gap-3 px-4 py-3 text-start transition-colors", c.id === selectedId ? "bg-brand-50" : "hover:bg-ink-50")}
             >
               <span className="relative shrink-0">
-                <Avatar name={c.name} />
+                <UserAvatar userId={c.id} name={c.name} photoUrl={c.photoUrl} />
                 {c.online && <span className="absolute end-0 bottom-0 size-3 rounded-full bg-success-600 ring-2 ring-white" />}
               </span>
               <span className="min-w-0 flex-1">
@@ -173,8 +180,12 @@ export function ConversationList({
 /* --------------------------------- bubble --------------------------------- */
 
 function Ticks({ read }: { read: boolean }) {
-  // On the green "sent" bubble: delivered = dim white double-check, read = bright blue double-check.
-  return <CheckCheck className="size-3.5" style={{ color: read ? "#7dd3fc" : "rgba(255,255,255,0.65)" }} />;
+  // WhatsApp semantics, sender-only: sent = one check, read = two blue checks.
+  return read ? (
+    <CheckCheck className="size-3.5" style={{ color: "#7dd3fc" }} />
+  ) : (
+    <Check className="size-3.5" style={{ color: "rgba(255,255,255,0.65)" }} />
+  );
 }
 
 function MessageBubble({
@@ -214,6 +225,46 @@ function MessageBubble({
     const bTop = wrapRef.current?.getBoundingClientRect().top ?? 9999;
     onOpenActions(active ? null : message.id, bTop - cTop < 56);
   };
+
+  // Calls are CallLog rows surfaced in the chat timeline — a centred
+  // system line like WhatsApp (not a chat bubble).
+  if (message.type === "call") {
+    // Mobile semantics: caller sees outgoing, the other party sees
+    // incoming / missed / declined, and a connected call carries mm:ss.
+    const status = message.call?.status;
+    const missed = !mine && status === "MISSED";
+    const rejected = !mine && status === "REJECTED";
+    const label = mine
+      ? t("callOutgoing")
+      : missed
+        ? t("callMissed")
+        : rejected
+          ? t("callRejected")
+          : t("callIncoming");
+    const Icon = mine ? PhoneOutgoing : rejected ? PhoneOff : missed ? PhoneMissed : PhoneIncoming;
+    const dur = message.call?.durationSec;
+    return (
+      <div className="flex justify-center py-2">
+        <span
+          className={clsx(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
+            missed || rejected
+              ? "border-danger-200 bg-danger-50 text-danger-700"
+              : "border-ink-100 bg-white text-ink-500",
+          )}
+        >
+          <Icon className="size-3.5 shrink-0" />
+          <span>{label}</span>
+          {status === "ENDED" && dur != null && (
+            <span className="tabular">
+              · {String(Math.floor(dur / 60)).padStart(2, "0")}:{String(dur % 60).padStart(2, "0")}
+            </span>
+          )}
+          <span className="tabular opacity-70">{clock(message.createdAt)}</span>
+        </span>
+      </div>
+    );
+  }
 
   if (message.deleted) {
     return (
@@ -447,9 +498,13 @@ function Composer({ onSend, replyTo, onCancelReply }: { onSend: (input: SendInpu
         setPaused(false);
         setElapsed(0);
         if (cancelledRef.current || dur < 600) return;
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        // MediaRecorder often reports "audio/webm;codecs=opus" (or mp4 with a
+        // codec suffix); the backend whitelist expects a bare mime type.
+        const mime = (rec.mimeType || "audio/webm").split(";")[0].trim();
+        const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: mime });
         const reader = new FileReader();
-        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: "voice-note.webm" });
+        reader.onload = () => onSend({ type: "voice", mediaUrl: String(reader.result), durationMs: dur, replyToId: replyTo?.id, file: blob, mediaName: `voice-note.${ext}` });
         reader.readAsDataURL(blob);
         onCancelReply();
       };
@@ -787,7 +842,7 @@ function DocViewer({ message, onClose }: { message: ChatMessage; onClose: () => 
 }
 
 /** Simulated call screen (real voice/video calling needs a WebRTC backend — see requirement.md). */
-function CallOverlay({ name, video, onEnd }: { name: string; video: boolean; onEnd: () => void }) {
+function CallOverlay({ name, peerId, video, onEnd }: { name: string; peerId?: string | null; video: boolean; onEnd: () => void }) {
   const t = useTranslations("common.chat");
   const [secs, setSecs] = useState(0);
   const [muted, setMuted] = useState(false);
@@ -796,9 +851,9 @@ function CallOverlay({ name, video, onEnd }: { name: string; video: boolean; onE
     return () => window.clearInterval(iv);
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-gradient-to-b from-brand-700 to-ink-900 p-8 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-ink-900 p-8 text-white">
       <div className="mt-16 flex flex-col items-center gap-4">
-        <span className="flex size-28 items-center justify-center rounded-full bg-white/15 text-4xl font-bold">{name.slice(0, 1)}</span>
+        <UserAvatar userId={peerId} name={name} size="lg" className="!size-28 text-4xl" />
         <p className="text-2xl font-bold">{name}</p>
         <p className="text-sm text-white/70">
           {video ? t("videoCall") : t("voiceCall")} · {fmtDur(secs * 1000)}
@@ -857,7 +912,7 @@ export function ChatThread({
   // Audio-only: video calling is disabled product-wide.
   const placeCall = () => {
     if (callCtx && conversation.visitId && conversation.peerUserId) {
-      callCtx.startCall({ visitId: conversation.visitId, calleeId: conversation.peerUserId, peerName: conversation.name, video: false });
+      callCtx.startCall({ visitId: conversation.visitId, calleeId: conversation.peerUserId, peerName: conversation.name, peerPhotoUrl: conversation.photoUrl, video: false });
     } else {
       setCall({ video: false });
     }
@@ -895,7 +950,7 @@ export function ChatThread({
         )}
         <button type="button" onClick={() => setGalleryOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-start hover:bg-ink-50">
           <span className="relative shrink-0">
-            <Avatar name={conversation.name} />
+            <UserAvatar userId={conversation.id} name={conversation.name} photoUrl={conversation.photoUrl} />
             {conversation.online && <span className="absolute end-0 bottom-0 size-3 rounded-full bg-success-600 ring-2 ring-white" />}
           </span>
           <span className="min-w-0">
@@ -932,7 +987,7 @@ export function ChatThread({
       <Composer onSend={(input) => onSend(conversation.id, input)} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
 
       {galleryOpen && <MediaGallery conversation={conversation} onClose={() => setGalleryOpen(false)} onOpenMedia={openMedia} onOpenDoc={openDoc} />}
-      {call && <CallOverlay name={conversation.name} video={call.video} onEnd={() => setCall(null)} />}
+      {call && <CallOverlay name={conversation.name} peerId={conversation.peerUserId} video={call.video} onEnd={() => setCall(null)} />}
       {viewerIndex !== null && <Lightbox items={mediaList} index={viewerIndex} onClose={() => setViewerIndex(null)} onIndex={setViewerIndex} />}
       {docMsg && <DocViewer message={docMsg} onClose={() => setDocMsg(null)} />}
     </div>

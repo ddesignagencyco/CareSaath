@@ -52,6 +52,9 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { StorageService, withFileUrl } from '../common/storage/storage.module.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
+import { NativePushService } from '../notifications/native-push.service.js';
+import { WebPushService } from '../notifications/web-push.service.js';
 import { ConfigService, PlatformConfigModule } from '../config/platform-config.module.js';
 
 /** Chat exists only on a real (accepted) booking: never on a request, a decline, or a cancelled request. */
@@ -156,7 +159,38 @@ export class ChatService {
     @Optional() private readonly redis?: RedisService,
     @Optional() private readonly realtime?: RealtimeService,
     @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly nativePush?: NativePushService,
+    @Optional() private readonly webPush?: WebPushService,
   ) {}
+
+  /**
+   * A chat message used to be socket-only: the moment the app was closed the
+   * event was lost, so there was no notification and no sound. Fan out a
+   * best-effort push (phone tray + browser) alongside the live socket update.
+   * Fire-and-forget — a push failure must never fail the send itself.
+   */
+  private pushMessageToRecipient(
+    recipientId: string,
+    message: { id: string; body: string | null; type: ChatMessageType },
+    bookingId: string,
+  ): void {
+    const preview = message.type === ChatMessageType.TEXT
+      ? (message.body ?? '').trim().slice(0, 120)
+      : {
+          [ChatMessageType.IMAGE]: 'Photo',
+          [ChatMessageType.VOICE]: 'Voice message',
+          [ChatMessageType.FILE]: 'Document',
+        }[message.type];
+    const payload = {
+      id: message.id,
+      event: 'chat.message.new',
+      title: 'New message',
+      body: preview || 'New message',
+      data: { bookingId, messageId: message.id, url: `/messages?booking=${bookingId}` },
+    };
+    void this.nativePush?.sendToUser(recipientId, payload, { ttlSeconds: 3600 });
+    void this.webPush?.sendToUser(recipientId, payload);
+  }
 
   /**
    * The booking, only if the caller is the customer, the assigned caregiver,
@@ -206,9 +240,25 @@ export class ChatService {
    * A media message's `mediaKey` becomes a viewable `url`; the raw key is never
    * exposed. A deleted message is a tombstone: `deletedAt` set, no body/media.
    */
+  /** Extract a human-readable filename from a Cloudinary/local mediaKey (`.../<ts>-<name>`). */
+  private filenameFromMediaKey(
+    mediaKey: string | null | undefined,
+    mimeType?: string | null,
+  ): string | null {
+    if (!mediaKey) return null;
+    const segment = mediaKey.split('/').pop() ?? '';
+    const cleaned = segment.replace(/^\d{10,}-/, '').trim();
+    if (!cleaned) return null;
+    if (mimeType === 'application/pdf' && !cleaned.toLowerCase().endsWith('.pdf')) {
+      return `${cleaned}.pdf`;
+    }
+    return cleaned;
+  }
+
   private async present<
     T extends {
       mediaKey: string | null;
+      mimeType?: string | null;
       body: string | null;
       deletedAt: Date | null;
       replyTo?: { body: string | null; deletedAt: Date | null } | null;
@@ -219,14 +269,54 @@ export class ChatService {
     }
     if (message.deletedAt) {
       const { mediaKey: _mediaKey, ...rest } = message;
-      return { ...rest, body: null, mimeType: null, sizeBytes: null, url: null };
+      return { ...rest, body: null, mimeType: null, sizeBytes: null, url: null, fileName: null };
     }
     if (!message.mediaKey || !this.storage) {
-      return { ...message, url: null };
+      return { ...message, url: null, fileName: null };
     }
-    const { url } = await withFileUrl(this.storage, { fileKey: message.mediaKey });
+    const { url } = await withFileUrl(this.storage, {
+      fileKey: message.mediaKey,
+      mimeType: message.mimeType,
+    });
+    const fileName = this.filenameFromMediaKey(message.mediaKey, message.mimeType);
     const { mediaKey: _mediaKey, ...rest } = message;
-    return { ...rest, url };
+    return { ...rest, url, fileName };
+  }
+
+  /**
+   * A placed call becomes a virtual chat item so the thread reads like WhatsApp:
+   * one timeline of messages + calls, backed by two tables. The CallLog row
+   * stays the source of truth; nothing is written to ChatMessage for a call.
+   */
+  private presentCall(call: {
+    id: string;
+    callerId: string;
+    status: string;
+    startedAt: Date;
+    endedAt: Date | null;
+    durationSec: number | null;
+    visit: { bookingId: string };
+  }) {
+    return {
+      id: `call-${call.id}`,
+      callId: call.id,
+      type: 'CALL',
+      bookingId: call.visit.bookingId,
+      senderId: call.callerId,
+      callStatus: call.status,
+      durationSec: call.durationSec,
+      body: null,
+      mediaKey: null,
+      mimeType: null,
+      sizeBytes: null,
+      url: null,
+      fileName: null,
+      readAt: null,
+      deletedAt: null,
+      reactions: [],
+      replyTo: null,
+      createdAt: call.startedAt,
+    };
   }
 
   async send(user: AuthUser, bookingId: string, dto: SendMessageDto) {
@@ -256,6 +346,7 @@ export class ChatService {
         data: { bookingId, senderId: user.sub, body: message.body, type: message.type, replyToId: message.replyToId },
       },
     );
+    this.pushMessageToRecipient(recipientId, message, bookingId);
     return this.present(message);
   }
 
@@ -272,7 +363,7 @@ export class ChatService {
   async list(user: AuthUser, bookingId: string, query: ListMessagesQueryDto): Promise<Paginated<unknown>> {
     const booking = await this.bookingForParty(user, bookingId);
     const where = { bookingId: booking.id };
-    const [total, items] = await this.prisma.$transaction([
+    const [total, items, calls] = await Promise.all([
       this.prisma.chatMessage.count({ where }),
       this.prisma.chatMessage.findMany({
         where,
@@ -281,8 +372,19 @@ export class ChatService {
         take: query.limit,
         include: this.messageInclude(),
       }),
+      Promise.resolve(
+        this.prisma.callLog.findMany({
+          where: { visit: { bookingId: booking.id } },
+          include: { visit: { select: { bookingId: true } } },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ).catch(() => []),
     ]);
-    return paginate(await Promise.all(items.map((item) => this.present(item))), query.page, query.limit, total);
+    const callRows: Array<Parameters<ChatService['presentCall']>[0]> = calls ?? [];
+    const messages = await Promise.all(items.map((item) => this.present(item)));
+    const merged = [...messages, ...callRows.map((call) => this.presentCall(call))];
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return paginate(merged, query.page, query.limit, total + callRows.length);
   }
 
   /**
@@ -343,6 +445,13 @@ export class ChatService {
       where: { bookingId: booking.id, senderId: { not: user.sub }, readAt: null },
       data: { readAt: new Date() },
     });
+    if (result.count > 0) {
+      const recipientId = user.sub === booking.customerId ? booking.caregiver.userId : booking.customerId;
+      this.realtime?.entityUpdated(
+        { users: [recipientId] },
+        { type: 'chat_message', id: recipientId, action: 'read', data: { readerUserId: user.sub } },
+      );
+    }
     return { updated: result.count };
   }
 
@@ -353,6 +462,13 @@ export class ChatService {
       where: { id: messageId, bookingId: booking.id, senderId: { not: user.sub }, readAt: null },
       data: { readAt: new Date() },
     });
+    if (result.count > 0) {
+      const recipientId = user.sub === booking.customerId ? booking.caregiver.userId : booking.customerId;
+      this.realtime?.entityUpdated(
+        { users: [recipientId] },
+        { type: 'chat_message', id: recipientId, action: 'read', data: { readerUserId: user.sub } },
+      );
+    }
     return { updated: result.count };
   }
 
@@ -398,6 +514,16 @@ export class ChatService {
    * The caller's open chat bookings (CONFIRMED/COMPLETED), each tagged with
    * the other party, so threads can be grouped per (customer, caregiver) pair.
    */
+  /** Never let one broken avatar key fail the whole conversation list. */
+  private async photoUrlForChat(photoKey: string | null): Promise<string | null> {
+    if (!photoKey || !this.storage) return null;
+    try {
+      return await this.storage.presignedGet(photoKey);
+    } catch {
+      return null;
+    }
+  }
+
   private async chatBookingsByCounterpart(user: AuthUser, counterpartUserId?: string) {
     const isCustomer = user.role === UserRole.CUSTOMER;
     const bookings = await this.prisma.booking.findMany({
@@ -412,14 +538,26 @@ export class ChatService {
         id: true,
         status: true,
         createdAt: true,
-        customer: { select: { id: true, fullName: true } },
-        caregiver: { select: { id: true, userId: true, user: { select: { fullName: true } } } },
+        customer: { select: { id: true, fullName: true, photoKey: true } },
+        caregiver: {
+          select: {
+            id: true,
+            userId: true,
+            // Legacy portraits live on the caregiver row; newer uploads mirror
+            // onto User.photoKey. Chat must accept either source.
+            photoKey: true,
+            user: { select: { fullName: true, photoKey: true } },
+          },
+        },
       },
     });
     return bookings.map((b) => ({
       ...b,
       counterpartUserId: isCustomer ? b.caregiver.userId : b.customer.id,
       counterpartName: isCustomer ? b.caregiver.user.fullName : b.customer.fullName,
+      counterpartPhotoKey: isCustomer
+        ? b.caregiver.user.photoKey ?? b.caregiver.photoKey
+        : b.customer.photoKey,
     }));
   }
 
@@ -451,6 +589,9 @@ export class ChatService {
         return {
           counterpartUserId,
           counterpartName: group[0]!.counterpartName,
+          counterpartPhotoUrl: await this.photoUrlForChat(
+            group[0]!.counterpartPhotoKey,
+          ),
           caregiverId: group[0]!.caregiver.id,
           bookingIds,
           activeBookingId:
@@ -476,8 +617,9 @@ export class ChatService {
     if (bookings.length === 0) {
       throw new NotFoundException('Conversation not found');
     }
-    const where = { bookingId: { in: bookings.map((b) => b.id) } };
-    const [total, items] = await this.prisma.$transaction([
+    const bookingIds = bookings.map((b) => b.id);
+    const where = { bookingId: { in: bookingIds } };
+    const [total, items, calls] = await Promise.all([
       this.prisma.chatMessage.count({ where }),
       this.prisma.chatMessage.findMany({
         where,
@@ -486,8 +628,19 @@ export class ChatService {
         take: query.limit,
         include: this.messageInclude(),
       }),
+      Promise.resolve(
+        this.prisma.callLog.findMany({
+          where: { visit: { bookingId: { in: bookingIds } } },
+          include: { visit: { select: { bookingId: true } } },
+          orderBy: { startedAt: 'desc' },
+        }),
+      ).catch(() => []),
     ]);
-    return paginate(await Promise.all(items.map((item) => this.present(item))), query.page, query.limit, total);
+    const callRows: Array<Parameters<ChatService['presentCall']>[0]> = calls ?? [];
+    const messages = await Promise.all(items.map((item) => this.present(item)));
+    const merged = [...messages, ...callRows.map((call) => this.presentCall(call))];
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return paginate(merged, query.page, query.limit, total + callRows.length);
   }
 
   /** Marks everything from the counterpart, on every booking of the pair, as read. */
@@ -679,6 +832,7 @@ export class ChatService {
         data: { bookingId, senderId: user.sub, type: message.type, replyToId: message.replyToId },
       },
     );
+    this.pushMessageToRecipient(recipientId, message, bookingId);
     return this.present(message);
   }
 }
@@ -897,7 +1051,7 @@ export class ChatConversationsController {
 }
 
 @Module({
-  imports: [PlatformConfigModule],
+  imports: [PlatformConfigModule, NotificationsModule],
   controllers: [ChatController, ChatUploadsController, ChatConversationsController],
   providers: [ChatService],
   exports: [ChatService],

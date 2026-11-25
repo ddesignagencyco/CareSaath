@@ -2,17 +2,18 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, CalendarCheck2, CircleUserRound, Home, LogOut, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Phone, Scale, Search, Siren, Users, Wallet } from "lucide-react";
+import { Bell, CalendarCheck2, CircleUserRound, Home, LogOut, MapPin, MessagesSquare, PanelLeftClose, PanelLeftOpen, Scale, Search, Siren, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
 import { Logo, LogoMark } from "@shared/brand";
 import { LanguageToggle } from "@shared/i18n/language-toggle";
 import { useSidebarCollapsed } from "@shared/lib/use-sidebar-collapsed";
 import { formatPkMobile } from "@shared/lib/phone";
 import { IconButton } from "@shared/ui/button";
 import { ProfileMenu } from "@shared/ui/profile-menu";
+import { Avatar } from "@shared/ui/misc";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { ApiError, http } from "@/features/customer/lib/api/http";
 import { session } from "@/features/customer/lib/api/session";
@@ -34,7 +35,6 @@ type NavLabel =
   | "nav.account"
   | "items.patients"
   | "items.addresses"
-  | "items.contacts"
   | "items.payments"
   | "items.disputes"
   | "items.notifications"
@@ -79,15 +79,6 @@ const SIDEBAR_GROUPS: { label?: "groups.care" | "groups.family" | "groups.accoun
 
 const isActive = (pathname: string, href: string) =>
   href === "/customer" ? pathname === "/customer" : pathname === href || pathname.startsWith(`${href}/`);
-
-function subscribeSeen(onChange: () => void) {
-  window.addEventListener(SEEN_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    window.removeEventListener(SEEN_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
 
 function useUnread(enabled: boolean) {
   // Phase 15: GET /notifications/unread-count (markRead invalidates the keys.notifications prefix).
@@ -166,7 +157,10 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 // "Account" stays highlighted only on its own page; its sub-pages have their own entries.
-                const active = item.href === "/customer/account" ? pathname === item.href : isActive(pathname, item.href);
+                const active =
+                  item.href === "/customer/account"
+                    ? pathname === item.href
+                    : isActive(pathname, item.href) || (item.href === "/customer/bookings" && pathname.startsWith("/customer/visits"));
                 const Icon = item.icon;
                 const count = item.href === "/customer/notifications" ? unread : 0;
                 const label = t(item.label);
@@ -261,6 +255,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
               { href: "/customer/account/payments", label: t("items.payments"), icon: Wallet },
             ]}
             onSignOut={signOut}
+            renderAvatar={(size) => <Avatar name={name} src={me.data?.photoUrl} size={size} />}
           />
         </div>
       </header>
@@ -282,7 +277,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
                   <span className={clsx("flex h-7 w-12 items-center justify-center rounded-full transition-colors", active && "bg-brand-50")}>
                     <Icon className="size-5" />
                   </span>
-                  {t(item.label)}
+                  <span className="max-w-[68px] truncate">{t(item.label)}</span>
                 </Link>
               </li>
             );

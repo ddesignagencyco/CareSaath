@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, type Tone } from "./ui/badge";
+import { VISIT_TONE } from "./lib/visit";
 import { useLabels } from "./i18n/use-labels";
 import type {
   DisputeStatus,
@@ -87,7 +88,7 @@ export function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
 export function VisitStatusBadge({ status }: { status: VisitStatus }) {
   const L = useLabels();
   return (
-    <Badge tone={status === "COMPLETED" ? "success" : status === "CANCELLED" || status === "DECLINED" ? "danger" : "info"}>
+    <Badge tone={VISIT_TONE[status]} dot>
       {L.visitAdmin(status)}
     </Badge>
   );

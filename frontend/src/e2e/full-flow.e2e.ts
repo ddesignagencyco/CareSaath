@@ -101,9 +101,6 @@ describe("CareSaath live flow — all roles", () => {
       ctx.addressId = a.id;
       expectThat(!!a.id, "no address id");
     });
-    await step("Customer", "POST /customer/emergency-contacts", () =>
-      customer.contactsApi.add({ name: "Next of kin", phone: "+923002220001" }),
-    );
   });
 
   it("caregiver: onboarding, documents, availability", async () => {

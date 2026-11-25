@@ -208,7 +208,7 @@ export default function PaymentsPage() {
         <Card>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
         </Card>
-      ) : list.data && list.data.items.length === 0 ? (
+      ) : list.data && list.data.items.length === 0 && status === "ALL" && !q.trim() ? (
         <Card>
           <EmptyState icon={Wallet} title={t("emptyTitle")} description={t("emptyHint")} />
         </Card>

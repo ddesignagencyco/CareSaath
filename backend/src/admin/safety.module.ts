@@ -89,6 +89,25 @@ const INCIDENT_INCLUDE = {
   reportedBy: { select: { id: true, fullName: true, role: true, phone: true } },
   assignedAdmin: { select: { id: true, fullName: true } },
   events: { orderBy: { at: 'asc' } },
+  visit: {
+    select: {
+      id: true,
+      status: true,
+      scheduledDate: true,
+      timeWindowStart: true,
+      timeWindowEnd: true,
+      booking: {
+        select: {
+          id: true,
+          serviceType: true,
+          patient: { select: { name: true, relationship: true } },
+          address: { select: { addressLine: true, city: true, latitude: true, longitude: true } },
+          customer: { select: { id: true, fullName: true, phone: true } },
+          caregiver: { select: { id: true, user: { select: { fullName: true, phone: true } } } },
+        },
+      },
+    },
+  },
 } satisfies Prisma.SafetyIncidentInclude;
 
 @Injectable()

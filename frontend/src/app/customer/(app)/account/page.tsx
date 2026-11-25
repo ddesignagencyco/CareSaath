@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, MapPin, MessagesSquare, Scale, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, LogOut, MapPin, MessagesSquare, Scale, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -13,12 +13,13 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
 import { Avatar, Skeleton } from "@shared/ui/misc";
+import { PhotoPicker } from "@shared/ui/photo-picker";
 import { Select } from "@shared/ui/select";
 import type { Me } from "@shared/caregiver-types";
 import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
 import { meApi, notificationsApi } from "@/features/customer/lib/api/customer";
 import { keys } from "@/features/customer/lib/api/keys";
-import { useMe, useSessionRaw } from "@/features/customer/lib/auth";
+import { useMe, useSessionRaw, useSignOut } from "@/features/customer/lib/auth";
 
 /** Phones only: on desktop these pages are in the sidebar. */
 const MOBILE_LINKS = [
@@ -83,9 +84,11 @@ function ProfileForm({ me }: { me: Me }) {
 
 export default function AccountPage() {
   const t = useTranslations("customerB.account");
+  const ts = useTranslations("customerA.shell");
   const tc = useTranslations("common");
   const f = useFmt();
   const me = useMe();
+  const signOut = useSignOut();
   // Until the reload-time session rehydrate finishes, `hydrated` is false on both
   // the server render and the first client render, so gating user data on it keeps
   // the two in sync (a query that resolves during streamed hydration would otherwise
@@ -101,7 +104,17 @@ export default function AccountPage() {
           <Card>
             <div className="p-5 sm:p-6">
               <div className="flex items-center gap-4 border-b border-ink-100 pb-5">
-                <Avatar name={profile?.fullName || t("you")} size="lg" />
+                {profile ? (
+                  <PhotoPicker
+                    name={profile.fullName || t("you")}
+                    photoUrl={profile.photoUrl}
+                    upload={meApi.uploadPhoto}
+                    remove={meApi.removePhoto}
+                    invalidate={[keys.me]}
+                  />
+                ) : (
+                  <Avatar name={t("you")} size="lg" />
+                )}
                 <div className="min-w-0">
                   <p className="truncate text-lg font-extrabold text-ink-900">{profile?.fullName || t("addName")}</p>
                   <p className="tabular text-sm text-ink-500">{profile ? formatPkMobile(profile.phone) : " "}</p>
@@ -109,7 +122,7 @@ export default function AccountPage() {
                 </div>
               </div>
               <div className="pt-5">
-                {profile ? <ProfileForm key={`${profile.fullName}-${profile.preferredLanguage}`} me={profile} /> : <Skeleton className="h-48" />}
+                {profile ? <ProfileForm key={`${profile.fullName}-${profile.email ?? ""}-${profile.preferredLanguage}`} me={profile} /> : <Skeleton className="h-48" />}
               </div>
             </div>
           </Card>
@@ -121,10 +134,23 @@ export default function AccountPage() {
           {MOBILE_LINKS.map(({ href, key, icon: Icon }) => (
             <Link key={href} href={href} className="flex items-center gap-3 px-5 py-4 text-sm font-semibold text-ink-800 hover:bg-ink-25">
               <Icon className="size-5 text-ink-400" />
-              <span className="flex-1">{key === "notifications" ? tc("nav.notifications") : t(`links.${key}`)}</span>
+              <span className="flex-1">
+                {key === "notifications" ? tc("nav.notifications") : t(`links.${key}`)}
+              </span>
               <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
             </Link>
           ))}
+        </Card>
+
+        <Card className="overflow-hidden lg:hidden">
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex w-full items-center gap-3 px-5 py-4 text-sm font-semibold text-danger-600 hover:bg-danger-50"
+          >
+            <LogOut className="size-5" />
+            <span>{tc("actions.signOut")}</span>
+          </button>
         </Card>
       </div>
     </>

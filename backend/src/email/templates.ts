@@ -16,7 +16,7 @@ import { LOGO_CID } from './logo.js';
 
 const BRAND = 'CareSaath';
 export const SUPPORT_EMAIL = 'info@caresaath.com';
-const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
+export const WEB_URL = (process.env['FRONTEND_URL'] ?? 'https://caresaath-ui.vercel.app').replace(/\/+$/, '');
 
 const C = {
   brand: '#167267',
@@ -64,13 +64,13 @@ export function maskPhone(phone: string): string {
 /* ─── Pieces ─── */
 
 const h1 = (text: string) =>
-  `<h1 style="margin:0 0 12px; font-family:${SANS}; font-size:24px; line-height:32px; font-weight:700; letter-spacing:-0.3px; color:${C.ink900};">${esc(text)}</h1>`;
+  `<h1 class="heading-h1" style="margin:0 0 12px; font-family:${SANS}; font-size:24px; line-height:32px; font-weight:700; letter-spacing:-0.3px; color:${C.ink900}; word-break:break-word;">${esc(text)}</h1>`;
 
 const p = (text: string, last = false) =>
-  `<p style="margin:0 0 ${last ? 0 : 16}px; font-family:${SANS}; font-size:15px; line-height:24px; color:${C.ink700};">${esc(text)}</p>`;
+  `<p style="margin:0 0 ${last ? 0 : 16}px; font-family:${SANS}; font-size:15px; line-height:24px; color:${C.ink700}; word-break:break-word;">${esc(text)}</p>`;
 
 const small = (text: string) =>
-  `<p style="margin:0; font-family:${SANS}; font-size:13px; line-height:20px; color:${C.ink500};">${esc(text)}</p>`;
+  `<p style="margin:0; font-family:${SANS}; font-size:13px; line-height:20px; color:${C.ink500}; word-break:break-word;">${esc(text)}</p>`;
 
 const spacer = (px: number) => `<div style="height:${px}px; line-height:${px}px; font-size:1px;">&nbsp;</div>`;
 
@@ -79,18 +79,18 @@ const rule = () =>
 
 /** A table-cell button, so it keeps its shape in Outlook. */
 function button(href: string, label: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+  return `<table role="presentation" class="mobile-btn-table" cellpadding="0" cellspacing="0" border="0"><tr>
     <td style="border-radius:10px; background:${C.brand};">
-      <a href="${esc(href)}" target="_blank" style="display:inline-block; padding:12px 22px; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.white}; text-decoration:none; border-radius:10px;">${esc(label)}</a>
+      <a href="${esc(href)}" target="_blank" class="mobile-btn-link" style="display:inline-block; padding:12px 22px; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.white}; text-decoration:none; border-radius:10px; text-align:center;">${esc(label)}</a>
     </td>
   </tr></table>`;
 }
 
 /** The one code an OTP email exists to deliver: large, spaced, easy to copy. */
 function code(value: string): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="background:${C.ink25}; border:1px solid ${C.ink100}; border-radius:12px; padding:22px 16px; text-align:center;">
-      <span style="font-family:${SANS}; font-size:34px; line-height:40px; font-weight:700; letter-spacing:12px; color:${C.brandDeep}; font-variant-numeric:tabular-nums;">${esc(value)}</span>
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;"><tr>
+    <td class="otp-code-box" style="background:${C.ink25}; border:1px solid ${C.ink100}; border-radius:12px; padding:18px 12px; text-align:center;">
+      <span class="otp-code-text" style="font-family:${SANS}; font-size:28px; line-height:36px; font-weight:700; letter-spacing:8px; margin-left:8px; color:${C.brandDeep}; font-variant-numeric:tabular-nums; display:inline-block; word-break:break-all;">${esc(value)}</span>
     </td>
   </tr></table>`;
 }
@@ -99,7 +99,7 @@ function code(value: string): string {
 function callout(variant: Exclude<Variant, 'standard'>): string {
   const s = CALLOUT[variant];
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;"><tr>
-    <td style="border-left:3px solid ${s.line}; background:${s.soft}; border-radius:0 8px 8px 0; padding:10px 14px; font-family:${SANS}; font-size:13px; line-height:18px; font-weight:600; color:${s.ink};">${esc(s.label)}</td>
+    <td style="border-left:3px solid ${s.line}; background:${s.soft}; border-radius:0 8px 8px 0; padding:10px 14px; font-family:${SANS}; font-size:13px; line-height:18px; font-weight:600; color:${s.ink}; word-break:break-word;">${esc(s.label)}</td>
   </tr></table>`;
 }
 
@@ -107,11 +107,11 @@ function callout(variant: Exclude<Variant, 'standard'>): string {
 function facts(rows: Array<[string, string | null | undefined]>): string {
   const filled = rows.filter((r): r is [string, string] => Boolean(r[1]));
   if (!filled.length) return '';
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${filled
+  return `<table role="presentation" class="facts-table" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed; width:100%;">${filled
     .map(
       ([label, value]) => `<tr>
-      <td style="padding:11px 0; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; color:${C.ink500};">${esc(label)}</td>
-      <td align="right" style="padding:11px 0; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.ink900};">${esc(value)}</td>
+      <td class="facts-row-label" valign="top" style="width:38%; padding:11px 8px 11px 0; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; color:${C.ink500}; word-break:break-word;">${esc(label)}</td>
+      <td class="facts-row-val" align="right" valign="top" style="width:62%; padding:11px 0 11px 8px; border-bottom:1px solid ${C.ink100}; font-family:${SANS}; font-size:14px; line-height:20px; font-weight:600; color:${C.ink900}; word-break:break-word; overflow-wrap:anywhere;">${esc(value)}</td>
     </tr>`,
     )
     .join('')}</table>`;
@@ -125,7 +125,7 @@ function steps(items: string[]): string {
       <td valign="top" style="width:28px; padding:0 0 12px;">
         <div style="width:22px; height:22px; border-radius:11px; background:${C.brandSoft}; font-family:${SANS}; font-size:12px; line-height:22px; font-weight:700; color:${C.brand}; text-align:center;">${i + 1}</div>
       </td>
-      <td valign="top" style="padding:1px 0 12px 8px; font-family:${SANS}; font-size:15px; line-height:22px; color:${C.ink700};">${esc(item)}</td>
+      <td valign="top" style="padding:1px 0 12px 8px; font-family:${SANS}; font-size:15px; line-height:22px; color:${C.ink700}; word-break:break-word;">${esc(item)}</td>
     </tr>`,
     )
     .join('')}</table>`;
@@ -148,36 +148,141 @@ function lockup(): string {
 function footer(): string {
   const link = (href: string, label: string) =>
     `<a href="${href}" target="_blank" style="color:${C.ink500}; text-decoration:underline;">${label}</a>`;
-  return `<p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500};">Verified home nursing and physiotherapy across Pakistan — booked, tracked and paid from one app, in Urdu or English.</p>
-    <p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500};">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:${C.brand}; text-decoration:none; font-weight:600;">${SUPPORT_EMAIL}</a></p>
-    <p style="margin:0; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink400};">${link(`${WEB_URL}/privacy`, 'Privacy')} &nbsp;·&nbsp; ${link(`${WEB_URL}/terms`, 'Terms')} &nbsp;·&nbsp; ${link(`${WEB_URL}/contact`, 'Contact')}<br>&copy; ${new Date().getFullYear()} ${BRAND}. This is an automated message; replies are not monitored.</p>`;
+  return `<p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500}; word-break:break-word;">Verified home nursing and physiotherapy across Pakistan — booked, tracked and paid from one app, in Urdu or English.</p>
+    <p style="margin:0 0 10px; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink500}; word-break:break-word;">Need help? <a href="mailto:${SUPPORT_EMAIL}" style="color:${C.brand}; text-decoration:none; font-weight:600;">${SUPPORT_EMAIL}</a></p>
+    <p style="margin:0; font-family:${SANS}; font-size:12px; line-height:19px; color:${C.ink400}; word-break:break-word;">${link(`${WEB_URL}/privacy`, 'Privacy')} &nbsp;·&nbsp; ${link(`${WEB_URL}/terms`, 'Terms')} &nbsp;·&nbsp; ${link(`${WEB_URL}/contact`, 'Contact')}<br>&copy; ${new Date().getFullYear()} ${BRAND}. This is an automated message; replies are not monitored.</p>`;
 }
 
-/** Page shell: hidden inbox preview, lockup, white card, footer. */
+/** Page shell: hidden inbox preview, lockup, white card, footer with responsive mobile styles. */
 function layout(preview: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
   <title>${BRAND}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <style type="text/css">
+    body, table, td, p, a, span, h1 { font-family: Arial, Helvetica, sans-serif !important; }
+  </style>
+  <![endif]-->
+  <style type="text/css">
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100% !important;
+      -ms-text-size-adjust: 100% !important;
+    }
+    table, td {
+      mso-table-lspace: 0pt !important;
+      mso-table-rspace: 0pt !important;
+      border-collapse: collapse !important;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+    }
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    a[x-apple-data-detectors] {
+      color: inherit !important;
+      text-decoration: none !important;
+      font-size: inherit !important;
+      font-family: inherit !important;
+      font-weight: inherit !important;
+      line-height: inherit !important;
+    }
+    @media only screen and (max-width: 600px) {
+      .email-wrapper {
+        padding: 20px 10px 32px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .card-cell {
+        padding: 24px 16px 20px !important;
+        border-radius: 12px !important;
+      }
+      .heading-h1 {
+        font-size: 20px !important;
+        line-height: 28px !important;
+      }
+      .otp-code-box {
+        padding: 14px 8px !important;
+      }
+      .otp-code-text {
+        font-size: 24px !important;
+        line-height: 30px !important;
+        letter-spacing: 5px !important;
+        margin-left: 5px !important;
+      }
+      .facts-row-label {
+        font-size: 13px !important;
+        line-height: 18px !important;
+        padding: 9px 4px 9px 0 !important;
+        width: 42% !important;
+      }
+      .facts-row-val {
+        font-size: 13px !important;
+        line-height: 18px !important;
+        padding: 9px 0 9px 4px !important;
+        width: 58% !important;
+      }
+      .mobile-btn-table {
+        width: 100% !important;
+      }
+      .mobile-btn-link {
+        display: block !important;
+        width: 100% !important;
+        text-align: center !important;
+        padding: 13px 16px !important;
+      }
+      .footer-cell {
+        padding: 20px 4px 0 !important;
+      }
+    }
+  </style>
 </head>
-<body style="margin:0; padding:0; background:${C.ink50}; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+<body style="margin:0; padding:0; background:${C.ink50}; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
   <div style="display:none; max-height:0; max-width:0; overflow:hidden; opacity:0; mso-hide:all;">${esc(preview)}${'&#847;&zwnj;&nbsp;'.repeat(40)}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.ink50};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; min-width:100%; background:${C.ink50};">
     <tr>
-      <td align="center" style="padding:40px 16px 48px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+      <td align="center" class="email-wrapper" style="padding:40px 16px 48px;">
+        <!--[if (gte mso 9)|(IE)]>
+        <table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td>
+        <![endif]-->
+        <table role="presentation" class="email-container" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:560px; table-layout:fixed;">
           <tr><td style="padding:0 0 24px;">${lockup()}</td></tr>
           <tr>
-            <td style="background:${C.white}; border:1px solid ${C.ink100}; border-radius:16px; padding:40px 40px 36px;">
+            <td class="card-cell" style="background:${C.white}; border:1px solid ${C.ink100}; border-radius:16px; padding:36px 32px 30px; word-break:break-word;">
               ${body}
             </td>
           </tr>
-          <tr><td style="padding:28px 4px 0;">${footer()}</td></tr>
+          <tr><td class="footer-cell" style="padding:28px 4px 0; word-break:break-word;">${footer()}</td></tr>
         </table>
+        <!--[if (gte mso 9)|(IE)]>
+            </td>
+          </tr>
+        </table>
+        <![endif]-->
       </td>
     </tr>
   </table>
@@ -188,16 +293,28 @@ function layout(preview: string, body: string): string {
 /* ─── Emails ─── */
 
 /** Any catalogue notification event (booking, visit, payment, safety, admin queue). */
-export function renderNotificationEmail(opts: { title: string; message?: string; variant?: Variant }): string {
+export function renderNotificationEmail(opts: {
+  title: string;
+  message?: string;
+  variant?: Variant;
+  facts?: Array<[string, string | null | undefined]>;
+  action?: { label: string; url: string };
+}): string {
   const variant = opts.variant ?? 'standard';
+  const factsHtml = opts.facts && opts.facts.length > 0 ? facts(opts.facts) : '';
+  const actionButton = opts.action
+    ? button(opts.action.url, opts.action.label)
+    : button(WEB_URL, 'View in CareSaath');
+
   return layout(
     opts.message || opts.title,
     [
       variant === 'standard' ? '' : callout(variant),
       h1(opts.title),
       opts.message ? p(opts.message) : '',
+      factsHtml ? spacer(8) + factsHtml + spacer(16) : '',
       spacer(8),
-      button(WEB_URL, 'View in CareSaath'),
+      actionButton,
     ].join(''),
   );
 }
@@ -243,15 +360,47 @@ function purposeLabel(purpose: string): string {
   return PURPOSE_LABEL[purpose] ?? words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * Code email for the account holder only. The subject names the purpose but
+ * never the code; the body is the only place the code appears.
+ */
+export function otpCodeEmailSubject(purpose: string): string {
+  return `Your CareSaath ${purposeLabel(purpose).toLowerCase()} code`;
+}
+
+/** A one-time code for purposes other than login/sign-up (e.g. visit check-in). */
+export function renderOtpCodeEmail(opts: {
+  code: string;
+  purpose: string;
+  ttlMinutes: number;
+}): string {
+  const label = purposeLabel(opts.purpose);
+  const minutes = `${opts.ttlMinutes} minute${opts.ttlMinutes === 1 ? '' : 's'}`;
+  return layout(
+    `Your ${label.toLowerCase()} code expires in ${minutes}.`,
+    [
+      h1(`${label} verification code`),
+      p(`Enter this code in CareSaath to continue with ${label.toLowerCase()}.`),
+      spacer(4),
+      code(opts.code),
+      spacer(16),
+      p(`The code expires in ${minutes} and can be used once.`, true),
+      spacer(28),
+      rule(),
+      spacer(20),
+      small(
+        "CareSaath staff will never ask you for this code. If you didn't request it, you can ignore this email — your account stays secure without it.",
+      ),
+    ].join(''),
+  );
+}
+
 /** Subject for the ops-inbox copy. Names the purpose only, never the code or the number. */
 export function otpMirrorSubject(purpose: string): string {
   return `CareSaath ops · ${purposeLabel(purpose)} code issued`;
 }
 
-/**
- * Copy of a verification code for the ops inbox (OTP_MIRROR_EMAIL). Carries the
- * code (that is its job) but only a masked phone and the role, never the name.
- */
+/** Ops-inbox copy of a code (never logged; emailed to the configured mirror only). */
 export function renderOtpMirrorEmail(opts: {
   code: string;
   purpose: string;

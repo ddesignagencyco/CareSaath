@@ -132,8 +132,9 @@ export class AuthService {
       throw new ForbiddenException('Too many OTP requests, try again later');
     }
 
-    const code = randomInt(100000, 999999).toString();
+    const code = randomInt(100000, 1000000).toString();
     const ttlSeconds = await this.otpTtlSeconds();
+    const key = this.otpKey(phone, 'LOGIN');
     await this.prisma.otpCode.create({
       data: {
         userId: existing?.id ?? null,
@@ -143,12 +144,9 @@ export class AuthService {
         expiresAt: new Date(Date.now() + ttlSeconds * 1000),
       },
     });
-    await this.redis.client.set(
-      this.otpKey(phone, 'LOGIN'),
-      this.hash(code),
-      'EX',
-      ttlSeconds,
-    );
+    await this.redis.client.set(key, this.hash(code), 'EX', ttlSeconds);
+    // Reset failed attempts from any previous code so a fresh OTP gets a full 5 attempts.
+    await this.redis.client.del(`${key}:attempts`);
     await this.sms.sendOtp(phone, code, {
       purpose: OtpPurpose.LOGIN,
       email: existing?.email ?? null,
@@ -262,8 +260,9 @@ export class AuthService {
       throw new ForbiddenException('Too many OTP requests, try again later');
     }
 
-    const code = randomInt(100000, 999999).toString();
+    const code = randomInt(100000, 1000000).toString();
     const ttlSeconds = await this.otpTtlSeconds();
+    const key = this.otpKey(dto.phone, OtpPurpose.SIGNUP);
     await this.prisma.otpCode.create({
       data: {
         userId: null,
@@ -273,7 +272,8 @@ export class AuthService {
         expiresAt: new Date(Date.now() + ttlSeconds * 1000),
       },
     });
-    await this.redis.client.set(this.otpKey(dto.phone, OtpPurpose.SIGNUP), this.hash(code), 'EX', ttlSeconds);
+    await this.redis.client.set(key, this.hash(code), 'EX', ttlSeconds);
+    await this.redis.client.del(`${key}:attempts`);
     await this.redis.client.set(
       this.signupPendingKey(dto.phone),
       JSON.stringify({ fullName: dto.fullName, email: dto.email ?? null, role: dto.role }),
@@ -433,8 +433,9 @@ export class AuthService {
       throw new ForbiddenException('Too many OTP requests, try again later');
     }
 
-    const code = randomInt(100000, 999999).toString();
+    const code = randomInt(100000, 1000000).toString();
     const ttlSeconds = await this.otpTtlSeconds();
+    const key = this.changePhoneKey(userId);
     await this.prisma.otpCode.create({
       data: {
         userId,
@@ -445,11 +446,12 @@ export class AuthService {
       },
     });
     await this.redis.client.set(
-      this.changePhoneKey(userId),
+      key,
       JSON.stringify({ phone: newPhone, codeHash: this.hash(code) }),
       'EX',
       ttlSeconds,
     );
+    await this.redis.client.del(`${key}:attempts`);
     const userForOtp = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, fullName: true },
@@ -498,11 +500,44 @@ export class AuthService {
     return { phone: updated.phone };
   }
 
+  private refreshTtlSeconds(): number {
+    const raw = Number(process.env['JWT_REFRESH_TTL_SECONDS']);
+    return Number.isFinite(raw) && raw > 0 ? raw : REFRESH_TOKEN_TTL_SECONDS;
+  }
+
+  private async readGraceRotated(rotatedKey: string, waitForWinner = false): Promise<TokenPair | null> {
+    const attempts = waitForWinner ? 5 : 1;
+    for (let i = 0; i < attempts; i++) {
+      const graceCached = await this.redis.client.get(rotatedKey);
+      if (graceCached) {
+        try {
+          const parsed = JSON.parse(graceCached) as TokenPair;
+          if (parsed && typeof parsed === 'object' && parsed.accessToken && parsed.refreshToken) {
+            return parsed;
+          }
+        } catch {
+          return null;
+        }
+      }
+      if (i + 1 < attempts) {
+        await new Promise((r) => setTimeout(r, 40));
+      }
+    }
+    return null;
+  }
+
   async refresh(refreshToken: string): Promise<TokenPair> {
     // Rotating refresh tokens with a Redis deny-list for used tokens.
+    // A brief grace period (30s) allows concurrent in-flight requests from the same
+    // client or across tabs to receive the newly rotated tokens instead of tripping reuse detection.
     const denyKey = `jwt:deny:${refreshToken}`;
+    const rotatedKey = `jwt:rotated:${refreshToken}`;
+    const denyTtl = this.refreshTtlSeconds();
+
     const denied = await this.redis.client.get(denyKey);
     if (denied) {
+      const grace = await this.readGraceRotated(rotatedKey);
+      if (grace) return grace;
       throw new UnauthorizedException('Refresh token already used');
     }
     let payload: { sub: string; role: UserRole; phone: string; type?: string };
@@ -520,23 +555,27 @@ export class AuthService {
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Account is not active');
     }
-    // Claim the token atomically: SET NX only succeeds for the first caller, so two
-    // concurrent requests presenting the same (possibly stolen) token cannot both
-    // rotate into fresh valid sessions — the loser is rejected, preserving reuse detection.
-    const claimed = await this.redis.client.set(denyKey, '1', 'EX', REFRESH_TOKEN_TTL_SECONDS, 'NX');
+    // Claim the token atomically: SET NX only succeeds for the first caller.
+    // If another concurrent request just claimed it, wait briefly for it to write rotatedKey.
+    const claimed = await this.redis.client.set(denyKey, '1', 'EX', denyTtl, 'NX');
     if (claimed === null) {
+      const grace = await this.readGraceRotated(rotatedKey, true);
+      if (grace) return grace;
       throw new UnauthorizedException('Refresh token already used');
     }
-    return this.issueTokens(user.id, user.role, user.phone);
+    const newTokens = await this.issueTokens(user.id, user.role, user.phone);
+    await this.redis.client.set(rotatedKey, JSON.stringify(newTokens), 'EX', 30);
+    return newTokens;
   }
 
   async logout(refreshToken: string): Promise<{ ok: true }> {
     if (refreshToken) {
+      await this.redis.client.del(`jwt:rotated:${refreshToken}`);
       await this.redis.client.set(
         `jwt:deny:${refreshToken}`,
         '1',
         'EX',
-        REFRESH_TOKEN_TTL_SECONDS,
+        this.refreshTtlSeconds(),
       );
     }
     return { ok: true };
@@ -559,7 +598,7 @@ export class AuthService {
       { sub: userId, role, phone, type: 'refresh' },
       {
         secret: process.env['JWT_REFRESH_SECRET'],
-        expiresIn: Number(process.env['JWT_REFRESH_TTL_SECONDS'] ?? REFRESH_TOKEN_TTL_SECONDS),
+        expiresIn: this.refreshTtlSeconds(),
       },
     );
     return { accessToken, refreshToken };

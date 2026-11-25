@@ -10,8 +10,10 @@ import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card, CardHeader } from "@shared/ui/card";
 import { Input } from "@shared/ui/field";
-import { ErrorState, TableSkeleton } from "@shared/ui/misc";
-import { configApi } from "@/features/admin/lib/api/admin";
+import { Avatar, ErrorState, TableSkeleton } from "@shared/ui/misc";
+import { PhotoPicker } from "@shared/ui/photo-picker";
+import { formatPkMobile } from "@shared/lib/phone";
+import { configApi, meApi } from "@/features/admin/lib/api/admin";
 import { keys, useAction } from "@/features/admin/lib/api/hooks";
 import type { PlatformConfigItem } from "@shared/types";
 
@@ -89,7 +91,20 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
           </div>
           <p dir="auto" className="mt-0.5 text-sm text-ink-500">{item.description}</p>
         </div>
-        <Switch checked={on} onCheckedChange={(v) => save.mutate(v ? 1 : 0)} disabled={save.isPending} aria-label={meta.title} />
+        <div className="flex items-center gap-2">
+          {item.overridden && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title={t("reset", { value: item.envDefault })}
+              loading={reset.isPending}
+              onClick={() => reset.mutate(undefined)}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+          )}
+          <Switch checked={on} onCheckedChange={(v) => save.mutate(v ? 1 : 0)} disabled={save.isPending} aria-label={meta.title} />
+        </div>
       </li>
     );
   }
@@ -127,15 +142,16 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
           <span className="pointer-events-none absolute top-1/2 end-3 -translate-y-1/2 text-xs text-ink-400">{meta.unit}</span>
         </div>
         <span className="tabular w-14 text-xs text-ink-500">{friendly && t("approx", { value: friendly })}</span>
-        {item.overridden && item.value !== item.envDefault && (
+        {item.overridden && (
           <Button
             variant="ghost"
             size="sm"
             title={t("reset", { value: item.envDefault })}
             loading={reset.isPending}
             onClick={() => {
-              setValue(String(item.envDefault));
-              reset.mutate(undefined);
+              reset.mutate(undefined, {
+                onSuccess: () => setValue(String(item.envDefault)),
+              });
             }}
           >
             <RotateCcw className="size-3.5" />
@@ -151,6 +167,7 @@ function ConfigRow({ item }: { item: PlatformConfigItem }) {
 
 export default function SettingsPage() {
   const config = useQuery({ queryKey: keys.config, queryFn: configApi.list });
+  const me = useQuery({ queryKey: ["a-me"], queryFn: meApi.get, staleTime: 300_000 });
   const t = useTranslations("adminB.settings");
 
   const groups = new Map<Group, PlatformConfigItem[]>();
@@ -165,6 +182,26 @@ export default function SettingsPage() {
         title={t("title")}
         description={t("description")}
       />
+      <Card className="mb-5">
+        <CardHeader title={t("profileTitle")} description={t("profileHint")} />
+        <div className="flex items-center gap-4 px-5 pb-5">
+          {me.data ? (
+            <PhotoPicker
+              name={me.data.fullName || t("profileFallback")}
+              photoUrl={me.data.photoUrl}
+              upload={meApi.uploadPhoto}
+              remove={meApi.removePhoto}
+              invalidate={[["a-me"]]}
+            />
+          ) : (
+            <Avatar name={t("profileFallback")} size="lg" />
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-bold text-ink-900">{me.data?.fullName || t("profileFallback")}</p>
+            {me.data?.phone && <p className="tabular text-sm text-ink-500">{formatPkMobile(me.data.phone)}</p>}
+          </div>
+        </div>
+      </Card>
       {config.isError ? (
         <Card>
           <ErrorState error={config.error} onRetry={() => config.refetch()} />

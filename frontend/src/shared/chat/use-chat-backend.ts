@@ -13,13 +13,77 @@ const uid = () => Math.random().toString(36).slice(2, 10);
  *  DELETE round-trip (and the server's `deletedAt`) confirms it. */
 type Patch = { deleted?: boolean };
 
-const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice" };
+const TYPE_MAP: Record<BackendChatType, ChatMessageType> = { TEXT: "text", IMAGE: "image", FILE: "file", VOICE: "voice", CALL: "call" };
 
 /** Collapse per-user reaction rows into one chip per emoji, flagging mine. */
 function aggregateReactions(rows: BackendChatMessage["reactions"], myUserId: string | undefined): ChatReaction[] {
   const byEmoji = new Map<string, boolean>();
   for (const r of rows) byEmoji.set(r.emoji, (byEmoji.get(r.emoji) ?? false) || r.userId === myUserId);
   return [...byEmoji].map(([emoji, byMe]) => ({ emoji, byMe }));
+}
+
+/**
+ * Map one wire row to a timeline item. CALL rows are virtual items synthesized
+ * by the backend from CallLog (never ChatMessage) — all their data comes from
+ * the API; nothing is invented here. `senderId` is the caller, so the caller
+ * sees an outgoing row and the callee an incoming/missed/declined one.
+ */
+/** Extract a readable filename from a backend row or signed media URL. */
+function extractMediaName(m: BackendChatMessage): string | undefined {
+  const explicit = (m as BackendChatMessage & { fileName?: string | null; mediaName?: string | null }).fileName ?? (m as BackendChatMessage & { mediaName?: string | null }).mediaName;
+  if (explicit) return explicit;
+  if (!m.url) return undefined;
+  try {
+    const pathname = new URL(m.url, "http://localhost").pathname;
+    const raw = pathname.split("/").pop();
+    return raw ? decodeURIComponent(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function toChatMessage(m: BackendChatMessage, myUserId: string | undefined): ChatMessage {
+  return {
+    id: m.id,
+    conversationId: m.bookingId,
+    bookingId: m.bookingId,
+    sender: m.senderId === myUserId ? "me" : "them",
+    type: m.deletedAt ? "text" : TYPE_MAP[m.type],
+    text: m.deletedAt ? undefined : (m.body ?? undefined),
+    mediaUrl: m.deletedAt ? undefined : (m.url ?? undefined),
+    mediaName: m.deletedAt ? undefined : extractMediaName(m),
+    mediaSize: m.sizeBytes ?? undefined,
+    replyToId: m.replyToId ?? undefined,
+    reactions: m.deletedAt ? [] : aggregateReactions(m.reactions, myUserId),
+    deleted: m.deletedAt != null,
+    createdAt: new Date(m.createdAt).getTime(),
+    readByThem: m.senderId === myUserId ? m.readAt != null : true,
+    ...(m.type === "CALL"
+      ? { call: { callId: m.callId ?? "", status: m.callStatus ?? "INITIATED", durationSec: m.durationSec } }
+      : {}),
+  };
+}
+
+/** De-duplicate by row id, then order oldest-first (stable for equal timestamps). */
+export function finalizeChatItems(items: ChatMessage[]): ChatMessage[] {
+  const seen = new Set<string>();
+  const unique: ChatMessage[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push(item);
+  }
+  return unique.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/**
+ * Backend rows arrive newest-first across every booking of the pair; the chat
+ * timeline is oldest-first. De-duplicate by row id first (the same CallLog row
+ * can be returned by more than one page/subscription) so a call never renders
+ * twice, then order by timestamp.
+ */
+export function mergeChatItems(rows: BackendChatMessage[], myUserId: string | undefined, conversationId: string): ChatMessage[] {
+  return finalizeChatItems(rows.map((row) => ({ ...toChatMessage(row, myUserId), conversationId })));
 }
 
 /**
@@ -48,30 +112,12 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
   const [extra, setExtra] = useState<Record<string, ChatMessage[]>>({});
   const [patches, setPatches] = useState<Record<string, Patch>>({});
 
-  const mapBackend = useCallback(
-    (m: BackendChatMessage): ChatMessage => ({
-      id: m.id,
-      conversationId: m.bookingId,
-      bookingId: m.bookingId,
-      sender: m.senderId === myUserId ? "me" : "them",
-      type: m.deletedAt ? "text" : TYPE_MAP[m.type],
-      text: m.deletedAt ? undefined : (m.body ?? undefined),
-      mediaUrl: m.deletedAt ? undefined : (m.url ?? undefined),
-      mediaSize: m.sizeBytes ?? undefined,
-      replyToId: m.replyToId ?? undefined,
-      reactions: m.deletedAt ? [] : aggregateReactions(m.reactions, myUserId),
-      deleted: m.deletedAt != null,
-      createdAt: new Date(m.createdAt).getTime(),
-      readByThem: m.senderId === myUserId ? m.readAt != null : true,
-    }),
-    [myUserId],
-  );
 
   const conversations = useMemo<ChatConversation[]>(
     () =>
       threads.map((th, i) => {
-        // Each thread is a counterpart; stamp the message's thread id (its own bookingId stays on `bookingId`).
-        const backend = (results[i]?.data ?? []).map((m) => ({ ...mapBackend(m), conversationId: th.id }));
+        // Each thread is a counterpart; CALL virtual items from CallLog are part of this timeline.
+        const backend = mergeChatItems(results[i]?.data ?? [], myUserId, th.id);
         // Hide an optimistic bubble once its real (server) copy has arrived in `backend`, so a sent
         // message doesn't flicker (show → vanish → reappear) around the send+refetch.
         const locals = (extra[th.id] ?? []).filter(
@@ -85,17 +131,18 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
                 Math.abs(b.createdAt - loc.createdAt) < 30_000,
             ),
         );
-        const messages = [...backend, ...locals]
-          .map((m) => {
+        const messages = finalizeChatItems(
+          [...backend, ...locals].map((m) => {
+            // A virtual CALL item is an immutable audit row — it can never be deleted.
             const p = patches[m.id];
-            if (p?.deleted) return { ...m, deleted: true, type: "text" as const, text: undefined, mediaUrl: undefined, mediaName: undefined, durationMs: undefined, reactions: [] };
+            if (p?.deleted && m.type !== "call") return { ...m, deleted: true, type: "text" as const, text: undefined, mediaUrl: undefined, mediaName: undefined, durationMs: undefined, reactions: [] };
             return m;
-          })
-          .sort((a, b) => a.createdAt - b.createdAt);
-        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, bookingIds: th.bookingIds, messages };
+          }),
+        );
+        return { id: th.id, name: th.name, role: th.role, online: th.online, visitId: th.visitId, peerUserId: th.peerUserId, photoUrl: th.photoUrl, bookingIds: th.bookingIds, messages };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dataSig stands in for the per-thread query data
-    [threads, dataSig, extra, patches, mapBackend],
+    [threads, dataSig, extra, patches, myUserId],
   );
 
   // msgId → the booking it lives on, so reactions/deletes target the right booking.
@@ -136,7 +183,10 @@ export function useChatBackend(scope: ChatScope, transport: ChatTransport) {
             await qc.invalidateQueries({ queryKey: ["chat", scope, "msgs", convId] });
             setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
           })
-          .catch(() => toast.error(t("sendFailed"))); // keep the bubble, but surface the failure
+          .catch(() => {
+            setExtra((e) => ({ ...e, [convId]: (e[convId] ?? []).filter((m) => m.id !== tempId) }));
+            toast.error(t("sendFailed"));
+          });
         return;
       }
       // Media / voice → resumable upload to the backend; an optimistic bubble shows the local

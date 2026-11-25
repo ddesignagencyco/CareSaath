@@ -309,7 +309,7 @@ function payout(id: string, i: number, amountRs: number, status: AdminPayoutRequ
     status,
     requestedAt: ago(requestedDaysAgo),
     processedAt: status === "PAID" || status === "REJECTED" ? ago(requestedDaysAgo - 1) : null,
-    caregiver: { id: c.id, specialty: c.specialty, user: { fullName: c.user.fullName, phone: c.user.phone } },
+    caregiver: { id: c.id, specialty: c.specialty, user: { id: c.userId, fullName: c.user.fullName, phone: c.user.phone } },
     payoutAccount: { ...account(i, type) },
   };
 }

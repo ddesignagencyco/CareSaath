@@ -285,7 +285,7 @@ export class FeedbackService {
       include: {
         booking: {
           include: {
-            customer: { include: { emergencyContacts: true } },
+            customer: true,
             address: { select: { addressLine: true, city: true } },
           },
         },
@@ -361,17 +361,6 @@ export class FeedbackService {
         }. Immediate review required.`,
       });
     }
-    for (const contact of visit.booking.customer.emergencyContacts) {
-      await this.notifications.notify({
-        userId: visit.booking.customer.id,
-        phone: contact.phone,
-        event: 'safety_incident.sos.contact',
-        payload: { incidentId: incident.id, visitId: visit.id, contact: contact.name },
-        message: `Emergency alert: an SOS was raised for ${
-          visit.booking.customer.fullName || 'your contact'
-        } during a CareSaath visit.`,
-      });
-    }
 
     this.realtime?.entityUpdated(
       { users: [user.sub, visit.booking.customerId], roles: ['ADMIN'] },
@@ -380,7 +369,7 @@ export class FeedbackService {
     return {
       incident,
       notifiedAdmins: admins.length,
-      notifiedContacts: visit.booking.customer.emergencyContacts.length,
+      notifiedContacts: 0,
     };
   }
 
@@ -473,7 +462,7 @@ export class SosController {
   @Post()
   @ApiOperation({
     summary: 'Trigger emergency SOS alert',
-    description: 'Emergency panic button during an active visit. Immediately creates highest-priority safety incident and alerts admin and emergency contacts.',
+    description: 'Emergency panic button during an active visit. Immediately creates highest-priority safety incident and alerts admins.',
   })
   raise(@CurrentUser() user: AuthUser, @Body() dto: SosDto) {
     return this.feedback.raiseSos(user, dto);

@@ -4,18 +4,23 @@ import { PrismaService } from '../common/prisma/prisma.service.js';
 import { RedisService } from '../common/redis/redis.module.js';
 import { NotificationsService } from '../notifications/notifications.module.js';
 import { WebPushService } from '../notifications/web-push.service.js';
-import { NativePushService } from '../notifications/native-push.service.js';
+import { ANDROID_CALL_CHANNEL_ID, NativePushService } from '../notifications/native-push.service.js';
 import { RealtimeService } from './realtime.service.js';
 import { CallSignalingService } from './call-signaling.service.js';
 
-/** How long a call rings before it counts as missed. */
-export const RING_SECONDS = 30;
+/**
+ * How long a call rings before it counts as missed. 60s (instead of 30s) gives
+ * a delayed high-priority FCM delivery a real chance to reach a locked phone.
+ */
+export const RING_SECONDS = 60;
 
 export interface PendingCall {
   callId: string;
   visitId: string;
   callerId: string;
   callerName: string;
+  /** Signed photo URL for the caller's avatar (generated at invite time). */
+  callerPhotoUrl?: string | null;
   sdp: unknown;
 }
 
@@ -69,14 +74,35 @@ export class CallRingingService implements OnModuleDestroy {
     return call?.status === 'INITIATED' ? pending : null;
   }
 
-  /** Stop ringing: the call was answered, declined or hung up. */
-  async settle(callId: string, calleeId: string): Promise<void> {
+  /**
+   * Stop ringing: the call was answered, declined or hung up. When the callee's
+   * app has no live socket we must also send a data-only push, otherwise their
+   * ringing notification keeps sounding long after the caller hung up.
+   */
+  async settle(
+    callId: string,
+    calleeId: string,
+    endEvent?: 'call.ended' | 'call.rejected',
+  ): Promise<void> {
     const timer = this.timers.get(callId);
     if (timer) clearTimeout(timer);
     this.timers.delete(callId);
     const raw = await this.redis.client.get(pendingKey(calleeId));
     if (raw && (JSON.parse(raw) as PendingCall).callId === callId) {
       await this.redis.client.del(pendingKey(calleeId));
+    }
+    if (endEvent) {
+      await this.nativePush?.sendToUser(
+        calleeId,
+        {
+          id: callId,
+          event: endEvent,
+          title: endEvent === 'call.rejected' ? 'Call declined' : 'Call ended',
+          body: null,
+          data: { callId },
+        },
+        { dataOnly: true, ttlSeconds: 30 },
+      );
     }
   }
 
@@ -86,8 +112,18 @@ export class CallRingingService implements OnModuleDestroy {
       const call = await this.prisma.callLog.findUnique({ where: { id: callId } });
       if (!call || call.status !== 'INITIATED') return;
       await this.calls.markMissed(callId);
-      await this.redis.client.del(pendingKey(calleeId));
+      // A newer call can have replaced this one in the single pending slot —
+      // only clear the slot if it still belongs to the call that expired.
+      const pendingRaw = await this.redis.client.get(pendingKey(calleeId));
+      if (pendingRaw && (JSON.parse(pendingRaw) as PendingCall).callId === callId) {
+        await this.redis.client.del(pendingKey(calleeId));
+      }
       this.realtime.emit({ users: [call.callerId, call.calleeId] }, 'call:missed', { callId });
+      // The missed call is now a row in the chat timeline on both clients.
+      this.realtime.entityUpdated(
+        { users: [call.callerId, call.calleeId] },
+        { type: 'chat_message', id: call.id, action: 'call_logged', data: { callId } },
+      );
 
       const caller = await this.prisma.user.findUnique({ where: { id: call.callerId }, select: { fullName: true } });
       await this.notifications?.notify({
@@ -96,6 +132,20 @@ export class CallRingingService implements OnModuleDestroy {
         payload: { callId, visitId: call.visitId },
         message: `${caller?.fullName || 'Someone'} tried to call you.`,
       });
+      // The notification above is a normal alert (FCM shows it itself), so a
+      // killed app never runs Dart to clear its own ringing notification. This
+      // data-only twin reaches the background handler and stops the ring.
+      await this.nativePush?.sendToUser(
+        call.calleeId,
+        {
+          id: callId,
+          event: 'call.missed',
+          title: 'Missed call',
+          body: null,
+          data: { callId, visitId: call.visitId },
+        },
+        { dataOnly: true, ttlSeconds: 60 },
+      );
     } catch (err) {
       this.logger.warn(`Missed-call handling for ${callId} failed: ${(err as Error).message}`);
     }
@@ -114,6 +164,7 @@ export class CallRingingService implements OnModuleDestroy {
         data: {
           callId: pending.callId,
           visitId: pending.visitId,
+          callerName: pending.callerName,
           url: `/${section}/visits/${pending.visitId}`,
           tag: `call-${pending.callId}`,
           call: true,
@@ -122,7 +173,11 @@ export class CallRingingService implements OnModuleDestroy {
       // A ringing push delivered after the call stopped ringing is worse than none.
       await Promise.all([
         this.webPush?.sendToUser(calleeId, payload, { ttlSeconds: RING_SECONDS, urgency: 'high' }),
-        this.nativePush?.sendToUser(calleeId, payload, { ttlSeconds: RING_SECONDS }),
+        this.nativePush?.sendToUser(calleeId, payload, {
+          ttlSeconds: RING_SECONDS,
+          channelId: ANDROID_CALL_CHANNEL_ID,
+          dataOnly: true,
+        }),
       ]);
     } catch (err) {
       this.logger.warn(`Incoming-call push for ${pending.callId} failed: ${(err as Error).message}`);

@@ -8,14 +8,14 @@ const customer: AuthUser = { sub: 'u-cust', role: 'CUSTOMER', phone: '+923000000
 const caregiverUser: AuthUser = { sub: 'u-cg', role: 'CAREGIVER', phone: '+923000000002' };
 const admin: AuthUser = { sub: 'u-admin', role: 'ADMIN', phone: '+923000000009' };
 
-function makeService() {
+function makeService(storage?: { presignedGet: ReturnType<typeof vi.fn> }) {
   const prisma = createPrismaMock();
   wireTransaction(prisma);
   const realtime = { entityUpdated: vi.fn(), emit: vi.fn() };
   const service = new ChatService(
     prisma as never,
     createAuditMock() as never,
-    undefined,
+    storage as never,
     undefined,
     realtime as never,
     createConfigMock({ 'chat.deleteGraceMinutes': 60 }) as never,
@@ -136,6 +136,36 @@ describe('ChatService — conversations per person', () => {
     expect(conversations[0]).toMatchObject({
       counterpartUserId: 'u-cg', bookingIds: ['b-2', 'b-1'], activeBookingId: 'b-2', unreadCount: 3,
     });
+  });
+
+  it('uses the caregiver portrait when the user photo key is missing', async () => {
+    const storage = { presignedGet: vi.fn().mockResolvedValue('https://cdn/portrait') };
+    const { service, prisma } = makeService(storage);
+    const cg = {
+      id: 'cg-1',
+      userId: 'u-cg',
+      photoKey: 'caregivers/cg-1/photo',
+      user: { fullName: 'Dr Ahmed', photoKey: null },
+    };
+    prisma.booking.findMany.mockResolvedValue([
+      { id: 'b-1', status: 'CONFIRMED', createdAt: new Date(), customer: { id: 'u-cust', fullName: 'C' }, caregiver: cg },
+    ]);
+    prisma.chatMessage.findFirst.mockResolvedValue(null);
+    prisma.chatMessage.count.mockResolvedValue(0);
+
+    const conversations = await service.listConversations(customer);
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          caregiver: expect.objectContaining({
+            select: expect.objectContaining({ photoKey: true }),
+          }),
+        }),
+      }),
+    );
+    expect(storage.presignedGet).toHaveBeenCalledWith('caregivers/cg-1/photo');
+    expect(conversations[0]?.counterpartPhotoUrl).toBe('https://cdn/portrait');
   });
 
   it('merges history across the pair\'s bookings', async () => {

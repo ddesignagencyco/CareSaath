@@ -272,6 +272,9 @@
     }
   },
   "settings": {
+    "profileTitle": "Your profile",
+    "profileHint": "Your photo appears next to your name across the console.",
+    "profileFallback": "Admin",
     "title": "Platform settings",
     "description": "Operational parameters that take effect immediately, without a redeploy. Every change is audit-logged.",
     "saved": "{title} set to {value} {unit}",

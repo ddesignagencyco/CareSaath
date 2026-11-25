@@ -11,6 +11,7 @@ export type RealtimeEntityType =
   | 'dispute'
   | 'incident'
   | 'caregiver'
+  | 'user'
   | 'review'
   | 'chat_message';
 

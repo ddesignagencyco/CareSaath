@@ -12,6 +12,7 @@ import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import { RespondCountdown } from "@shared/ui/respond-countdown";
 import { VisitRow } from "@/features/caregiver/components/visit-row";
+import { AvailableNowCard } from "@/features/caregiver/components/available-now-card";
 import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, moneyApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
@@ -63,20 +64,31 @@ export default function TodayPage() {
       {active && (
         <Link
           href={`/caregiver/visits/${active.id}`}
-          className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-800 p-4 text-white shadow-pop transition-transform active:scale-[0.99]"
+          className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-brand-800 p-4 text-white shadow-pop transition-all hover:shadow-lg active:scale-[0.99]"
         >
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+          <div className="relative flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-xs">
+            <span className="absolute -top-0.5 -end-0.5 flex size-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-3 rounded-full bg-emerald-400" />
+            </span>
             <Navigation className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-semibold tracking-wide text-white/80 uppercase">{L.visitCaregiver(active.status)}</span>
-            <span className="block truncate font-bold">{active.booking.patient.name}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 text-sm font-bold">
-            {t("continue")} <ArrowRight className="rtl:-scale-x-100 size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold tracking-wider text-brand-200 uppercase">{L.visitCaregiver(active.status)}</span>
+              <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-200 uppercase">Live</span>
+            </div>
+            <p className="truncate text-base font-bold text-white">{active.booking.patient.name}</p>
+            <p className="truncate text-xs text-brand-100/90">{active.booking.address.addressLine}, {active.booking.address.city}</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-xs transition-colors group-hover:bg-white/30">
+            {t("continue")} <ArrowRight className="rtl:-scale-x-100 size-3.5" />
           </span>
         </Link>
       )}
+
+      {/* Quick toggle for emergency / immediate availability */}
+      <AvailableNowCard />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.4fr_1fr]">
         {/* Next visit */}

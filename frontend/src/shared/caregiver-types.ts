@@ -45,6 +45,8 @@ export interface Me {
   status: UserStatus;
   lastLoginAt: string | null;
   createdAt: string;
+  /** Viewable profile photo URL (null when none uploaded). */
+  photoUrl: string | null;
   caregiverProfile: { id: string; verificationStatus: VerificationStatus } | null;
 }
 

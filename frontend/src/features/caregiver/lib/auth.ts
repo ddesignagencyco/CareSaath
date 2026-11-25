@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 import type { Me } from "@shared/caregiver-types";
-import { sessionReady, sessionRole, subscribeBootstrap } from "@shared/api/session";
+import { sessionReady, sessionRole, setSessionRole, subscribeBootstrap } from "@shared/api/session";
 import { authApi, meApi } from "./api/caregiver";
 import { keys } from "./api/keys";
 import { session } from "./api/session";
@@ -49,6 +49,7 @@ export async function refreshTokens() {
   if (!session.get()) return;
   // Rotates the cookie pair and re-reads the DB role into the new access cookie.
   await authApi.refresh();
+  setSessionRole("CAREGIVER");
 }
 
 export function useMe() {

@@ -104,7 +104,7 @@
     "call1122": "Medical emergency: call 1122",
     "reportConcern": "Report a safety concern",
     "raiseDispute": "Raise a dispute",
-    "sosDescription": "CareSaath's safety team and your emergency contacts are alerted immediately.",
+    "sosDescription": "CareSaath's safety team is alerted immediately.",
     "caregiverUnavailable": "Caregiver details aren't available right now.",
     "disputesTitle": "Disputes about this visit"
   },
@@ -122,6 +122,8 @@
     "eta": "About {min} min away",
     "arrivingIn": "Arriving in",
     "minUnit": "min",
+    "hrUnit": "hr",
+    "dayUnit": "d",
     "onTheWay": "Your caregiver is on the way",
     "onTheWayNamed": "{name} is on the way",
     "live": "Live",

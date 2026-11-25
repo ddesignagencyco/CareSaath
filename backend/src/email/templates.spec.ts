@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   maskPhone,
+  otpCodeEmailSubject,
   otpEmailSubject,
   otpMirrorSubject,
   renderNotificationEmail,
+  renderOtpCodeEmail,
   renderOtpEmail,
   renderOtpMirrorEmail,
   renderSmtpTestEmail,
@@ -52,6 +54,7 @@ describe('email templates', () => {
     for (const html of [
       renderNotificationEmail({ title: attack, message: attack }),
       renderWelcomeEmail({ name: attack, role: 'CUSTOMER' }),
+      renderOtpCodeEmail({ code: '1', purpose: attack, ttlMinutes: 5 }),
       renderOtpMirrorEmail({ code: '1', purpose: 'LOGIN', phone: '+92', role: attack, visitId: attack, ttlMinutes: 5 }),
     ]) {
       expect(html).not.toContain('<script>');
@@ -59,12 +62,19 @@ describe('email templates', () => {
     }
   });
 
-  it('gives the ops copy the code but only a masked phone, and keeps both out of its subject', () => {
-    const html = renderOtpMirrorEmail({ code: '654321', purpose: 'VISIT_CHECKIN', phone: '+923001112233', role: 'CUSTOMER', visitId: 'v-1', ttlMinutes: 5 });
+  it('names the purpose in both code-email subjects but never puts the code there', () => {
+    const html = renderOtpCodeEmail({ code: '654321', purpose: 'VISIT_CHECKIN', ttlMinutes: 5 });
     expect(html).toContain('654321');
-    expect(html).toContain('•••• 2233');
-    expect(html).not.toContain('3001112233');
+    expect(preview(html)).not.toContain('654321');
+    expect(otpCodeEmailSubject('VISIT_CHECKIN')).toBe('Your CareSaath visit check-in code');
+    expect(otpCodeEmailSubject('VISIT_CHECKIN')).not.toMatch(/\d{6}/);
+
+    const mirror = renderOtpMirrorEmail({ code: '654321', purpose: 'VISIT_CHECKIN', phone: '+923001112233', role: 'CUSTOMER', visitId: 'v-1', ttlMinutes: 5 });
+    expect(mirror).toContain('654321');
+    expect(mirror).toContain('•••• 2233');
+    expect(mirror).not.toContain('3001112233');
     expect(otpMirrorSubject('VISIT_CHECKIN')).toBe('CareSaath ops · Visit check-in code issued');
+    expect(otpMirrorSubject('VISIT_CHECKIN')).not.toMatch(/\d{6}/);
     expect(maskPhone('12')).toBe('••••');
   });
 
@@ -73,5 +83,16 @@ describe('email templates', () => {
     expect(renderWelcomeEmail({ name: '  ', role: 'CUSTOMER' })).toContain('Welcome to CareSaath<');
     expect(renderWelcomeEmail({ name: 'Ali', role: 'CAREGIVER' })).toContain('Open your dashboard');
     expect(renderWelcomeEmail({ name: 'Ali', role: 'CUSTOMER' })).toContain('Find care');
+  });
+
+  it('includes mobile responsive styles, viewport tags, and fixed table layout', () => {
+    const html = renderOtpEmail({ code: '123456', purpose: 'login', ttlMinutes: 5 });
+    expect(html).toContain('name="viewport" content="width=device-width, initial-scale=1.0"');
+    expect(html).toContain('name="x-apple-disable-message-reformatting"');
+    expect(html).toContain('@media only screen and (max-width: 600px)');
+    expect(html).toContain('table-layout:fixed');
+    expect(html).toContain('card-cell');
+    expect(html).toContain('email-container');
+    expect(html).toContain('otp-code-text');
   });
 });

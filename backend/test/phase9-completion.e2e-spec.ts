@@ -108,7 +108,6 @@ describe('Phase 9 completions (e2e)', () => {
     await prisma.booking.deleteMany({ where: { customerId } });
     await prisma.patientProfile.deleteMany({ where: { ownerUserId: customerId } });
     await prisma.address.deleteMany({ where: { userId: customerId } });
-    await prisma.emergencyContact.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.caregiverDocument.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.credentialReview.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
     await prisma.caregiverStrike.deleteMany({ where: { caregiver: { userId: { in: createdUserIds } } } });
@@ -221,6 +220,14 @@ describe('Phase 9 completions (e2e)', () => {
       .set(bearer(caregiverToken));
     expect(enRoute.body.status).toBe('EN_ROUTE');
 
+    // An OTP is now doorstep-only: mirror the app's ambient GPS heartbeat at
+    // the visit address so the caregiver has a fresh nearby fix to prove arrival.
+    const fix = await request(app.getHttpServer())
+      .patch('/api/v1/caregiver/location')
+      .set(bearer(caregiverToken))
+      .send({ lat: 31.5204, lng: 74.3587 });
+    expect(fix.status).toBe(200);
+
     capturedOtp.length = 0;
     const issued = await request(app.getHttpServer())
       .post(`/api/v1/caregiver/visits/${visitId}/check-in-otp`)
@@ -280,11 +287,6 @@ describe('Phase 9 completions (e2e)', () => {
   });
 
   it('raises an SOS that becomes a CRITICAL incident and alerts admins (FR-C14)', async () => {
-    await request(app.getHttpServer())
-      .post('/api/v1/customer/emergency-contacts')
-      .set(bearer(customerToken))
-      .send({ name: 'Next of Kin', phone: '+923001112233' });
-
     const res = await request(app.getHttpServer())
       .post('/api/v1/sos')
       .set(bearer(customerToken))
@@ -292,7 +294,6 @@ describe('Phase 9 completions (e2e)', () => {
     expect(res.status).toBe(201);
     expect(res.body.incident.priority).toBe('CRITICAL');
     expect(res.body.incident.source).toBe('SOS');
-    expect(res.body.notifiedContacts).toBeGreaterThanOrEqual(1);
 
     const adminList = await request(app.getHttpServer())
       .get('/api/v1/admin/safety-incidents?status=OPEN')

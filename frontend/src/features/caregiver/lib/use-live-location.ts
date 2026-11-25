@@ -70,33 +70,50 @@ export function useLiveLocation(enabled: boolean) {
   }, [enabled, sharing]);
 }
 
+const activeStreams = new Map<string, { count: number; intervalId: number }>();
+
 /**
  * While a specific visit is EN_ROUTE (and the caregiver hasn't opted out), stream
- * high-accuracy GPS fixes to `POST /caregiver/visits/:id/location` every ~12s so the
- * customer watches the caregiver approach on their visit map. Best-effort — silent on error.
+ * GPS fixes to `POST /caregiver/visits/:id/location` every ~12s so the customer watches
+ * the caregiver approach on their visit map. Reference-counted so multiple components
+ * (AppShell + visit detail page) share a single interval. Best-effort — silent on error.
  */
 export function useVisitLocationStream(visitId: string, active: boolean) {
   const [sharing] = useLocationSharing();
   useEffect(() => {
-    if (!active || !sharing || typeof navigator === "undefined" || !navigator.geolocation) return;
-    let stopped = false;
-    const push = () => {
-      if (document.visibilityState !== "visible") return;
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (!stopped) visitsApi.postLocation(visitId, pos.coords.latitude, pos.coords.longitude).catch(() => undefined);
-        },
-        () => undefined,
-        // Low accuracy (network/WiFi) so the fix actually resolves on desktops without a GPS
-        // chip; the customer only sees an ETA, not a precise position, so this is enough.
-        { enableHighAccuracy: false, maximumAge: 10_000, timeout: 10_000 },
-      );
-    };
-    push();
-    const iv = window.setInterval(push, 12_000);
+    if (!active || !visitId || !sharing || typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    let entry = activeStreams.get(visitId);
+    if (!entry) {
+      const push = () => {
+        if (document.visibilityState !== "visible") return;
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            visitsApi.postLocation(visitId, pos.coords.latitude, pos.coords.longitude).catch(() => undefined);
+          },
+          () => undefined,
+          // Low accuracy (network/WiFi) so the fix actually resolves on desktops without a GPS
+          // chip; the customer only sees an ETA, not a precise position, so this is enough.
+          { enableHighAccuracy: false, maximumAge: 10_000, timeout: 10_000 },
+        );
+      };
+      push();
+      const iv = window.setInterval(push, 12_000);
+      entry = { count: 1, intervalId: iv };
+      activeStreams.set(visitId, entry);
+    } else {
+      entry.count += 1;
+    }
+
     return () => {
-      stopped = true;
-      window.clearInterval(iv);
+      const current = activeStreams.get(visitId);
+      if (current) {
+        current.count -= 1;
+        if (current.count <= 0) {
+          window.clearInterval(current.intervalId);
+          activeStreams.delete(visitId);
+        }
+      }
     };
   }, [visitId, active, sharing]);
 }

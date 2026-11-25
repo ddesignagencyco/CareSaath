@@ -134,7 +134,7 @@ for (const setting of platformConfig) {
 console.log(`Seeded ${platformConfig.length} platform config values`);
 
 // ===========================================================================
-// 2. Demo users (login via OTP -> MailHog at http://localhost:18025)
+// 2. Demo users (login via OTP delivered to the account holder's email/SMS)
 // ===========================================================================
 
 const CUSTOMERS = [
@@ -372,7 +372,6 @@ await prisma.prescriptionDocument.deleteMany({
 await prisma.booking.deleteMany({ where: { customerId: { in: customerIds } } });
 await prisma.patientProfile.deleteMany({ where: { ownerUserId: { in: customerIds } } });
 await prisma.address.deleteMany({ where: { userId: { in: customerIds } } });
-await prisma.emergencyContact.deleteMany({ where: { userId: { in: customerIds } } });
 await prisma.payoutRequest.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
 await prisma.availabilityRule.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
 await prisma.availabilityBlock.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
@@ -381,7 +380,7 @@ await prisma.credentialReview.deleteMany({ where: { caregiverId: { in: caregiver
 await prisma.payoutAccount.deleteMany({ where: { caregiverId: { in: caregiverProfileIds } } });
 
 // ===========================================================================
-// 3. Customer-side data: patients, addresses, emergency contacts
+// 3. Customer-side data: patients, addresses
 // ===========================================================================
 
 const ayeshap = await prisma.patientProfile.create({
@@ -445,14 +444,7 @@ const bilalHome = await prisma.address.create({
   },
 });
 
-await prisma.emergencyContact.createMany({
-  data: [
-    { userId: customers[0].id, name: 'Hamza Khan (spouse)', phone: '+923002220001' },
-    { userId: customers[1].id, name: 'Zara Ahmed (sister)', phone: '+923002220002' },
-  ],
-});
-
-console.log('Seeded patients, addresses and emergency contacts');
+console.log('Seeded patients and addresses');
 
 // ===========================================================================
 // 4. Caregiver-side data: availability, documents, reviews, payouts

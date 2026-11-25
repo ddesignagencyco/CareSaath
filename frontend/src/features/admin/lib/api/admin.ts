@@ -6,11 +6,18 @@ import type {
   AdminCaregiver,
   AdminCaregiverRecord,
   AdminBookingListItem,
+  AdminBookingDetail,
   AdminCustomer,
   AdminCustomerDetail,
+  AdminUser,
+  ContactInfo,
+  EditorialPage,
+  UserRole,
+  UserStatus,
   AdminPayment,
   AdminPayoutRequest,
   AdminVisitListItem,
+  AdminVisitDetail,
   BookingStatus,
   AnalyticsOverview,
   AnalyticsRange,
@@ -79,6 +86,10 @@ export const healthApi = {
 export const meApi = {
   /** GET /customer/me — the shared profile endpoint; used to show the admin's own name. */
   get: (): Promise<Me> => http.get<Me>("/customer/me"),
+  /** POST /customer/me/photo */
+  uploadPhoto: (file: File) => http.upload<{ photoKey: string; photoUrl: string }>("/customer/me/photo", file),
+  /** DELETE /customer/me/photo */
+  removePhoto: () => http.delete<{ ok: true }>("/customer/me/photo"),
 };
 
 export const authApi = {
@@ -97,8 +108,8 @@ export const authApi = {
 };
 
 export const caregiversApi = {
-  /** GET /admin/caregivers?status=&q=&reverifyDueBefore=&page=&limit= (q = name/phone/license; reverifyDueBefore → due-asc order) */
-  list: (q: PageQuery & { status?: VerificationStatus; q?: string; reverifyDueBefore?: string }) =>
+  /** GET /admin/caregivers?status=&q=&id=&reverifyDueBefore=&page=&limit= (q = name/phone/license; reverifyDueBefore → due-asc order) */
+  list: (q: PageQuery & { status?: VerificationStatus; q?: string; id?: string; reverifyDueBefore?: string }) =>
     http.get<Paginated<AdminCaregiver>>("/admin/caregivers", q),
   /** POST /admin/caregivers/:id/approve */
   approve: (id: string, reason?: string) =>
@@ -240,8 +251,8 @@ export const auditApi = {
 };
 
 export const callLogsApi = {
-  /** GET /admin/call-logs?visitId=&page=&limit= — persisted in-app call history (investigation; filter by visit, not status). */
-  list: (q: PageQuery & { visitId?: string }) =>
+  /** GET /admin/call-logs?visitId=&q=&page=&limit= — persisted in-app call history (investigation; filter by visit or caller/callee). */
+  list: (q: PageQuery & { visitId?: string; q?: string }) =>
     http.get<Paginated<CallLogEntry>>("/admin/call-logs", q),
 };
 
@@ -251,12 +262,12 @@ export const adminBookingsApi = {
   listBookings: (q: PageQuery & { status?: BookingStatus; isImmediate?: boolean; customerId?: string; caregiverId?: string }) =>
     http.get<Paginated<AdminBookingListItem>>("/admin/bookings", q),
   /** GET /admin/bookings/:id */
-  getBooking: (id: string) => http.get<AdminBookingListItem>(`/admin/bookings/${id}`),
+  getBooking: (id: string) => http.get<AdminBookingDetail>(`/admin/bookings/${id}`),
   /** GET /admin/visits?status=&bookingId=&from=&to=&sort=&page=&limit= */
   listVisits: (q: PageQuery & { status?: VisitStatus; bookingId?: string; from?: string; to?: string; sort?: "asc" | "desc" }) =>
     http.get<Paginated<AdminVisitListItem>>("/admin/visits", q),
   /** GET /admin/visits/:id */
-  getVisit: (id: string) => http.get<AdminVisitListItem>(`/admin/visits/${id}`),
+  getVisit: (id: string) => http.get<AdminVisitDetail>(`/admin/visits/${id}`),
 };
 
 /** Admin customer directory + support actions. */
@@ -270,4 +281,39 @@ export const customersApi = {
     http.post<AdminCustomerDetail>(`/admin/customers/${id}/deactivate`, reason ? { reason } : {}),
   /** POST /admin/customers/:id/reactivate — restores the account. */
   reactivate: (id: string) => http.post<AdminCustomerDetail>(`/admin/customers/${id}/reactivate`, {}),
+};
+
+/** All users directory (Customers, Caregivers, Admins) + account management actions. */
+export const usersApi = {
+  /** GET /admin/users?q=&id=&role=&status=&page=&limit= */
+  list: (q: PageQuery & { q?: string; id?: string; role?: UserRole; status?: UserStatus }) =>
+    http.get<Paginated<AdminUser>>("/admin/users", q),
+  /** GET /admin/users/:id */
+  get: (id: string) => http.get<AdminCustomerDetail>(`/admin/users/${id}`),
+  /** POST /admin/users/:id/deactivate */
+  deactivate: (id: string, reason?: string) =>
+    http.post<AdminCustomerDetail>(`/admin/users/${id}/deactivate`, reason ? { reason } : {}),
+  /** POST /admin/users/:id/suspend */
+  suspend: (id: string, reason?: string) =>
+    http.post<AdminCustomerDetail>(`/admin/users/${id}/suspend`, reason ? { reason } : {}),
+  /** POST /admin/users/:id/reactivate */
+  reactivate: (id: string) => http.post<AdminCustomerDetail>(`/admin/users/${id}/reactivate`, {}),
+  /** POST /admin/users/:id/revoke-sessions */
+  revokeSessions: (id: string) => http.post<{ ok: true; message: string }>(`/admin/users/${id}/revoke-sessions`, {}),
+};
+
+/** Editorial CMS content & platform public contact information. */
+export const editorialApi = {
+  /** GET /admin/editorial/pages */
+  listPages: () => http.get<EditorialPage[]>("/admin/editorial/pages"),
+  /** GET /admin/editorial/pages/:slug */
+  getPage: (slug: string) => http.get<EditorialPage>(`/admin/editorial/pages/${slug}`),
+  /** PUT /admin/editorial/pages/:slug */
+  updatePage: (slug: string, dto: { title?: string; content: string }) =>
+    http.put<EditorialPage>(`/admin/editorial/pages/${slug}`, dto),
+  /** GET /admin/editorial/contact-info */
+  getContactInfo: () => http.get<ContactInfo>("/admin/editorial/contact-info"),
+  /** PUT /admin/editorial/contact-info */
+  updateContactInfo: (dto: Partial<ContactInfo>) =>
+    http.put<ContactInfo>(`/admin/editorial/contact-info`, dto),
 };

@@ -145,7 +145,7 @@
     "safety": {
       "identity": "Identity and license checked before joining.",
       "notified": "You're notified when the caregiver is on the way and arrives.",
-      "sos": "SOS button during every visit alerts our team and your emergency contact."
+      "sos": "SOS button during every visit alerts our safety team."
     }
   },
   "book": {

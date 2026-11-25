@@ -20,8 +20,9 @@ talks to the real API; the production build reads `.env.production` (the Render 
 | `/caregiver` | Caregiver panel, phone-first (`/caregiver/login`) |
 | `/customer` | Customer app, phone-first (`/customer/login`) |
 
-**Sign-in:** in dev the OTP is printed in the backend console and emailed to MailHog
-(`http://localhost:18025`, `info@caresaath.com`). Seed numbers: admin +92 300 0000000;
+**Sign-in:** OTPs are delivered to the account holder (SMS / WhatsApp / email) and
+mirrored to the ops inbox (`OTP_MIRROR_EMAIL`); the backend never prints codes to
+the console. Seed numbers: admin +92 300 0000000;
 customers +92 300 1110001 / 1110002; caregivers +92 300 1110011 / 1110012 / 1110013 (approved),
 1110014 (pending); doctors +92 300 1110021 / 1110022. Promo codes: `WELCOME10`, `ELDERCARE500`.
 

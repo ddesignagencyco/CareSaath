@@ -160,7 +160,7 @@ export default function CustomerHome() {
                       <p className="text-sm font-bold text-ink-900">{f.relativeDay(v.scheduledDate, now)}</p>
                       <p className="tabular text-xs text-ink-500">{f.time(v.timeWindowStart)}</p>
                     </div>
-                    <Avatar name={cg?.user.fullName ?? "?"} size="sm" />
+                    <Avatar name={cg?.user.fullName ?? "?"} src={cg?.photoUrl} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-ink-900">{cg?.user.fullName ?? t("caregiverFallback")}</p>
                       <p className="flex items-center gap-1 truncate text-xs text-ink-500">

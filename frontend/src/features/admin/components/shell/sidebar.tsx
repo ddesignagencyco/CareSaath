@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   BadgePercent,
   BarChart3,
+  BookOpenText,
   CalendarCheck2,
   CalendarClock,
   CreditCard,
@@ -35,8 +36,8 @@ interface NavItem {
 }
 
 /** Badge counts come from `total` on page-size-1 list calls. */
-function useNavCounts() {
-  const opts = { refetchInterval: 60_000 };
+function useNavCounts(enabled: boolean) {
+  const opts = { refetchInterval: 60_000, enabled };
   const pending = useQuery({
     queryKey: [...keys.caregivers, "count", "PENDING"],
     queryFn: () => caregiversApi.list({ status: "PENDING", limit: 1 }),
@@ -65,9 +66,9 @@ function useNavCounts() {
   };
 }
 
-export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+export function Sidebar({ onNavigate, collapsed = false, enabled = true }: { onNavigate?: () => void; collapsed?: boolean; enabled?: boolean }) {
   const pathname = usePathname();
-  const counts = useNavCounts();
+  const counts = useNavCounts(enabled);
   const t = useTranslations("adminA");
   const tNav = useTranslations("common.nav");
 
@@ -106,7 +107,8 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     {
       label: t("nav.groups.platform"),
       items: [
-        { href: "/admin/customers", label: t("nav.customers"), icon: Users },
+        { href: "/admin/users", label: t("nav.users"), icon: Users },
+        { href: "/admin/editorial", label: t("nav.editorial"), icon: BookOpenText },
         { href: "/admin/settings", label: t("nav.settings"), icon: Settings2 },
         ...(CAN_AUDIT_LOG ? [{ href: "/admin/audit-logs", label: t("nav.auditLogs"), icon: ScrollText }] : []),
       ],

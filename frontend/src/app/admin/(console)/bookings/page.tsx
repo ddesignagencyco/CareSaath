@@ -2,18 +2,23 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Zap } from "lucide-react";
+import { ChevronRight, Eye, Zap } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@shared/page-header";
 import { VisitStatusBadge } from "@shared/status";
 import { Badge, type Tone } from "@shared/ui/badge";
+import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { DatePicker } from "@shared/ui/date-picker";
-import { Avatar, ErrorState, FilterTabs } from "@shared/ui/misc";
+import { ErrorState, FilterTabs } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { adminBookingsApi } from "@/features/admin/lib/api/admin";
+import { BookingDrawer } from "@/features/admin/components/bookings/booking-drawer";
+import { VisitDrawer } from "@/features/admin/components/bookings/visit-drawer";
 import { useFmt } from "@shared/i18n/use-fmt";
 import { useLabels } from "@shared/i18n/use-labels";
 import type { AdminBookingListItem, AdminVisitListItem, BookingStatus, VisitStatus } from "@shared/types";
@@ -21,9 +26,9 @@ import type { AdminBookingListItem, AdminVisitListItem, BookingStatus, VisitStat
 const LIMIT = 15;
 const BOOKING_STATUSES: BookingStatus[] = ["REQUESTED", "CONFIRMED", "COMPLETED", "DECLINED", "CANCELLED"];
 const VISIT_STATUSES: VisitStatus[] = ["REQUESTED", "CONFIRMED", "EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT", "COMPLETED", "DECLINED", "CANCELLED"];
-const BOOKING_TONE: Record<BookingStatus, Tone> = { REQUESTED: "warning", CONFIRMED: "info", COMPLETED: "success", DECLINED: "neutral", CANCELLED: "danger" };
+const BOOKING_TONE: Record<BookingStatus, Tone> = { REQUESTED: "neutral", CONFIRMED: "neutral", COMPLETED: "success", DECLINED: "danger", CANCELLED: "danger" };
 
-function BookingsTab() {
+function BookingsTab({ onSelectBooking }: { onSelectBooking: (id: string) => void }) {
   const t = useTranslations("adminB.operations");
   const f = useFmt();
   const L = useLabels();
@@ -43,7 +48,7 @@ function BookingsTab() {
       accessorFn: (b) => b.customer.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.customer.fullName} size="sm" />
+          <UserAvatar userId={row.original.customer.id} name={row.original.customer.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.customer.fullName}</p>
             <p className="text-xs text-ink-500">{t("forPatient", { name: row.original.patient.name })}</p>
@@ -92,6 +97,24 @@ function BookingsTab() {
         </div>
       ),
     },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectBooking(row.original.id);
+          }}
+          className="text-xs"
+        >
+          <Eye className="size-3.5 mr-1" /> View
+        </Button>
+      ),
+    },
   ];
 
   return list.isError ? (
@@ -104,6 +127,7 @@ function BookingsTab() {
       data={list.data?.items ?? []}
       loading={!list.data}
       emptyText={t("emptyBookings")}
+      onRowClick={(row) => onSelectBooking(row.id)}
       serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
       toolbar={() => (
         <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +154,7 @@ function BookingsTab() {
   );
 }
 
-function VisitsTab() {
+function VisitsTab({ onSelectVisit }: { onSelectVisit: (id: string) => void }) {
   const t = useTranslations("adminB.operations");
   const f = useFmt();
   const L = useLabels();
@@ -152,7 +176,7 @@ function VisitsTab() {
       accessorFn: (v) => v.booking.customer.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.booking.customer.fullName} size="sm" />
+          <UserAvatar userId={row.original.booking.customer.id} name={row.original.booking.customer.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.booking.customer.fullName}</p>
             <p dir="auto" className="truncate text-xs text-ink-500">{row.original.booking.address.city}</p>
@@ -205,6 +229,24 @@ function VisitsTab() {
       enableSorting: false,
       cell: ({ row }) => <VisitStatusBadge status={row.original.status} />,
     },
+    {
+      id: "actions",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectVisit(row.original.id);
+          }}
+          className="text-xs"
+        >
+          <Eye className="size-3.5 mr-1" /> View
+        </Button>
+      ),
+    },
   ];
 
   return list.isError ? (
@@ -217,6 +259,7 @@ function VisitsTab() {
       data={list.data?.items ?? []}
       loading={!list.data}
       emptyText={t("emptyVisits")}
+      onRowClick={(row) => onSelectVisit(row.id)}
       serverPagination={list.data ? { page: list.data.page, limit: list.data.limit, total: list.data.total, onPageChange: setPage } : undefined}
       toolbar={() => (
         <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +281,23 @@ function VisitsTab() {
 /** Admin read-only browser for every booking and visit across the platform. */
 export default function AdminBookingsPage() {
   const t = useTranslations("adminB.operations");
-  const [tab, setTab] = useState<"bookings" | "visits">("bookings");
+  const searchParams = useSearchParams();
+  const initialBookingId = searchParams?.get("bookingId") ?? searchParams?.get("id");
+  const initialVisitId = searchParams?.get("visitId");
+
+  const [tab, setTab] = useState<"bookings" | "visits">(initialVisitId ? "visits" : "bookings");
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId ?? null);
+  const [selectedVisitId, setSelectedVisitId] = useState<string | null>(initialVisitId ?? null);
+
+  useEffect(() => {
+    if (initialVisitId) {
+      setSelectedVisitId(initialVisitId);
+      setTab("visits");
+    } else if (initialBookingId) {
+      setSelectedBookingId(initialBookingId);
+      setTab("bookings");
+    }
+  }, [initialBookingId, initialVisitId]);
 
   return (
     <>
@@ -253,7 +312,34 @@ export default function AdminBookingsPage() {
           ]}
         />
       </div>
-      {tab === "bookings" ? <BookingsTab /> : <VisitsTab />}
+
+      {tab === "bookings" ? (
+        <BookingsTab onSelectBooking={(id) => setSelectedBookingId(id)} />
+      ) : (
+        <VisitsTab onSelectVisit={(id) => setSelectedVisitId(id)} />
+      )}
+
+      {selectedBookingId && (
+        <BookingDrawer
+          bookingId={selectedBookingId}
+          onClose={() => setSelectedBookingId(null)}
+          onSelectVisit={(visitId) => {
+            setSelectedBookingId(null);
+            setSelectedVisitId(visitId);
+          }}
+        />
+      )}
+
+      {selectedVisitId && (
+        <VisitDrawer
+          visitId={selectedVisitId}
+          onClose={() => setSelectedVisitId(null)}
+          onSelectBooking={(bookingId) => {
+            setSelectedVisitId(null);
+            setSelectedBookingId(bookingId);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -38,6 +38,26 @@
   "toast": {
     "dismiss": "بند کریں"
   },
+  "photo": {
+    "add": "تصویر شامل کریں",
+    "change": "تصویر تبدیل کریں",
+    "view": "تصویر مکمل سائز میں دیکھیں",
+    "manageTitle": "پروفائل تصویر",
+    "manageDescription": "کیا آپ اپنی پروفائل تصویر اپ ڈیٹ کرنا چاہتے ہیں یا ہٹانا چاہتے ہیں؟",
+    "update": "تصویر اپ ڈیٹ کریں",
+    "remove": "تصویر ہٹائیں",
+    "updated": "تصویر اپ ڈیٹ ہو گئی",
+    "removed": "تصویر ہٹا دی گئی",
+    "invalid": "10MB سے کم JPEG، PNG یا WEBP تصویر منتخب کریں",
+    "cropTitle": "تصویر درست کریں",
+    "cropDescription": "محفوظ کرنے سے پہلے تصویر کو کھینچ کر پوزیشن، زوم یا گھمائیں۔",
+    "zoom": "زوم",
+    "rotate": "گھمائیں",
+    "reset": "دوبارہ ترتیب دیں",
+    "apply": "محفوظ کریں اور اپ لوڈ کریں",
+    "cancel": "منسوخ کریں",
+    "cropFailed": "تصویر پروسیس نہیں ہو سکی"
+  },
   "language": {
     "label": "زبان",
     "appLanguage": "ایپ کی زبان",
@@ -52,7 +72,7 @@
     "notifications": "اطلاعات",
     "notificationsNew": "اطلاعات، {count} نئی",
     "expandSidebar": "سائیڈ بار کھولیں",
-    "collapseSidebar": "Collapse sidebar",
+    "collapseSidebar": "سائیڈ بار بند کریں",
     "home": "کیئر ساتھ ہوم",
     "viewAll": "تمام اطلاعات دیکھیں"
   },
@@ -98,6 +118,11 @@
     "calling": "کال کی جا رہی ہے…",
     "ringing": "گھنٹی بج رہی ہے…",
     "incomingCall": "آنے والی کال",
+    "callOutgoing": "آؤٹ گوئنگ کال",
+    "callIncoming": "آنے والی کال",
+    "callMissed": "مس کال",
+    "callRejected": "مسترد کال",
+    "callDuration": "مدت {value}",
     "connecting": "منسلک ہو رہا ہے…",
     "accept": "قبول کریں",
     "decline": "مسترد کریں",

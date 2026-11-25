@@ -25,11 +25,13 @@ function subscribe(onChange: () => void) {
   };
 }
 
+const memoryLocales = new Map<string, Locale>();
+
 function read(key: string): Locale {
   try {
     return localStorage.getItem(key) === "ur" ? "ur" : "en";
   } catch {
-    return "en";
+    return memoryLocales.get(key) ?? "en";
   }
 }
 
@@ -45,10 +47,11 @@ export function LocaleProvider({ storageKey, children }: { storageKey?: string; 
   const setLocale = useCallback(
     (l: Locale) => {
       if (!storageKey) return;
+      memoryLocales.set(storageKey, l);
       try {
         localStorage.setItem(storageKey, l);
       } catch {
-        // storage unavailable; locale lasts for this page only
+        // storage unavailable; memoryLocales keeps the chosen locale for this session
       }
       window.dispatchEvent(new Event(EVENT));
     },

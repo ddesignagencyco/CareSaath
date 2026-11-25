@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BadgeCheck, Camera, Star } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Camera, Maximize2, Star } from "lucide-react";
 import { TierBadge } from "@shared/ui/tier-badge";
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
@@ -21,9 +21,12 @@ import type { Locale } from "@shared/i18n/messages";
 import type { Me, MyCaregiverProfile } from "@shared/caregiver-types";
 import type { Specialty } from "@shared/types";
 import { DocumentList, DocumentUploader } from "@/features/caregiver/components/documents-panel";
-import { PhotoAvatar } from "@/features/caregiver/components/profile-photo";
+import { PhotoAvatar, usePhotoUrl } from "@/features/caregiver/components/profile-photo";
+import { PhotoCropModal } from "@shared/ui/photo-crop-modal";
+import { PhotoViewer } from "@shared/ui/photo-viewer";
 import { ServiceAreasCard } from "@/features/caregiver/components/service-areas-card";
-import { meApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
+import { NotificationPrefsCard } from "@shared/notifications/notification-prefs";
+import { meApi, notificationsApi, profileApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { CITY_OPTIONS, SPECIALTY_OPTIONS } from "@shared/lib/options";
 
@@ -42,38 +45,73 @@ function displayCnic(cnic: string | null): string {
 
 function PhotoButton({ name, photoKey }: { name: string; photoKey: string | null }) {
   const t = useTranslations("caregiverB.profile");
+  const tp = useTranslations("common.photo");
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
-  const upload = useAction((file: File) => profileApi.uploadPhoto(file), { invalidate: [keys.profile], success: t("photoUpdated") });
-  const hasPhoto = !!photoKey;
+  const photoUrl = usePhotoUrl(photoKey);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const upload = useAction((file: File) => profileApi.uploadPhoto(file), {
+    invalidate: [keys.profile, keys.me, ["c-caregivers"]],
+    success: t("photoUpdated"),
+  });
+  const hasPhoto = !!photoUrl;
+
   return (
-    <div className="relative">
-      <PhotoAvatar name={name} photoKey={photoKey} size="lg" />
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        disabled={upload.isPending}
-        aria-label={hasPhoto ? t("changePhoto") : t("addPhoto")}
-        className="absolute -end-1 -bottom-1 flex size-7 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-white hover:bg-brand-700"
-      >
-        <Camera className="size-3.5" />
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="user"
-        className="sr-only"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f) return;
-          // The API also accepts PDFs here; a portrait must be an image.
-          if (!PHOTO_TYPES.includes(f.type) || f.size > PHOTO_MAX_BYTES) toast.error(t("photoInvalid"));
-          else upload.mutate(f);
+    <>
+      <div className="relative">
+        <PhotoAvatar name={name} photoKey={photoKey} size="lg" />
+        {hasPhoto && (
+          <button
+            type="button"
+            onClick={() => setViewOpen(true)}
+            aria-label={tp("view")}
+            title={tp("view")}
+            className="absolute -start-1 -bottom-1 z-10 flex size-7 items-center justify-center rounded-full bg-white text-ink-700 ring-2 ring-brand-600 hover:bg-ink-50"
+          >
+            <Maximize2 className="size-3.5" aria-hidden />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          disabled={upload.isPending}
+          aria-label={photoKey ? t("changePhoto") : t("addPhoto")}
+          className="absolute -end-1 -bottom-1 z-10 flex size-7 items-center justify-center rounded-full bg-brand-600 text-white ring-2 ring-white hover:bg-brand-700"
+        >
+          <Camera className="size-3.5" />
+        </button>
+        <input
+          ref={input}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="user"
+          className="sr-only"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            // The API also accepts PDFs here; a portrait must be an image.
+            if (!PHOTO_TYPES.includes(f.type) || f.size > PHOTO_MAX_BYTES) toast.error(t("photoInvalid"));
+            else setPendingFile(f);
+          }}
+        />
+      </div>
+
+      <PhotoCropModal
+        open={!!pendingFile}
+        file={pendingFile}
+        onClose={() => setPendingFile(null)}
+        onCrop={(croppedFile) => {
+          setPendingFile(null);
+          upload.mutate(croppedFile);
         }}
       />
-    </div>
+
+      {viewOpen && photoUrl && (
+        <PhotoViewer src={photoUrl} name={name} onClose={() => setViewOpen(false)} />
+      )}
+    </>
   );
 }
 
@@ -254,7 +292,7 @@ export default function ProfilePage() {
               </Card>
             )}
             <ProfileForm key={p.updatedAt} me={me.data} profile={p} />
-            <ServiceAreasCard />
+            {p.serviceArea?.cities?.includes("Lahore") && <ServiceAreasCard />}
           </div>
 
           <div className="space-y-5">
@@ -283,6 +321,7 @@ export default function ProfilePage() {
                 </div>
               </CardBody>
             </Card>
+            <NotificationPrefsCard api={{ prefs: notificationsApi.prefs, setPref: notificationsApi.setPref }} />
           </div>
         </div>
       )}

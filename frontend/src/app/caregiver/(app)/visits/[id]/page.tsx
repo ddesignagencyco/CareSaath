@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { FileViewer } from "@shared/ui/file-viewer";
 import { LocationMap } from "@shared/ui/location-map";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { formatBytes } from "@shared/lib/format";
 import type { PrescriptionDocument } from "@shared/caregiver-types";
 import { useFmt } from "@shared/i18n/use-fmt";
@@ -23,7 +24,7 @@ import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { useVisitLocationStream } from "@/features/caregiver/lib/use-live-location";
-import { ACTIVE_STATUSES, mapsUrl, VISIT_TONE } from "@shared/lib/visit";
+import { ACTIVE_STATUSES, mapsUrl, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@shared/lib/visit";
 
 /**
  * The API decrypts medical context for the assigned caregiver, but when it
@@ -71,6 +72,7 @@ export default function VisitDetailPage() {
 
   const v = visit.data;
   const active = v && ACTIVE_STATUSES.includes(v.status);
+  const canSos = v && SOS_ELIGIBLE_STATUSES.includes(v.status);
   const booking = v?.booking;
   const patient = booking?.patient;
   const address = booking?.address;
@@ -115,22 +117,21 @@ export default function VisitDetailPage() {
                 </span>
               )}
             </div>
-            <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
-              {L.visitCaregiver(v.status)}
-            </Badge>
-          </header>
-
-          {active && (
-            // Full-width on mobile for fast emergency access; compact and right-aligned on larger screens.
-            <div className="flex sm:justify-end">
-              <button
-                onClick={() => setDialog("sos")}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-danger-600 bg-danger-50 px-6 py-3 text-sm font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white sm:w-auto"
-              >
-                <Siren className="size-5" /> {ts("sos.button")}
-              </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+              <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
+                {L.visitCaregiver(v.status)}
+              </Badge>
+              {canSos && (
+                <button
+                  type="button"
+                  onClick={() => setDialog("sos")}
+                  className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3.5 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
+                >
+                  <Siren className="size-4" /> {ts("sos.button")}
+                </button>
+              )}
             </div>
-          )}
+          </header>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
             <div className="space-y-5">
@@ -220,7 +221,7 @@ export default function VisitDetailPage() {
                   <CardHeader title={t("family")} />
                   <CardBody>
                     <div className="flex items-center gap-3">
-                      <Avatar name={customer.fullName || t("family")} />
+                      <UserAvatar userId={customer.id} name={customer.fullName || t("family")} />
                       <div>
                         <p className="font-bold text-ink-900">{customer.fullName || t("bookedByUnnamed")}</p>
                         <p className="text-xs text-ink-500">

@@ -13,7 +13,8 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { Input } from "@shared/ui/field";
-import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
+import { ErrorState, Skeleton } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Drawer } from "@shared/ui/overlay";
 import { customersApi } from "@/features/admin/lib/api/admin";
 import { useAction } from "@/features/admin/lib/api/hooks";
@@ -85,7 +86,9 @@ function CustomerDrawer({ customer, onClose }: { customer: AdminCustomer; onClos
         <p className="mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">
           {detail.data ? t("bookingsCount", { count: detail.data.bookingsTotal }) : t("recentBookings")}
         </p>
-        {!detail.data ? (
+        {detail.isError ? (
+          <ErrorState error={detail.error} onRetry={() => detail.refetch()} />
+        ) : !detail.data ? (
           <div className="space-y-2">
             <Skeleton className="h-12 rounded-lg" />
             <Skeleton className="h-12 rounded-lg" />
@@ -147,7 +150,7 @@ export default function CustomersPage() {
       accessorFn: (c) => c.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.fullName} size="sm" />
+          <UserAvatar userId={row.original.id} name={row.original.fullName} size="sm" />
           <p className="truncate font-semibold text-ink-900">{row.original.fullName}</p>
         </div>
       ),

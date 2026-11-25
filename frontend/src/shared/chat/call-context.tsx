@@ -15,18 +15,18 @@ const ICE_FALLBACK: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.googl
 /** Ceiling on waiting for the server's `call:outgoing` ack before giving up on an invite (40s). */
 const RING_TIMEOUT_MS = 40_000;
 /** Server ring window, used until `call:outgoing` reports the real one. */
-const DEFAULT_RING_SECONDS = 30;
+const DEFAULT_RING_SECONDS = 60;
 /** Extra client-side wait past the server ring window before tearing down without a terminal event. */
 const RING_GRACE_MS = 5_000;
-/** Callee-side ceiling on showing an incoming call that never got a terminal event (45s). */
-const INCOMING_TIMEOUT_MS = 45_000;
+/** Callee-side ceiling on showing an incoming call that never got a terminal event (65s). */
+const INCOMING_TIMEOUT_MS = 65_000;
 /** Caller's "tooooo" while the other side rings, and the callee's ringtone. Both loop cleanly. */
 const RINGBACK_SRC = "/sounds/ringback.wav";
 const RINGTONE_SRC = "/sounds/ringtone.wav";
 /** Grace period for temporary network/signal blips before concluding the call dropped (8s). */
 const RECONNECT_GRACE_MS = 8_000;
 
-function createSilentAudioStream(): MediaStream {
+function createSilentAudioStream(): { stream: MediaStream; cleanup: () => void } {
   try {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioCtx) {
@@ -39,12 +39,23 @@ function createSilentAudioStream(): MediaStream {
       if (track) {
         track.enabled = false;
       }
-      return dst.stream;
+      return {
+        stream: dst.stream,
+        cleanup: () => {
+          try {
+            oscillator.stop();
+            oscillator.disconnect();
+          } catch {
+            /* already stopped */
+          }
+          void ctx.close().catch(() => undefined);
+        },
+      };
     }
   } catch {
     /* fallback to empty stream */
   }
-  return new MediaStream();
+  return { stream: new MediaStream(), cleanup: () => undefined };
 }
 
 /** Close the service worker's "Incoming call" notification for `callId` (tagged `call-<id>`), if any. */
@@ -63,6 +74,9 @@ export interface ActiveCall {
   /** Caller side: the server confirmed the callee has the app open and their device is ringing. */
   ringing?: boolean;
   peerName: string;
+  /** Real user id + API photo URL, so the call UI can show the actual portrait. */
+  peerUserId?: string | null;
+  peerPhotoUrl?: string | null;
   video: boolean;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -71,7 +85,7 @@ export interface ActiveCall {
 export interface CallApi {
   active: ActiveCall | null;
   /** Caller side: needs the callee's **user id** and a shared active visit. */
-  startCall: (opts: { visitId: string; calleeId?: string; peerName: string; video: boolean }) => void;
+  startCall: (opts: { visitId: string; calleeId?: string; peerName: string; peerPhotoUrl?: string | null; video: boolean }) => void;
   accept: () => void;
   reject: () => void;
   end: () => void;
@@ -95,8 +109,11 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localRef = useRef<MediaStream | null>(null);
+  const silentCleanupRef = useRef<(() => void) | null>(null);
   const callIdRef = useRef<string | null>(null);
+  const callGenRef = useRef(0);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
+  const pendingRemoteCandidates = useRef<RTCIceCandidateInit[]>([]);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const ringTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Looping ringback (caller) / ringtone (callee); null when silent.
@@ -155,6 +172,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   );
 
   const teardown = useCallback(() => {
+    callGenRef.current += 1;
     clearTimers();
     stopTone();
     pcRef.current?.getSenders().forEach((s) => s.track?.stop());
@@ -162,9 +180,12 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     pcRef.current = null;
     localRef.current?.getTracks().forEach((t) => t.stop());
     localRef.current = null;
+    silentCleanupRef.current?.();
+    silentCleanupRef.current = null;
     callIdRef.current = null;
     pendingOffer.current = null;
     pendingCandidates.current = [];
+    pendingRemoteCandidates.current = [];
     calleeOnlineRef.current = true;
     setActive(null);
   }, [clearTimers, stopTone]);
@@ -331,7 +352,9 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       // When testing on a PC/laptop without a mic or when device is not found,
       // create a silent dummy audio stream so WebRTC connects smoothly for testing.
       if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
-        const fallbackStream = createSilentAudioStream();
+        const { stream: fallbackStream, cleanup } = createSilentAudioStream();
+        silentCleanupRef.current?.();
+        silentCleanupRef.current = cleanup;
         localRef.current = fallbackStream;
         return fallbackStream;
       }
@@ -370,7 +393,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       armRingTimer(ringSeconds * 1000 + RING_GRACE_MS, ringTimedOut);
     });
 
-    socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; callerName?: string; sdp: RTCSessionDescriptionInit }) => {
+    socket.on("call:incoming", (p: { callId: string; visitId: string; callerId: string; callerName?: string; callerPhotoUrl?: string | null; sdp: RTCSessionDescriptionInit }) => {
       // Already showing this call (e.g. call:sync after a reconnect while it rings): nothing to do.
       if (p.callId === callIdRef.current) return;
       // Ignore a second incoming call while one is active (callIdRef is always current).
@@ -381,7 +404,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       const video = p.sdp?.sdp?.includes("m=video") ?? false;
       pendingOffer.current = { callId: p.callId, sdp: p.sdp, video };
       callIdRef.current = p.callId;
-      setActive({ status: "incoming", callId: p.callId, peerName: p.callerName || "", video, localStream: null, remoteStream: null });
+      setActive({ status: "incoming", callId: p.callId, peerName: p.callerName || "", peerUserId: p.callerId, peerPhotoUrl: p.callerPhotoUrl, video, localStream: null, remoteStream: null });
       // Safety net if call:missed/ended never reaches this tab (e.g. answered on another device).
       armRingTimer(INCOMING_TIMEOUT_MS, () => {
         if (activeRef.current?.status === "incoming") teardownRef.current();
@@ -397,6 +420,12 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
         callIdRef.current = p.callId;
         flushCandidatesRef.current(p.callId);
         await pcRef.current?.setRemoteDescription(new RTCSessionDescription(p.sdp));
+        if (pcRef.current && pendingRemoteCandidates.current.length > 0) {
+          const queued = pendingRemoteCandidates.current.splice(0);
+          for (const c of queued) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+          }
+        }
         setActive((a) => (a ? { ...a, callId: p.callId, status: "connected" } : a));
       } catch {
         teardownRef.current();
@@ -405,7 +434,11 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
 
     socket.on("call:ice-candidate", async (p: { callId: string; candidate: RTCIceCandidateInit }) => {
       try {
-        await pcRef.current?.addIceCandidate(new RTCIceCandidate(p.candidate));
+        if (!pcRef.current || !pcRef.current.remoteDescription) {
+          pendingRemoteCandidates.current.push(p.candidate);
+          return;
+        }
+        await pcRef.current.addIceCandidate(new RTCIceCandidate(p.candidate));
       } catch {
         // candidate can arrive before remote description; safely handled
       }
@@ -452,36 +485,78 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
       teardownRef.current();
     });
 
+    let disposed = false;
+    let authErrorRetried = false;
+
+    socket.on("auth.error", async () => {
+      if (authErrorRetried) {
+        socket.close();
+        return;
+      }
+      authErrorRetried = true;
+      const refreshed = await http.refreshSession().catch(() => false);
+      if (disposed) return;
+      if (refreshed) {
+        socket.connect();
+      } else {
+        socket.close();
+      }
+    });
+
+    socket.on("auth.expired", async () => {
+      const refreshed = await http.refreshSession().catch(() => false);
+      if (disposed) return;
+      if (refreshed) {
+        socket.disconnect();
+        socket.connect();
+      } else {
+        socket.close();
+      }
+    });
+
     // On every (re)connect, ask for a call still ringing for this user, e.g. the site was just opened
     // from an "incoming call" push. All call:* listeners above are attached before this can fire.
     socket.on("connect", () => {
+      authErrorRetried = false;
       socket.emit("call:sync");
     });
 
     return () => {
+      disposed = true;
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
       teardownRef.current();
     };
-  }, [enabled, session, armRingTimer, ringTimedOut]);
+  }, [enabled, session, http, armRingTimer, ringTimedOut]);
 
   const startCall = useCallback(
-    async (opts: { visitId: string; calleeId?: string; peerName: string; video: boolean }) => {
+    async (opts: { visitId: string; calleeId?: string; peerName: string; peerPhotoUrl?: string | null; video: boolean }) => {
       if (active) return;
+      const gen = ++callGenRef.current;
       try {
         pendingCandidates.current = [];
-        setActive({ status: "outgoing", callId: null, peerName: opts.peerName, video: opts.video, localStream: null, remoteStream: null });
+        pendingRemoteCandidates.current = [];
+        setActive({ status: "outgoing", callId: null, peerName: opts.peerName, peerUserId: opts.calleeId, peerPhotoUrl: opts.peerPhotoUrl, video: opts.video, localStream: null, remoteStream: null });
 
         // Give up if the server never acknowledges the invite; call:outgoing re-arms this for the ring window.
         armRingTimer(RING_TIMEOUT_MS, ringTimedOut);
 
         const stream = await getMedia(opts.video);
+        if (gen !== callGenRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         const pc = newPeer();
         pcRef.current = pc;
         stream.getTracks().forEach((t) => pc.addTrack(t, stream));
         setActive((a) => (a ? { ...a, localStream: stream } : a));
         const offer = await pc.createOffer();
+        if (gen !== callGenRef.current) {
+          pc.close();
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         await pc.setLocalDescription(offer);
         socketRef.current?.emit("call:invite", {
           visitId: opts.visitId,
@@ -489,6 +564,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
           sdp: offer,
         });
       } catch (err) {
+        if (gen !== callGenRef.current) return;
         const error = err as { name?: string; message?: string };
         if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
           toastRef.current.error(tRef.current("micBlocked"));
@@ -504,6 +580,7 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
   const accept = useCallback(async () => {
     const offer = pendingOffer.current;
     if (!offer) return;
+    const gen = ++callGenRef.current;
     // Silence the ringtone and drop the incoming safety net while the mic prompt is up.
     stopTone();
     if (ringTimerRef.current) {
@@ -512,16 +589,32 @@ export function CallProvider({ session, enabled, children }: { session: SessionS
     }
     try {
       const stream = await getMedia(offer.video);
+      if (gen !== callGenRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       const pc = newPeer();
       pcRef.current = pc;
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       await pc.setRemoteDescription(new RTCSessionDescription(offer.sdp));
+      if (pendingRemoteCandidates.current.length > 0) {
+        const queued = pendingRemoteCandidates.current.splice(0);
+        for (const c of queued) {
+          await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => undefined);
+        }
+      }
       const answer = await pc.createAnswer();
+      if (gen !== callGenRef.current) {
+        pc.close();
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       await pc.setLocalDescription(answer);
       socketRef.current?.emit("call:answer", { callId: offer.callId, sdp: answer });
       setActive((a) => (a ? { ...a, status: "connected", localStream: stream } : a));
       pendingOffer.current = null;
     } catch {
+      if (gen !== callGenRef.current) return;
       if (offer.callId) socketRef.current?.emit("call:reject", { callId: offer.callId });
       teardownRef.current();
     }

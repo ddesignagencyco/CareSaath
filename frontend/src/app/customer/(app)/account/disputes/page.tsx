@@ -19,6 +19,7 @@ import { Select } from "@shared/ui/select";
 import type { DisputeRow } from "@shared/caregiver-types";
 import type { DisputeStatus } from "@shared/types";
 import { disputesApi } from "@/features/customer/lib/api/customer";
+import { keys } from "@/features/customer/lib/api/keys";
 
 const DISPUTE_STATUSES: DisputeStatus[] = ["OPEN", "RESOLVED"];
 const LIMIT = 15;
@@ -33,7 +34,7 @@ export default function DisputesPage() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const disputes = useQuery({
-    queryKey: ["customer", "disputes", status, q, page],
+    queryKey: [...keys.disputes, status, q, page],
     queryFn: () => disputesApi.listPaged({ page, limit: LIMIT, ...(status === "ALL" ? {} : { status }), ...(q.trim() ? { q: q.trim() } : {}) }),
   });
 

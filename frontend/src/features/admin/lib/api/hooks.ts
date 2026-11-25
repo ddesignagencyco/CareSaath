@@ -12,4 +12,8 @@ export const keys = {
   commissions: ["a-commissions"] as const,
   promos: ["a-promos"] as const,
   config: ["a-config"] as const,
+  users: ["a-users"] as const,
+  editorial: ["a-editorial"] as const,
+  bookings: ["a-bookings"] as const,
+  visits: ["a-visits"] as const,
 };

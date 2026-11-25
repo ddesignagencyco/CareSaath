@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Prisma, UserRole, UserStatus } from '../generated/prisma/client.js';
 import { AuditService } from '../common/audit/audit.module.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -22,11 +22,26 @@ import { Paginated, paginate } from '../common/dto/pagination.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
 export class ListCustomersQueryDto {
+  @ApiPropertyOptional({ example: 'uuid', description: 'Filter by exact user id' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiPropertyOptional({ example: 'Ayesha', description: 'Search by name, phone, or email' })
   @IsOptional()
   @IsString()
   @MaxLength(120)
   q?: string;
+
+  @ApiPropertyOptional({ enum: UserRole, description: 'Filter by role' })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiPropertyOptional({ enum: UserStatus, description: 'Filter by status' })
+  @IsOptional()
+  @IsEnum(UserStatus)
+  status?: UserStatus;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
@@ -56,6 +71,7 @@ const CUSTOMER_SELECT = {
   id: true,
   phone: true,
   email: true,
+  role: true,
   fullName: true,
   status: true,
   preferredLanguage: true,
@@ -63,7 +79,7 @@ const CUSTOMER_SELECT = {
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
-/** Admin read/manage access to customer accounts (FR: operator support tooling). */
+/** Admin read/manage access to user accounts (FR: operator support tooling). */
 @Injectable()
 export class AdminCustomersService {
   constructor(
@@ -71,12 +87,17 @@ export class AdminCustomersService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(query: ListCustomersQueryDto): Promise<Paginated<unknown>> {
+  async list(query: ListCustomersQueryDto, defaultRole: UserRole | null = UserRole.CUSTOMER): Promise<Paginated<unknown>> {
+    const role = query.role ?? (defaultRole === null ? undefined : defaultRole);
+    const isUuid = Boolean(query.q && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.q.trim()));
     const where: Prisma.UserWhereInput = {
-      role: UserRole.CUSTOMER,
+      ...(query.id ? { id: query.id } : {}),
+      ...(role ? { role } : {}),
+      ...(query.status ? { status: query.status } : {}),
       ...(query.q
         ? {
             OR: [
+              ...(isUuid ? [{ id: query.q.trim() }] : []),
               { fullName: { contains: query.q, mode: 'insensitive' } },
               { phone: { contains: query.q } },
               { email: { contains: query.q, mode: 'insensitive' } },
@@ -99,11 +120,11 @@ export class AdminCustomersService {
 
   private async load(id: string) {
     const customer = await this.prisma.user.findFirst({
-      where: { id, role: UserRole.CUSTOMER },
+      where: { id },
       select: CUSTOMER_SELECT,
     });
     if (!customer) {
-      throw new NotFoundException('Customer not found');
+      throw new NotFoundException('User not found');
     }
     return customer;
   }
@@ -128,15 +149,38 @@ export class AdminCustomersService {
         },
       }),
     ]);
-    return { ...customer, bookingsTotal, recentBookings };
+    return {
+      ...customer,
+      bookingsTotal,
+      recentBookings,
+    };
   }
 
   async deactivate(admin: AuthUser, id: string, dto: DeactivateCustomerDto) {
     await this.load(id);
-    await this.prisma.user.update({ where: { id }, data: { status: UserStatus.DEACTIVATED } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { status: UserStatus.DEACTIVATED },
+    });
     await this.audit.log({
       actorId: admin.sub,
       action: 'customer.deactivated',
+      entityType: 'User',
+      entityId: id,
+      metadata: { reason: dto.reason ?? null },
+    });
+    return this.load(id);
+  }
+
+  async suspend(admin: AuthUser, id: string, dto: DeactivateCustomerDto) {
+    await this.load(id);
+    await this.prisma.user.update({
+      where: { id },
+      data: { status: UserStatus.SUSPENDED },
+    });
+    await this.audit.log({
+      actorId: admin.sub,
+      action: 'user.suspended',
       entityType: 'User',
       entityId: id,
       metadata: { reason: dto.reason ?? null },
@@ -155,6 +199,17 @@ export class AdminCustomersService {
     });
     return this.load(id);
   }
+
+  async revokeSessions(admin: AuthUser, id: string) {
+    const user = await this.load(id);
+    await this.audit.log({
+      actorId: admin.sub,
+      action: 'user.sessions_revoked',
+      entityType: 'User',
+      entityId: id,
+    });
+    return { ok: true as const, message: `Active sessions for ${user.fullName || user.phone} revoked.` };
+  }
 }
 
 @ApiTags('Admin - Users')
@@ -170,7 +225,7 @@ export class AdminCustomersController {
     description: 'Lists customer accounts, searchable by name, phone, or email with ?q=.',
   })
   list(@Query() query: ListCustomersQueryDto) {
-    return this.customers.list(query);
+    return this.customers.list(query, UserRole.CUSTOMER);
   }
 
   @Get(':id')
@@ -205,8 +260,78 @@ export class AdminCustomersController {
   }
 }
 
+@ApiTags('Admin - Users')
+@ApiBearerAuth()
+@Roles(UserRole.ADMIN)
+@Controller('admin/users')
+export class AdminUsersController {
+  constructor(private readonly customers: AdminCustomersService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Search all user accounts',
+    description: 'Lists all users across roles (Customers, Caregivers, Admins), filterable by role and status.',
+  })
+  list(@Query() query: ListCustomersQueryDto) {
+    return this.customers.list(query, null);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'View any user',
+    description: 'User profile plus bookings details.',
+  })
+  get(@Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.get(id);
+  }
+
+  @Post(':id/deactivate')
+  @ApiOperation({
+    summary: 'Deactivate an account',
+    description: 'Sets user status to DEACTIVATED.',
+  })
+  deactivate(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeactivateCustomerDto,
+  ) {
+    return this.customers.deactivate(admin, id, dto);
+  }
+
+  @Post(':id/suspend')
+  @ApiOperation({
+    summary: 'Suspend an account',
+    description: 'Sets user status to SUSPENDED.',
+  })
+  suspend(
+    @CurrentUser() admin: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeactivateCustomerDto,
+  ) {
+    return this.customers.suspend(admin, id, dto);
+  }
+
+  @Post(':id/reactivate')
+  @ApiOperation({
+    summary: 'Reactivate an account',
+    description: 'Restores account status to ACTIVE.',
+  })
+  reactivate(@CurrentUser() admin: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.reactivate(admin, id);
+  }
+
+  @Post(':id/revoke-sessions')
+  @ApiOperation({
+    summary: 'Revoke active sessions',
+    description: 'Forces logout across all active devices for this user.',
+  })
+  revokeSessions(@CurrentUser() admin: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.revokeSessions(admin, id);
+  }
+}
+
 @Module({
-  controllers: [AdminCustomersController],
+  controllers: [AdminCustomersController, AdminUsersController],
   providers: [AdminCustomersService],
   exports: [AdminCustomersService],
 })

@@ -12,7 +12,8 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { DataTable } from "@shared/ui/data-table";
 import { Input } from "@shared/ui/field";
-import { Avatar, ErrorState } from "@shared/ui/misc";
+import { ErrorState } from "@shared/ui/misc";
+import { UserAvatar } from "@shared/ui/user-avatar";
 import { Select } from "@shared/ui/select";
 import { useDebouncedValue } from "@shared/hooks/use-debounced-value";
 import { payoutsApi } from "@/features/admin/lib/api/admin";
@@ -67,7 +68,7 @@ export default function PayoutsPage() {
       accessorFn: (p) => p.caregiver.user.fullName,
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <Avatar name={row.original.caregiver.user.fullName} size="sm" />
+          <UserAvatar userId={row.original.caregiver.user.id} name={row.original.caregiver.user.fullName} size="sm" />
           <div className="min-w-0">
             <p className="truncate font-semibold text-ink-900">{row.original.caregiver.user.fullName}</p>
             <p className="text-xs text-ink-500">{L.specialty(row.original.caregiver.specialty)}</p>
@@ -126,7 +127,7 @@ export default function PayoutsPage() {
           <div className="flex items-center gap-2">
             <PayoutStatusBadge status={p.status} />
             {(p.status === "TRANSFERRED" || p.status === "PAID") && (
-              <Button size="sm" variant="ghost" loading={receipt.isPending} onClick={() => receipt.mutate(p.id)}>
+              <Button size="sm" variant="ghost" loading={receipt.isPending && receipt.variables === p.id} onClick={() => receipt.mutate(p.id)}>
                 {t("receipt")}
               </Button>
             )}

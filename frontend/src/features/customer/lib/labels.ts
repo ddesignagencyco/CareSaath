@@ -6,27 +6,32 @@ import { formatMoney } from "@shared/lib/format";
 import type { AppNotification, CaregiverBookingStatus } from "@shared/caregiver-types";
 import type { IncidentStatus, VisitStatus } from "@shared/types";
 
+// Same palette as the Flutter app: green done, teal in progress, muted pending,
+// red ended badly. EN_ROUTE keeps the travel accent.
 export const VISIT_TONE: Record<VisitStatus, Tone> = {
-  REQUESTED: "accent",
-  CONFIRMED: "brand",
-  EN_ROUTE: "brand",
+  REQUESTED: "neutral",
+  CONFIRMED: "neutral",
+  EN_ROUTE: "accent",
   CHECKED_IN: "brand",
   IN_PROGRESS: "brand",
-  CHECKED_OUT: "brand",
+  CHECKED_OUT: "success",
   COMPLETED: "success",
-  DECLINED: "neutral",
-  CANCELLED: "neutral",
+  DECLINED: "danger",
+  CANCELLED: "danger",
 };
 
 export const BOOKING_TONE: Record<CaregiverBookingStatus, Tone> = {
-  REQUESTED: "accent",
-  CONFIRMED: "success",
-  DECLINED: "neutral",
-  CANCELLED: "neutral",
+  REQUESTED: "neutral",
+  CONFIRMED: "neutral",
+  DECLINED: "danger",
+  CANCELLED: "danger",
   COMPLETED: "success",
 };
 
 export const ACTIVE_VISIT: VisitStatus[] = ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS", "CHECKED_OUT"];
+
+export { SOS_ELIGIBLE_STATUSES } from "@shared/lib/visit";
+
 
 /**
  * The backend now sets a booking to COMPLETED when its last open visit completes,
