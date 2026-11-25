@@ -1,7 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { NotificationChannel, UserRole } from '../generated/prisma/client.js';
 import { EmailService } from '../email/email.service.js';
-import { WhatsAppService } from '../whatsapp/whatsapp.service.js';
 import { renderNotificationEmail, WEB_URL } from '../email/templates.js';
 import { eventDefinition } from './events.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
@@ -51,24 +50,15 @@ export class WhatsAppChannelAdapter implements NotificationChannelAdapter {
   readonly channel = NotificationChannel.WHATSAPP;
   private readonly logger = new Logger(WhatsAppChannelAdapter.name);
 
-  constructor(@Optional() private readonly whatsapp?: WhatsAppService) {}
-
   enabled(): boolean {
-    if (this.whatsapp) {
-      return this.whatsapp.isConfigured;
-    }
-    return process.env['WHATSAPP_ENABLED'] === 'true';
+    return false;
   }
 
   async send(delivery: ChannelDelivery): Promise<void> {
     if (!delivery.phone) {
       return;
     }
-    if (this.whatsapp?.isConfigured) {
-      await this.whatsapp.sendTextMessage(delivery.phone, delivery.message ?? delivery.event);
-    } else {
-      this.logger.log(`[DEV-WHATSAPP] ${delivery.phone}: ${delivery.message ?? delivery.event}`);
-    }
+    this.logger.log(`[DEV-WHATSAPP] ${delivery.phone}: ${delivery.message ?? delivery.event}`);
   }
 }
 
