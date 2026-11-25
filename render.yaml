@@ -62,8 +62,6 @@ services:
         generateValue: true
       - key: RETENTION_ENABLED
         value: true
-      - key: WHATSAPP_ENABLED
-        value: false
       # Browser origins allowed to call the API (comma-separated). Set this to the real
       # production web domain(s); localhost is auto-allowed only when NODE_ENV != production.
       - key: CORS_ORIGINS

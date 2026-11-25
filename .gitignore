@@ -8,3 +8,5 @@ dist/
 .DS_Store
 coverage/
 backend/src/generated/
+auth_info_baileys/
+backend/auth_info_baileys/

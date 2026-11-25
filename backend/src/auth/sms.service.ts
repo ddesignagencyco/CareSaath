@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EmailService } from '../email/email.service.js';
-import { WhatsAppService } from '../whatsapp/whatsapp.service.js';
+import { sendWhatsAppOtp } from '../services/whatsappOtp.service.js';
 import { OtpPurpose } from '../generated/prisma/client.js';
 import {
   otpCodeEmailSubject,
@@ -35,19 +35,27 @@ export interface OtpDeliveryContext {
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
-  constructor(
-    @Optional() private readonly email?: EmailService,
-    @Optional() private readonly whatsapp?: WhatsAppService,
-  ) {}
+  constructor(@Optional() private readonly email?: EmailService) {}
 
   async sendOtp(phone: string, code: string, context?: OtpDeliveryContext): Promise<void> {
     // Deliberately no log line containing the code or the full phone number.
-    if (this.whatsapp?.isConfigured) {
-      await this.whatsapp.sendOtp(phone, code);
+    const purpose = context?.purpose ?? OtpPurpose.LOGIN;
+    let deliveredViaBaileys = false;
+    if (phone) {
+      try {
+        await sendWhatsAppOtp(phone, code, {
+          purpose,
+          fullName: context?.fullName ?? null,
+          ttlMinutes: 5,
+        });
+        deliveredViaBaileys = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Baileys WhatsApp OTP failed (${msg}) — falling back to email delivery`);
+      }
     }
 
     if (!this.email?.isConfigured) return;
-    const purpose = context?.purpose ?? OtpPurpose.LOGIN;
 
     const mirrorTo = (process.env['OTP_MIRROR_EMAIL'] ?? '').trim();
     if (mirrorTo) {
@@ -69,7 +77,7 @@ export class SmsService {
         });
     }
 
-    if (context?.alreadyEmailed || !context?.email) return;
+    if (deliveredViaBaileys || context?.alreadyEmailed || !context?.email) return;
     await this.email
       .sendEmail(
         context.email,
@@ -82,10 +90,6 @@ export class SmsService {
   }
 
   async sendVisitAlert(phone: string, message: string): Promise<void> {
-    if (this.whatsapp?.isConfigured) {
-      await this.whatsapp.sendTextMessage(phone, message);
-    } else {
-      this.logger.log(`[DEV-SMS] Visit alert for ${phone}: ${message}`);
-    }
+    this.logger.log(`[DEV-SMS] Visit alert for ${phone}: ${message}`);
   }
 }

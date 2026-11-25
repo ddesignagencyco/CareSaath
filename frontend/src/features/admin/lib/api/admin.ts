@@ -317,3 +317,31 @@ export const editorialApi = {
   updateContactInfo: (dto: Partial<ContactInfo>) =>
     http.put<ContactInfo>(`/admin/editorial/contact-info`, dto),
 };
+
+export interface AdminWhatsAppStatus {
+  connected: boolean;
+  status: "connected" | "qr_ready" | "connecting" | "logged_out" | "disconnected";
+  qrDataUrl: string | null;
+  qrUpdatedAt: string | null;
+  user: { phone: string; name?: string } | null;
+  lastDisconnectReason: string | null;
+  linkedAt: string | null;
+  expiresAt: string | null;
+  daysRemaining: number | null;
+  expiringSoon: boolean;
+}
+
+/** Admin-only Baileys WhatsApp OTP session management. */
+export const whatsappAdminApi = {
+  /** GET /admin/whatsapp/status */
+  status: () => http.get<AdminWhatsAppStatus>("/admin/whatsapp/status"),
+  /** POST /admin/whatsapp/reconnect */
+  reconnect: () => http.post<{ ok: true; status: AdminWhatsAppStatus }>("/admin/whatsapp/reconnect", {}),
+  /** POST /admin/whatsapp/logout */
+  logout: () => http.post<{ ok: true }>("/admin/whatsapp/logout", {}),
+  /** POST /admin/whatsapp/pairing-code */
+  requestPairingCode: (phone: string) =>
+    http.post<{ ok: true; code: string }>("/admin/whatsapp/pairing-code", { phone }),
+  /** POST /admin/whatsapp/test */
+  sendTest: (phone: string) => http.post<{ ok: true; message: string }>("/admin/whatsapp/test", { phone }),
+};

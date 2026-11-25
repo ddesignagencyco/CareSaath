@@ -19,6 +19,7 @@ import { SmsService } from './sms.service.js';
 import { EmailService } from '../email/email.service.js';
 import { otpEmailSubject, renderOtpEmail } from '../email/templates.js';
 import { FirebaseService } from '../firebase/firebase.service.js';
+import { sendWhatsAppOtp } from '../services/whatsappOtp.service.js';
 
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_REQUEST_LIMIT = 3;
@@ -147,16 +148,35 @@ export class AuthService {
     await this.redis.client.set(key, this.hash(code), 'EX', ttlSeconds);
     // Reset failed attempts from any previous code so a fresh OTP gets a full 5 attempts.
     await this.redis.client.del(`${key}:attempts`);
-    await this.sms.sendOtp(phone, code, {
-      purpose: OtpPurpose.LOGIN,
-      email: existing?.email ?? null,
-      fullName: existing?.fullName ?? null,
-      role: existing?.role,
-      userId: existing?.id ?? null,
-      alreadyEmailed: !!existing?.email,
-    });
-    if (existing?.email) {
-      this.emailOtp(existing.email, code, ttlSeconds);
+
+    // Primary: zero-cost Baileys WhatsApp OTP. If it succeeds, skip duplicate email.
+    let sentViaWhatsApp = false;
+    if (phone) {
+      try {
+        await sendWhatsAppOtp(phone, code, {
+          purpose: OtpPurpose.LOGIN,
+          fullName: existing?.fullName ?? null,
+          ttlMinutes: Math.max(1, Math.round(ttlSeconds / 60)),
+        });
+        sentViaWhatsApp = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`WhatsApp OTP failed for ${phone} (${msg}) — falling back to email OTP`);
+      }
+    }
+
+    if (!sentViaWhatsApp) {
+      await this.sms.sendOtp(phone, code, {
+        purpose: OtpPurpose.LOGIN,
+        email: existing?.email ?? null,
+        fullName: existing?.fullName ?? null,
+        role: existing?.role,
+        userId: existing?.id ?? null,
+        alreadyEmailed: !!existing?.email,
+      });
+      if (existing?.email) {
+        this.emailOtp(existing.email, code, ttlSeconds);
+      }
     }
     return { ttlSeconds };
   }
@@ -280,15 +300,34 @@ export class AuthService {
       'EX',
       ttlSeconds,
     );
-    await this.sms.sendOtp(dto.phone, code, {
-      purpose: OtpPurpose.SIGNUP,
-      email: dto.email ?? null,
-      fullName: dto.fullName,
-      role: dto.role,
-      alreadyEmailed: !!dto.email,
-    });
-    if (dto.email) {
-      this.emailOtp(dto.email, code, ttlSeconds, OtpPurpose.SIGNUP);
+
+    // Primary: zero-cost Baileys WhatsApp OTP. If it succeeds, skip duplicate email.
+    let sentViaWhatsApp = false;
+    if (dto.phone) {
+      try {
+        await sendWhatsAppOtp(dto.phone, code, {
+          purpose: OtpPurpose.SIGNUP,
+          fullName: dto.fullName,
+          ttlMinutes: Math.max(1, Math.round(ttlSeconds / 60)),
+        });
+        sentViaWhatsApp = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`WhatsApp SIGNUP OTP failed for ${dto.phone} (${msg}) — falling back to email OTP`);
+      }
+    }
+
+    if (!sentViaWhatsApp) {
+      await this.sms.sendOtp(dto.phone, code, {
+        purpose: OtpPurpose.SIGNUP,
+        email: dto.email ?? null,
+        fullName: dto.fullName,
+        role: dto.role,
+        alreadyEmailed: !!dto.email,
+      });
+      if (dto.email) {
+        this.emailOtp(dto.email, code, ttlSeconds, OtpPurpose.SIGNUP);
+      }
     }
     return { ttlSeconds };
   }
