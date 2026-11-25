@@ -515,7 +515,7 @@ export async function logoutWhatsApp(): Promise<void> {
   lastDisconnectReason = null;
 
   if (prismaRef) {
-    await clearAllBaileysAuthData(prismaRef).catch(() => {});
+    await clearAllBaileysAuthData(prismaRef).catch(() => { });
   }
 
   reconnectTimer = setTimeout(() => {
