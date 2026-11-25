@@ -472,7 +472,7 @@ export async function reconnectWhatsApp(): Promise<WhatsAppAdminStatus> {
   sock = null;
   if (prevSock) {
     try {
-      prevSock.end(undefined);
+      await prevSock.end(undefined);
     } catch {
       // ignore close errors
     }
@@ -500,7 +500,7 @@ export async function logoutWhatsApp(): Promise<void> {
       await prevSock.logout();
     } catch {
       try {
-        prevSock.end(undefined);
+        await prevSock.end(undefined);
       } catch {
         // ignore
       }
