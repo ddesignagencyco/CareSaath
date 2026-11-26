@@ -563,6 +563,31 @@ export async function sendWhatsAppOtp(
 }
 
 /**
+ * Sends a general CareSaath notification message over the active Baileys WhatsApp socket.
+ * Throws if disconnected, invalid phone, or recipient is not on WhatsApp.
+ */
+export async function sendWhatsAppNotification(phone: string, text: string): Promise<void> {
+  if (!isConnected || !sock) {
+    throw new Error('WhatsApp socket not connected');
+  }
+
+  const cleanPhone = normalizePhoneForBaileys(phone);
+  if (cleanPhone.length < 10) {
+    throw new Error(`Invalid phone number for WhatsApp: ${phone}`);
+  }
+
+  const jid = `${cleanPhone}@s.whatsapp.net`;
+  const lookup = await sock.onWhatsApp(jid);
+  const result = lookup?.[0];
+  if (!result?.exists) {
+    throw new Error('Phone number is not registered on WhatsApp');
+  }
+
+  const targetJid = result.jid || jid;
+  await sock.sendMessage(targetJid, { text });
+}
+
+/**
  * Returns minimal connection status.
  */
 export function getWhatsAppStatus(): { connected: boolean } {

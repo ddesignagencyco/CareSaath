@@ -217,7 +217,7 @@ export class NotificationsService {
       }
       const recipient = await this.prisma.user.findUnique({
         where: { id: input.userId },
-        select: { role: true, email: true },
+        select: { role: true, email: true, phone: true },
       });
       if (!recipient) {
         return;
@@ -247,11 +247,12 @@ export class NotificationsService {
         if (disabledChannels.has(adapter.channel)) {
           continue;
         }
-        if (
-          (adapter.channel === NotificationChannel.SMS ||
-            adapter.channel === NotificationChannel.WHATSAPP) &&
-          !input.phone
-        ) {
+        const whatsappPhone =
+          input.phone ?? (recipient.role !== UserRole.ADMIN ? recipient.phone : null);
+        if (adapter.channel === NotificationChannel.SMS && !input.phone) {
+          continue;
+        }
+        if (adapter.channel === NotificationChannel.WHATSAPP && !whatsappPhone) {
           continue;
         }
         if (adapter.channel === NotificationChannel.EMAIL && (!recipient.email || definition.skipEmail)) {
@@ -271,7 +272,7 @@ export class NotificationsService {
         });
         try {
           await adapter.send({
-            phone: input.phone,
+            phone: adapter.channel === NotificationChannel.WHATSAPP ? whatsappPhone : input.phone,
             email: recipient.email,
             title,
             message: input.message,

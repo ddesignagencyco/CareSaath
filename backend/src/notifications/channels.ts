@@ -2,6 +2,10 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { NotificationChannel, UserRole } from '../generated/prisma/client.js';
 import { EmailService } from '../email/email.service.js';
 import { renderNotificationEmail, WEB_URL } from '../email/templates.js';
+import {
+  getWhatsAppStatus,
+  sendWhatsAppNotification,
+} from '../services/whatsappOtp.service.js';
 import { eventDefinition } from './events.js';
 import { PrismaService } from '../common/prisma/prisma.service.js';
 
@@ -51,14 +55,23 @@ export class WhatsAppChannelAdapter implements NotificationChannelAdapter {
   private readonly logger = new Logger(WhatsAppChannelAdapter.name);
 
   enabled(): boolean {
-    return false;
+    return getWhatsAppStatus().connected;
   }
 
   async send(delivery: ChannelDelivery): Promise<void> {
     if (!delivery.phone) {
       return;
     }
-    this.logger.log(`[DEV-WHATSAPP] ${delivery.phone}: ${delivery.message ?? delivery.event}`);
+    const heading = delivery.title ? `*${delivery.title}*` : '*CareSaath Update*';
+    const body = delivery.message?.trim();
+    const text = body ? `${heading}\n\n${body}` : heading;
+    try {
+      await sendWhatsAppNotification(delivery.phone, text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`WhatsApp notification (${delivery.event}) to ${delivery.phone} failed: ${msg}`);
+      throw err;
+    }
   }
 }
 
