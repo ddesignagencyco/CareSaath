@@ -56,9 +56,10 @@ export function LocationPickerMap({
         zoomControl: true,
       });
 
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 20,
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
       }).addTo(map);
 
       const pinIcon = L.divIcon({

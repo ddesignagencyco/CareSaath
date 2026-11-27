@@ -8,11 +8,11 @@ import { Modal } from "@shared/ui/overlay";
 
 export interface LiveRouteMapProps {
   /** Primary pin (typically the destination / patient home). */
-  lat: number;
-  lng: number;
+  lat: number | string;
+  lng: number | string;
   /** Optional second pin (e.g. caregiver live GPS) to draw an OSRM road route. */
-  originLat?: number | null;
-  originLng?: number | null;
+  originLat?: number | string | null;
+  originLng?: number | string | null;
   originLabel?: string;
   destLabel?: string;
   /** Tailwind height class for inline map (defaults to "h-56"). */
@@ -22,6 +22,12 @@ export interface LiveRouteMapProps {
   /** Title for the expanded fullscreen map modal. */
   modalTitle?: string;
   className?: string;
+}
+
+function toCoord(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function formatDistance(meters: number): string {
@@ -67,8 +73,8 @@ function LeafletRouteCanvas({
 }: {
   lat: number;
   lng: number;
-  originLat?: number | null;
-  originLng?: number | null;
+  originLat: number | null;
+  originLng: number | null;
   originLabel: string;
   destLabel: string;
   heightClass: string;
@@ -83,19 +89,21 @@ function LeafletRouteCanvas({
   const routeLayerRef = useRef<Leaflet.Polyline | null>(null);
   const lastRouteKeyRef = useRef<string>("");
   const fittedRef = useRef(false);
+  // Incremented once async `import("leaflet")` finishes so the sync effect runs immediately.
+  const [mapReady, setMapReady] = useState(0);
 
   const hasOrigin =
-    typeof originLat === "number" &&
-    typeof originLng === "number" &&
+    originLat !== null &&
+    originLng !== null &&
     Number.isFinite(originLat) &&
     Number.isFinite(originLng) &&
-    originLat !== 0 &&
-    originLng !== 0 &&
+    (originLat !== 0 || originLng !== 0) &&
     haversineMeters(originLat, originLng, lat, lng) > 25;
 
   // Mount Leaflet map once on the client.
   useEffect(() => {
     let cancelled = false;
+    let observer: ResizeObserver | null = null;
 
     async function init() {
       if (!containerRef.current || mapRef.current) return;
@@ -113,9 +121,23 @@ function LeafletRouteCanvas({
         attributionControl: false,
       });
 
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-      }).addTo(map);
+      // CARTO Voyager tiles are fast, CDN-backed, Retina-ready, and reliable on web hosts.
+      let fallbackAdded = false;
+      const primaryTiles = L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        {
+          subdomains: "abcd",
+          maxZoom: 20,
+        },
+      );
+      primaryTiles.on("tileerror", () => {
+        if (fallbackAdded || cancelled || !mapRef.current) return;
+        fallbackAdded = true;
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+        }).addTo(map);
+      });
+      primaryTiles.addTo(map);
 
       const destMarker = L.marker([lat, lng], {
         icon: makePinIcon(L, destLabel, "#d97706"),
@@ -124,16 +146,33 @@ function LeafletRouteCanvas({
       mapRef.current = map;
       destMarkerRef.current = destMarker;
       fittedRef.current = false;
+      lastRouteKeyRef.current = "";
+
+      if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+        observer = new ResizeObserver(() => {
+          if (!cancelled && mapRef.current) {
+            mapRef.current.invalidateSize();
+          }
+        });
+        observer.observe(containerRef.current);
+      }
 
       setTimeout(() => {
-        if (!cancelled) map.invalidateSize();
+        if (!cancelled && mapRef.current) mapRef.current.invalidateSize();
       }, 120);
+
+      // Trigger the coordinate/route sync effect now that the Leaflet map exists.
+      setMapReady((n) => n + 1);
     }
 
     init().catch(() => undefined);
 
     return () => {
       cancelled = true;
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -145,8 +184,9 @@ function LeafletRouteCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactive]);
 
-  // Sync markers, bounds, and OSRM driving route whenever coordinates change.
+  // Sync markers, bounds, and OSRM driving route whenever map is ready or coordinates change.
   useEffect(() => {
+    if (mapReady === 0) return;
     let cancelled = false;
     const controller = new AbortController();
 
@@ -160,7 +200,7 @@ function LeafletRouteCanvas({
       destMarker.setLatLng([lat, lng]);
       destMarker.setIcon(makePinIcon(L, destLabel, "#d97706"));
 
-      if (!hasOrigin || originLat == null || originLng == null) {
+      if (!hasOrigin || originLat === null || originLng === null) {
         if (originMarkerRef.current) {
           originMarkerRef.current.remove();
           originMarkerRef.current = null;
@@ -186,6 +226,17 @@ function LeafletRouteCanvas({
         originMarkerRef.current.setIcon(makePinIcon(L, originLabel, "#0f766e"));
       }
 
+      // Immediately fit both pins in view before OSRM finishes so the user sees both markers right away.
+      if (!fittedRef.current || recenterSignal > 0) {
+        const bounds = L.latLngBounds([
+          [originLat, originLng],
+          [lat, lng],
+        ]);
+        map.invalidateSize();
+        map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16, animate: fittedRef.current });
+        fittedRef.current = true;
+      }
+
       const routeKey = `${originLat.toFixed(4)},${originLng.toFixed(4)}->${lat.toFixed(4)},${lng.toFixed(4)}`;
       if (routeKey !== lastRouteKeyRef.current) {
         lastRouteKeyRef.current = routeKey;
@@ -196,6 +247,16 @@ function LeafletRouteCanvas({
         ];
         let roadMeters = straightDist;
         let dashed = true;
+
+        // Draw immediate dashed preview while OSRM road route loads.
+        if (routeLayerRef.current) routeLayerRef.current.remove();
+        routeLayerRef.current = L.polyline(pts, {
+          color: "#0f766e",
+          weight: 4,
+          opacity: 0.55,
+          dashArray: "8 6",
+        }).addTo(map);
+        onDistance?.(straightDist);
 
         try {
           const url = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${lng},${lat}?overview=full&geometries=geojson`;
@@ -218,7 +279,7 @@ function LeafletRouteCanvas({
             }
           }
         } catch {
-          // Graceful fallback to straight dashed line.
+          // Keep straight dashed line fallback.
         }
 
         if (cancelled || !mapRef.current) return;
@@ -230,18 +291,17 @@ function LeafletRouteCanvas({
         routeLayerRef.current = L.polyline(pts, {
           color: "#0f766e",
           weight: 4,
-          opacity: 0.9,
+          opacity: 0.92,
           dashArray: dashed ? "8 6" : undefined,
         }).addTo(map);
-      }
 
-      if (!fittedRef.current || recenterSignal > 0) {
-        const bounds = L.latLngBounds([
-          [originLat, originLng],
-          [lat, lng],
-        ]);
-        map.fitBounds(bounds, { padding: [46, 46], maxZoom: 16, animate: fittedRef.current });
-        fittedRef.current = true;
+        if (!dashed) {
+          map.fitBounds(routeLayerRef.current.getBounds(), {
+            padding: [48, 48],
+            maxZoom: 16,
+            animate: true,
+          });
+        }
       }
     }
 
@@ -251,13 +311,13 @@ function LeafletRouteCanvas({
       cancelled = true;
       controller.abort();
     };
-  }, [lat, lng, originLat, originLng, hasOrigin, originLabel, destLabel, recenterSignal, onDistance]);
+  }, [mapReady, lat, lng, originLat, originLng, hasOrigin, originLabel, destLabel, recenterSignal, onDistance]);
 
   return <div ref={containerRef} className={`w-full ${heightClass}`} />;
 }
 
 /**
- * Interactive Leaflet + OpenStreetMap route map with real OSRM driving road
+ * Interactive Leaflet + CARTO/OpenStreetMap route map with real OSRM driving road
  * routing, labeled pins, distance overlay, and a fullscreen zoomable modal.
  */
 export function LiveRouteMap({
@@ -276,7 +336,12 @@ export function LiveRouteMap({
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [recenterTick, setRecenterTick] = useState(0);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+  const dLat = toCoord(lat);
+  const dLng = toCoord(lng);
+  const oLat = toCoord(originLat);
+  const oLng = toCoord(originLng);
+
+  if (dLat === null || dLng === null || (dLat === 0 && dLng === 0)) {
     return null;
   }
 
@@ -284,10 +349,10 @@ export function LiveRouteMap({
     <>
       <div className={`relative z-0 overflow-hidden rounded-xl border border-ink-200 bg-ink-50 ${className ?? ""}`}>
         <LeafletRouteCanvas
-          lat={lat}
-          lng={lng}
-          originLat={originLat}
-          originLng={originLng}
+          lat={dLat}
+          lng={dLng}
+          originLat={oLat}
+          originLng={oLng}
           originLabel={originLabel}
           destLabel={destLabel}
           heightClass={heightClass}
@@ -321,10 +386,10 @@ export function LiveRouteMap({
           <div className="space-y-3">
             <div className="relative z-0 overflow-hidden rounded-xl border border-ink-200 bg-ink-50">
               <LeafletRouteCanvas
-                lat={lat}
-                lng={lng}
-                originLat={originLat}
-                originLng={originLng}
+                lat={dLat}
+                lng={dLng}
+                originLat={oLat}
+                originLng={oLng}
                 originLabel={originLabel}
                 destLabel={destLabel}
                 heightClass="h-[60vh] min-h-[340px]"
