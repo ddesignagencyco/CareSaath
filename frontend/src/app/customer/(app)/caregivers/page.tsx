@@ -28,6 +28,7 @@ export default function FindCarePage() {
   const raw = params.get("specialty");
   const specialty = (SPECIALTIES.includes(raw as Specialty) ? raw : "ALL") as Specialty | "ALL";
   const city = params.get("city");
+  const addressId = params.get("addressId");
   const page = Math.max(1, Number(params.get("page")) || 1);
 
   const setParams = (next: Record<string, string | null>) => {
@@ -39,11 +40,19 @@ export default function FindCarePage() {
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
 
-  // Narrow by the customer's saved address (sub-city coverage zones) when searching their
-  // own city or all cities; a different city picked in the dropdown drops the geo filter.
+  // Optional saved-address filter: default shows all caregivers in the city
+  // (so adding a new address never silently hides caregivers); picking a saved
+  // address narrows results to caregivers covering that exact location.
   const addresses = useQuery({ queryKey: keys.addresses, queryFn: addressesApi.list });
-  const addr = addresses.data?.[0];
-  const geo = addr && (!city || city === addr.city) ? { lat: Number(addr.latitude), lng: Number(addr.longitude) } : {};
+  const selectedAddr = addressId ? addresses.data?.find((a) => a.id === addressId) : undefined;
+  const geo =
+    selectedAddr && (!city || city === selectedAddr.city)
+      ? { lat: Number(selectedAddr.latitude), lng: Number(selectedAddr.longitude) }
+      : {};
+  const addressOptions = (addresses.data ?? []).map((a) => ({
+    value: a.id,
+    label: a.label ? `${a.label} — ${a.addressLine}` : a.addressLine,
+  }));
 
   const results = useQuery({
     queryKey: [...keys.caregivers, "search", specialty, city, geo.lat ?? "", geo.lng ?? "", page],
@@ -59,16 +68,31 @@ export default function FindCarePage() {
           onChange={(v) => setParams({ specialty: v === "ALL" ? null : v, page: null })}
           options={SPECIALTIES.map((s) => ({ value: s, label: s === "ALL" ? t("all") : L.specialty(s) }))}
         />
-        <div className="w-full md:w-56">
-          <Select
-            aria-label={t("city")}
-            placeholder={t("allCities")}
-            isClearable
-            isSearchable
-            value={city}
-            onChange={(v) => setParams({ city: v, page: null })}
-            options={CITY_OPTIONS}
-          />
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+          {addressOptions.length > 0 && (
+            <div className="w-full sm:w-64">
+              <Select
+                aria-label="Filter by saved address"
+                placeholder="All areas (no address filter)"
+                isClearable
+                isSearchable
+                value={addressId}
+                onChange={(v) => setParams({ addressId: v, page: null })}
+                options={addressOptions}
+              />
+            </div>
+          )}
+          <div className="w-full sm:w-48">
+            <Select
+              aria-label={t("city")}
+              placeholder={t("allCities")}
+              isClearable
+              isSearchable
+              value={city}
+              onChange={(v) => setParams({ city: v, page: null })}
+              options={CITY_OPTIONS}
+            />
+          </div>
         </div>
       </div>
 
