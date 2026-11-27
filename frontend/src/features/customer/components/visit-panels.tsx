@@ -16,6 +16,7 @@ import { formatMoney } from "@shared/lib/format";
 import { formatPkMobile } from "@shared/lib/phone";
 import { Button } from "@shared/ui/button";
 import { Field, Textarea } from "@shared/ui/field";
+import { LiveRouteMap } from "@shared/ui/live-route-map";
 import { Modal } from "@shared/ui/overlay";
 import { Select } from "@shared/ui/select";
 import { DisputeStatusBadge } from "@shared/status";
@@ -87,93 +88,141 @@ export function VisitTracker({ visit }: { visit: CustomerVisitDetail }) {
  * ["visit-location", id]). Between GPS fixes the ETA ticks down locally once a
  * minute via `effectiveEta` + `useNow`, re-anchoring on each fresh fix.
  */
-export function LiveLocationMap({ visitId, caregiverName }: { visitId: string; caregiverName?: string }) {
+export function LiveLocationMap({
+  visitId,
+  caregiverName,
+  destLat,
+  destLng,
+  directionsUrl,
+}: {
+  visitId: string;
+  caregiverName?: string;
+  destLat?: number;
+  destLng?: number;
+  directionsUrl?: string;
+}) {
   const t = useTranslations("customerB.liveTrack");
   const now = useNow(60_000);
   const loc = useQuery({
     queryKey: ["visit-location", visitId],
     queryFn: () => visitsApi.location(visitId),
     // Fallback poll in case a socket update is missed; the socket keeps it fresh in between.
-    refetchInterval: 20_000,
+    refetchInterval: 10_000,
   });
+  const hasDest =
+    typeof destLat === "number" &&
+    typeof destLng === "number" &&
+    Number.isFinite(destLat) &&
+    Number.isFinite(destLng) &&
+    destLat !== 0 &&
+    destLng !== 0;
+
   if (!loc.data) {
     return (
-      <p className="flex items-center gap-2 rounded-xl bg-ink-25 p-4 text-sm text-ink-500">
-        <Navigation className="size-4 shrink-0 text-ink-400" /> {t("waiting")}
-      </p>
+      <div className="space-y-3">
+        <p className="flex items-center gap-2 rounded-xl bg-ink-25 p-4 text-sm text-ink-500">
+          <Navigation className="size-4 shrink-0 text-ink-400" /> {t("waiting")}
+        </p>
+        {hasDest && (
+          <LiveRouteMap
+            lat={destLat}
+            lng={destLng}
+            destLabel="Home"
+            heightClass="h-56"
+            directionsUrl={directionsUrl}
+            modalTitle="Visit location"
+          />
+        )}
+      </div>
     );
   }
   const eta = effectiveEta(loc.data.etaMinutes, loc.data.at, now, loc.data.estimate);
   const arriving = eta <= 0;
   const { days, hours, mins } = splitEta(eta);
-  // The patient sees only the live ETA, not the caregiver's position — the map
-  // stays on the caregiver's own screen (they need it to navigate).
+  const shortName = caregiverName?.split(" ")[0] || "Doctor";
+
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 p-5 text-white">
-      <div aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-40 rounded-full bg-white/5 blur-2xl" />
-      <div className="relative flex items-center gap-4">
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-accent-400 ring-1 ring-white/15">
-          <Navigation className="size-6" strokeWidth={2} />
-        </span>
-        <div className="min-w-0 flex-1">
-          {arriving ? (
-            <p className="text-2xl font-extrabold leading-tight">{t("arrivingNow")}</p>
-          ) : (
-            <>
-              <p className="text-[11px] font-bold tracking-[0.14em] text-brand-100 uppercase">{t("arrivingIn")}</p>
-              <p className="flex flex-wrap items-baseline gap-1.5 leading-none">
-                {days > 0 ? (
-                  <>
-                    <span className="tabular text-4xl font-extrabold">{days}</span>
-                    <span className="text-lg font-bold text-brand-100">{t("dayUnit")}</span>
-                    {hours > 0 && (
-                      <>
-                        <span className="tabular text-4xl font-extrabold ms-1.5">{hours}</span>
-                        <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
-                      </>
-                    )}
-                  </>
-                ) : hours > 0 ? (
-                  <>
-                    <span className="tabular text-4xl font-extrabold">{hours}</span>
-                    <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
-                    {mins > 0 && (
-                      <>
-                        <span className="tabular text-4xl font-extrabold ms-1.5">{mins}</span>
-                        <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="tabular text-4xl font-extrabold">{mins}</span>
-                    <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
-                  </>
-                )}
-              </p>
-            </>
-          )}
-          <p dir="auto" className="mt-1 truncate text-sm text-brand-100">
-            {caregiverName ? t("onTheWayNamed", { name: caregiverName }) : t("onTheWay")}
-          </p>
+    <div className="space-y-3">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 p-5 text-white">
+        <div aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-40 rounded-full bg-white/5 blur-2xl" />
+        <div className="relative flex items-center gap-4">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-accent-400 ring-1 ring-white/15">
+            <Navigation className="size-6" strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            {arriving ? (
+              <p className="text-2xl font-extrabold leading-tight">{t("arrivingNow")}</p>
+            ) : (
+              <>
+                <p className="text-[11px] font-bold tracking-[0.14em] text-brand-100 uppercase">{t("arrivingIn")}</p>
+                <p className="flex flex-wrap items-baseline gap-1.5 leading-none">
+                  {days > 0 ? (
+                    <>
+                      <span className="tabular text-4xl font-extrabold">{days}</span>
+                      <span className="text-lg font-bold text-brand-100">{t("dayUnit")}</span>
+                      {hours > 0 && (
+                        <>
+                          <span className="tabular text-4xl font-extrabold ms-1.5">{hours}</span>
+                          <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
+                        </>
+                      )}
+                    </>
+                  ) : hours > 0 ? (
+                    <>
+                      <span className="tabular text-4xl font-extrabold">{hours}</span>
+                      <span className="text-lg font-bold text-brand-100">{t("hrUnit")}</span>
+                      {mins > 0 && (
+                        <>
+                          <span className="tabular text-4xl font-extrabold ms-1.5">{mins}</span>
+                          <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="tabular text-4xl font-extrabold">{mins}</span>
+                      <span className="text-lg font-bold text-brand-100">{t("minUnit")}</span>
+                    </>
+                  )}
+                </p>
+              </>
+            )}
+            <p dir="auto" className="mt-1 truncate text-sm text-brand-100">
+              {caregiverName ? t("onTheWayNamed", { name: caregiverName }) : t("onTheWay")}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 self-start rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-accent-300 uppercase">
+            {loc.data.estimate ? (
+              <>
+                <Navigation className="size-2.5" />
+                {t("estimated")}
+              </>
+            ) : (
+              <>
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
+                </span>
+                {t("live")}
+              </>
+            )}
+          </span>
         </div>
-        <span className="flex shrink-0 items-center gap-1.5 self-start rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold tracking-wide text-accent-300 uppercase">
-          {loc.data.estimate ? (
-            <>
-              <Navigation className="size-2.5" />
-              {t("estimated")}
-            </>
-          ) : (
-            <>
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent-400 opacity-70" />
-                <span className="relative inline-flex size-2 rounded-full bg-accent-400" />
-              </span>
-              {t("live")}
-            </>
-          )}
-        </span>
       </div>
+
+      {hasDest && (
+        <LiveRouteMap
+          lat={destLat}
+          lng={destLng}
+          originLat={loc.data.lat}
+          originLng={loc.data.lng}
+          originLabel={shortName}
+          destLabel="Home"
+          heightClass="h-60"
+          directionsUrl={directionsUrl}
+          modalTitle={`${caregiverName ?? "Caregiver"} — Live route`}
+        />
+      )}
     </div>
   );
 }
