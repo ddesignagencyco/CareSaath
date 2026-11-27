@@ -9,7 +9,7 @@ import { useLabels } from "@shared/i18n/use-labels";
 import { Button } from "@shared/ui/button";
 import { Field, Input, Textarea } from "@shared/ui/field";
 import { DatePicker } from "@shared/ui/date-picker";
-import { LocationMap } from "@shared/ui/location-map";
+import { LocationPickerMap } from "@shared/ui/location-picker-map";
 import { ErrorState, Skeleton } from "@shared/ui/misc";
 import { Modal } from "@shared/ui/overlay";
 import { Select } from "@shared/ui/select";
@@ -146,7 +146,7 @@ export function AddressForm({ address, onClose, onSaved }: { address: Address | 
   const tc = useTranslations("common.actions");
   const [label, setLabel] = useState(address?.label ?? "");
   const [line, setLine] = useState(address?.addressLine ?? "");
-  const [city, setCity] = useState<string | null>(address?.city ?? null);
+  const [city, setCity] = useState<string | null>(address?.city ?? "Lahore");
   const [coords, setCoords] = useState<{ lat: string; lng: string; precise: boolean } | null>(
     address ? { lat: address.latitude, lng: address.longitude, precise: true } : null,
   );
@@ -233,10 +233,22 @@ export function AddressForm({ address, onClose, onSaved }: { address: Address | 
           </div>
           {pin ? (
             <>
-              <LocationMap lat={pin.lat} lng={pin.lng} label={line || city || t("selectedLocation")} />
+              <LocationPickerMap
+                lat={Number(pin.lat)}
+                lng={Number(pin.lng)}
+                city={city}
+                onChange={({ lat, lng, placeName }) => {
+                  setCoords({ lat, lng, precise: true });
+                  if (placeName && !line.trim()) {
+                    setLine(placeName);
+                  }
+                }}
+              />
               <p className="flex items-center gap-1.5 text-xs text-ink-500">
                 <MapPin className="size-3.5" />
-                {pin.precise ? t("pinnedPrecise") : t("pinnedCentre", { city: city ?? "" })}
+                {pin.precise
+                  ? `${t("pinnedPrecise")} (${Number(pin.lat).toFixed(5)}, ${Number(pin.lng).toFixed(5)})`
+                  : t("pinnedCentre", { city: city ?? "" })}
               </p>
             </>
           ) : (
