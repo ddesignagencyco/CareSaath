@@ -666,9 +666,9 @@ export class VisitsService {
         case VisitStatus.IN_PROGRESS:
           return `${cgName} has started your ${service}.`;
         case VisitStatus.CHECKED_OUT:
-          return `${cgName} has finished your ${service}.`;
+          return `${cgName} has checked out of your ${service}. Visit notes are being finalized.`;
         case VisitStatus.COMPLETED:
-          return `Your ${service} with ${cgName} is complete. Please confirm payment and share your review.`;
+          return `Your ${service} with ${cgName} is complete. Visit notes are ready and you can now share your review.`;
         default:
           return `Your ${service} with ${cgName} is now ${to.replace(/_/g, ' ').toLowerCase()}.`;
       }
