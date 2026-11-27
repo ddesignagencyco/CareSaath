@@ -348,11 +348,12 @@ describe('VisitsService transitions', () => {
     configGetNumber = async (key) =>
       key === 'visit.earlyArrivalGraceMinutes' ? 15 : 600;
     const start = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const startPkt = new Date(start.getTime() + 5 * 60 * 60 * 1000);
     const timeWindowStart =
-      `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
+      `${String(startPkt.getUTCHours()).padStart(2, '0')}:${String(startPkt.getUTCMinutes()).padStart(2, '0')}`;
     const v = visitFixture({
       status: 'EN_ROUTE',
-      scheduledDate: start,
+      scheduledDate: new Date(`${startPkt.toISOString().slice(0, 10)}T00:00:00.000Z`),
       timeWindowStart,
       booking: {
         customerId: 'u-cust',
@@ -498,9 +499,10 @@ describe('VisitsService transitions', () => {
         caregivers as never,
       );
       const now = new Date();
-      // Scheduled start == this instant's own hour:minute, so "now" is always on time.
-      const timeWindowStart = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-      const fixture = makeLateCheckFixture(now, timeWindowStart);
+      // Scheduled start == this instant's own Pakistan hour:minute, so "now" is always on time.
+      const nowPkt = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+      const timeWindowStart = `${nowPkt.getUTCHours().toString().padStart(2, '0')}:${nowPkt.getUTCMinutes().toString().padStart(2, '0')}`;
+      const fixture = makeLateCheckFixture(new Date(`${nowPkt.toISOString().slice(0, 10)}T00:00:00.000Z`), timeWindowStart);
       prisma.visit.findFirst.mockResolvedValue(fixture);
       prisma.visit.findUnique.mockResolvedValue(fixture);
       prisma.visit.update.mockResolvedValue({ id: 'v-1', status: 'CHECKED_IN' });
