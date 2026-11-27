@@ -134,11 +134,12 @@ const OPEN_VISIT_STATUSES: VisitStatus[] = [
   VisitStatus.CHECKED_OUT,
 ];
 
-/** Combine a visit's scheduled date with its time-window start into one instant (UTC). */
+/** Combine a visit's scheduled date with its time-window start (Pakistan time, UTC+5) into one UTC instant. */
 export function scheduledStartAt(visit: { scheduledDate: Date; timeWindowStart: string }): Date {
   const [hours, minutes] = visit.timeWindowStart.split(':').map(Number);
-  const start = new Date(visit.scheduledDate);
-  start.setUTCHours(hours, minutes, 0, 0);
+  const ymd = visit.scheduledDate.toISOString().slice(0, 10);
+  const start = new Date(`${ymd}T00:00:00.000Z`);
+  start.setUTCHours(hours - 5, minutes, 0, 0);
   return start;
 }
 
