@@ -1,3 +1,11 @@
 @import "tailwindcss";
 /* Brand tokens and base styles for all three sections. */
 @import "../shared/styles/theme.css";
+
+/* Prevent Tailwind v4 img preflight from collapsing Leaflet map tiles. */
+.leaflet-container img.leaflet-tile,
+.leaflet-container img.leaflet-marker-icon,
+.leaflet-container img.leaflet-marker-shadow {
+  max-width: none !important;
+  max-height: none !important;
+}
