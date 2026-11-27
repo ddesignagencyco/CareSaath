@@ -1,15 +1,31 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, FileText, FileWarning, HeartPulse, ImageIcon, MapPin, MessagesSquare, Navigation, Repeat, Scale, Siren } from "lucide-react";
+import clsx from "clsx";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Clock,
+  FileText,
+  FileWarning,
+  HeartPulse,
+  ImageIcon,
+  MapPin,
+  MessagesSquare,
+  Navigation,
+  Repeat,
+  Scale,
+  Siren,
+  Stethoscope,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@shared/ui/badge";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { FileViewer } from "@shared/ui/file-viewer";
-import { LocationMap } from "@shared/ui/location-map";
+import { LiveRouteMap } from "@shared/ui/live-route-map";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
 import { UserAvatar } from "@shared/ui/user-avatar";
 import { formatBytes } from "@shared/lib/format";
@@ -24,7 +40,7 @@ import { useNow } from "@shared/hooks/use-now";
 import { bookingsApi, visitsApi } from "@/features/caregiver/lib/api/caregiver";
 import { keys } from "@/features/caregiver/lib/api/keys";
 import { useVisitLocationStream } from "@/features/caregiver/lib/use-live-location";
-import { ACTIVE_STATUSES, mapsUrl, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@shared/lib/visit";
+import { mapsUrl, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@shared/lib/visit";
 
 /**
  * The API decrypts medical context for the assigned caregiver, but when it
@@ -40,6 +56,8 @@ function readableMedical(text: string | null | undefined): string | null | "unre
 function fileKind(mimeType: string | null | undefined): string {
   return (mimeType?.split("/")[1] ?? "").toUpperCase();
 }
+
+type MobileTab = "visit" | "medical" | "details";
 
 export default function VisitDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,9 +76,38 @@ export default function VisitDetailPage() {
   // The caregiver's own bookings — used to list other visits with the same customer.
   const bookings = useQuery({ queryKey: [...keys.bookings, "list", "all"], queryFn: () => bookingsApi.list({ limit: 50 }) });
   // Stream GPS to the customer's live map while this visit is EN_ROUTE.
-  useVisitLocationStream(id, visit.data?.status === "EN_ROUTE");
+  const isEnRoute = visit.data?.status === "EN_ROUTE";
+  useVisitLocationStream(id, isEnRoute);
+
+  // Also keep local browser GPS so the caregiver sees the live You -> Patient road route.
+  const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) return;
+    let active = true;
+    const sample = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!active) return;
+          setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          // Permission denied or unavailable — map gracefully falls back to single patient pin.
+        },
+        { enableHighAccuracy: true, timeout: 10_000, maximumAge: 15_000 },
+      );
+    };
+    sample();
+    if (!isEnRoute) return () => { active = false; };
+    const timer = window.setInterval(sample, 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [isEnRoute]);
+
   const [rx, setRx] = useState<PrescriptionDocument | null>(null);
   const [dialog, setDialog] = useState<"sos" | "report" | "dispute" | null>(null);
+  const [tab, setTab] = useState<MobileTab>("visit");
 
   if (visit.isError) {
     return (
@@ -71,7 +118,6 @@ export default function VisitDetailPage() {
   }
 
   const v = visit.data;
-  const active = v && ACTIVE_STATUSES.includes(v.status);
   const canSos = v && SOS_ELIGIBLE_STATUSES.includes(v.status);
   const booking = v?.booking;
   const patient = booking?.patient;
@@ -81,6 +127,10 @@ export default function VisitDetailPage() {
   const history = v?.statusHistory ?? [];
   const medical = readableMedical(patient?.medicalContext);
   const patientName = patient?.name ?? t("patient");
+  const canMessage = Boolean(booking && v && !["DECLINED", "CANCELLED"].includes(v.status));
+  const destLat = address ? Number(address.latitude) : NaN;
+  const destLng = address ? Number(address.longitude) : NaN;
+  const hasValidDest = Number.isFinite(destLat) && Number.isFinite(destLng);
 
   // Other visits this caregiver has with the same customer (for the history card + returning badge).
   const otherVisits = v
@@ -100,122 +150,267 @@ export default function VisitDetailPage() {
 
       {!v ? (
         <div className="space-y-4">
-          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-36 rounded-2xl" />
           <Skeleton className="h-64 rounded-2xl" />
         </div>
       ) : (
         <>
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">{patientName}</h1>
-              <p className="mt-0.5 text-sm text-ink-500">
-                {f.longDay(v.scheduledDate)} · <span className="tabular">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</span>
-              </p>
-              {priorCompleted > 0 && (
-                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 ring-1 ring-brand-200">
-                  <Repeat className="size-3.5" /> {t("returning", { count: priorCompleted })}
-                </span>
-              )}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-              <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-sm">
-                {L.visitCaregiver(v.status)}
-              </Badge>
-              {canSos && (
-                <button
-                  type="button"
-                  onClick={() => setDialog("sos")}
-                  className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3.5 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
-                >
-                  <Siren className="size-4" /> {ts("sos.button")}
-                </button>
-              )}
-            </div>
-          </header>
+          {/* Unified Hero Card */}
+          <section className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3.5">
+                <Avatar name={patientName} size="lg" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-lg font-extrabold tracking-tight text-ink-900 sm:text-xl">{patientName}</h1>
+                    {priorCompleted > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 ring-1 ring-brand-200">
+                        <Repeat className="size-3" /> {t("returning", { count: priorCompleted })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-600">
+                    {booking && (
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-ink-800">
+                        <Stethoscope className="size-3.5 text-brand-600" />
+                        {L.specialty(booking.serviceType)}
+                      </span>
+                    )}
+                    {patient && <span className="text-ink-500">· {L.patientLine(patient, f.age(patient.dateOfBirth, now))}</span>}
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
-            <div className="space-y-5">
-              {(v.status === "DECLINED" || v.status === "CANCELLED") ? (
-                <Card className="p-5 text-sm text-ink-600">
-                  {booking?.cancelReason
-                    ? t("closedWithReason", { status: v.status, reason: booking.cancelReason })
-                    : t("closed", { status: v.status })}
-                </Card>
-              ) : v.status === "REQUESTED" ? (
-                <Card className="p-5 text-sm text-ink-600">
-                  {t("awaitingResponse")}{" "}
-                  <Link href="/caregiver/requests" className="font-semibold text-brand-700 hover:underline">
-                    {t("goToRequests")}
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)} className="text-xs sm:text-sm">
+                  {L.visitCaregiver(v.status)}
+                </Badge>
+                {canSos && (
+                  <button
+                    type="button"
+                    onClick={() => setDialog("sos")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
+                  >
+                    <Siren className="size-4" /> {ts("sos.button")}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-3.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-ink-600 sm:text-sm">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-ink-900">
+                  <Clock className="size-4 text-brand-600" />
+                  {f.longDay(v.scheduledDate)} · <span className="tabular">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</span>
+                </span>
+                {address && (
+                  <span className="inline-flex items-center gap-1.5 text-ink-500">
+                    <MapPin className="size-3.5 shrink-0 text-ink-400" />
+                    <span className="truncate max-w-[240px] sm:max-w-xs">{address.addressLine}, {address.city}</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {canMessage && booking && (
+                  <Link
+                    href={`/caregiver/messages/${booking.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-700 sm:text-sm"
+                  >
+                    <MessagesSquare className="size-4" /> {t("messageCustomer")}
                   </Link>
-                </Card>
-              ) : (
+                )}
+                {address && (
+                  <a
+                    href={mapsUrl(address)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700 transition-colors hover:bg-ink-50 sm:text-sm"
+                  >
+                    <Navigation className="size-4 text-brand-600" /> {t("directions")}
+                  </a>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Responsive Mobile Tab Bar */}
+          <div className="flex gap-1.5 rounded-xl bg-ink-100/80 p-1 lg:hidden" role="tablist">
+            {(
+              [
+                { id: "visit" as const, label: "Visit & Map" },
+                { id: "medical" as const, label: "Medical" },
+                { id: "details" as const, label: "Details" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                onClick={() => setTab(item.id)}
+                className={clsx(
+                  "flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all",
+                  tab === item.id ? "bg-white text-brand-700 shadow-xs" : "text-ink-600 hover:text-ink-900",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
+            {/* Primary Column */}
+            <div className="space-y-5">
+              <div className={clsx("space-y-5", tab !== "visit" && "hidden lg:block")}>
+                {(v.status === "DECLINED" || v.status === "CANCELLED") ? (
+                  <Card className="p-5 text-sm text-ink-600">
+                    {booking?.cancelReason
+                      ? t("closedWithReason", { status: v.status, reason: booking.cancelReason })
+                      : t("closed", { status: v.status })}
+                  </Card>
+                ) : v.status === "REQUESTED" ? (
+                  <Card className="p-5 text-sm text-ink-600">
+                    {t("awaitingResponse")}{" "}
+                    <Link href="/caregiver/requests" className="font-semibold text-brand-700 hover:underline">
+                      {t("goToRequests")}
+                    </Link>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardBody>
+                      <VisitFlow visit={v} />
+                    </CardBody>
+                  </Card>
+                )}
+
+                <CashPayment visit={v} />
+
+                {/* Mobile inline map in Visit tab so caregiver sees route immediately on phone */}
+                {address && hasValidDest && (
+                  <Card className="lg:hidden">
+                    <CardHeader title={t("address")} />
+                    <CardBody className="space-y-3">
+                      <LiveRouteMap
+                        lat={destLat}
+                        lng={destLng}
+                        originLat={myPos?.lat}
+                        originLng={myPos?.lng}
+                        originLabel="You"
+                        destLabel="Patient"
+                        heightClass="h-52"
+                        directionsUrl={mapsUrl(address)}
+                        modalTitle={address.addressLine}
+                      />
+                      <div className="flex items-start gap-3">
+                        <MapPin className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                        <div>
+                          {address.label && <p className="text-xs font-semibold text-ink-500">{address.label}</p>}
+                          <p dir="auto" className="text-sm font-semibold text-ink-900">{address.addressLine}</p>
+                          <p className="text-sm text-ink-500">{address.city}</p>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                )}
+              </div>
+
+              <div className={clsx("space-y-5", tab !== "medical" && "hidden lg:block")}>
+                {booking?.serviceType === "DOCTOR" && !["REQUESTED", "DECLINED", "CANCELLED"].includes(v.status) && <DoctorOrders visitId={v.id} />}
+
                 <Card>
-                  <CardBody>
-                    <VisitFlow visit={v} />
+                  <CardHeader title={t("patient")} />
+                  <CardBody className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={patientName} />
+                      <div>
+                        <p className="font-bold text-ink-900">{patientName}</p>
+                        {patient && <p className="text-sm text-ink-500">{L.patientLine(patient, f.age(patient.dateOfBirth, now))}</p>}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold tracking-wide text-brand-800 uppercase">
+                        <HeartPulse className="size-3.5" /> {t("medicalContext")}
+                      </p>
+                      {medical === "unreadable" ? (
+                        <p className="text-sm text-ink-500">{t("medicalUnavailable")}</p>
+                      ) : (
+                        <p dir="auto" className="text-sm leading-relaxed whitespace-pre-line text-ink-800">{medical || t("noMedical")}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">{t("prescriptions")}</p>
+                      {prescriptions.length === 0 ? (
+                        <p className="text-sm text-ink-500">{t("noPrescriptions")}</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {prescriptions.map((p) => {
+                            const Icon = p.mimeType?.startsWith("image/") ? ImageIcon : FileText;
+                            return (
+                              <li key={p.id}>
+                                <button
+                                  onClick={() => setRx(p)}
+                                  className="flex w-full items-center gap-3 rounded-xl border border-ink-100 p-3 text-start hover:border-brand-300 hover:bg-brand-50/40"
+                                >
+                                  <span className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                                    <Icon className="size-5" />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-sm font-semibold text-ink-900">{t("prescription")}</span>
+                                    <span className="block text-xs text-ink-500">
+                                      {fileKind(p.mimeType)} · {formatBytes(p.sizeBytes)} · {f.dateTime(p.createdAt)}
+                                    </span>
+                                  </span>
+                                  <span className="text-sm font-semibold text-brand-700">{tc("view")}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            </div>
+
+            {/* Sidebar Column */}
+            <div className={clsx("space-y-5", tab !== "details" && "hidden lg:block")}>
+              {address && hasValidDest && (
+                <Card className="hidden lg:block">
+                  <CardHeader title={t("address")} />
+                  <CardBody className="space-y-3">
+                    <LiveRouteMap
+                      lat={destLat}
+                      lng={destLng}
+                      originLat={myPos?.lat}
+                      originLng={myPos?.lng}
+                      originLabel="You"
+                      destLabel="Patient"
+                      heightClass="h-56"
+                      directionsUrl={mapsUrl(address)}
+                      modalTitle={address.addressLine}
+                    />
+                    <div className="flex items-start gap-3">
+                      <MapPin className="mt-0.5 size-5 shrink-0 text-ink-400" />
+                      <div>
+                        {address.label && <p className="text-xs font-semibold text-ink-500">{address.label}</p>}
+                        <p dir="auto" className="text-sm font-semibold text-ink-900">{address.addressLine}</p>
+                        <p className="text-sm text-ink-500">{address.city}</p>
+                      </div>
+                    </div>
+                    <a
+                      href={mapsUrl(address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50 transition-colors"
+                    >
+                      <Navigation className="size-4" /> {t("directions")}
+                    </a>
                   </CardBody>
                 </Card>
               )}
 
-              <CashPayment visit={v} />
-
-              {booking?.serviceType === "DOCTOR" && !["REQUESTED", "DECLINED", "CANCELLED"].includes(v.status) && <DoctorOrders visitId={v.id} />}
-
-              <Card>
-                <CardHeader title={t("patient")} />
-                <CardBody className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={patientName} />
-                    <div>
-                      <p className="font-bold text-ink-900">{patientName}</p>
-                      {patient && <p className="text-sm text-ink-500">{L.patientLine(patient, f.age(patient.dateOfBirth, now))}</p>}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4">
-                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold tracking-wide text-brand-800 uppercase">
-                      <HeartPulse className="size-3.5" /> {t("medicalContext")}
-                    </p>
-                    {medical === "unreadable" ? (
-                      <p className="text-sm text-ink-500">{t("medicalUnavailable")}</p>
-                    ) : (
-                      <p dir="auto" className="text-sm leading-relaxed whitespace-pre-line text-ink-800">{medical || t("noMedical")}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-bold tracking-wide text-ink-500 uppercase">{t("prescriptions")}</p>
-                    {prescriptions.length === 0 ? (
-                      <p className="text-sm text-ink-500">{t("noPrescriptions")}</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {prescriptions.map((p) => {
-                          const Icon = p.mimeType?.startsWith("image/") ? ImageIcon : FileText;
-                          return (
-                            <li key={p.id}>
-                              <button
-                                onClick={() => setRx(p)}
-                                className="flex w-full items-center gap-3 rounded-xl border border-ink-100 p-3 text-start hover:border-brand-300 hover:bg-brand-50/40"
-                              >
-                                <span className="flex size-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-                                  <Icon className="size-5" />
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block text-sm font-semibold text-ink-900">{t("prescription")}</span>
-                                  <span className="block text-xs text-ink-500">
-                                    {fileKind(p.mimeType)} · {formatBytes(p.sizeBytes)} · {f.dateTime(p.createdAt)}
-                                  </span>
-                                </span>
-                                <span className="text-sm font-semibold text-brand-700">{tc("view")}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                </CardBody>
-              </Card>
-            </div>
-
-            <div className="space-y-5">
               {customer && (
                 <Card>
                   <CardHeader title={t("family")} />
@@ -234,7 +429,7 @@ export default function VisitDetailPage() {
                         </p>
                       </div>
                     </div>
-                    {booking && !["DECLINED", "CANCELLED"].includes(v.status) && (
+                    {canMessage && booking && (
                       <Link
                         href={`/caregiver/messages/${booking.id}`}
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50 transition-colors"
@@ -242,31 +437,6 @@ export default function VisitDetailPage() {
                         <MessagesSquare className="size-4" /> {t("messageCustomer")}
                       </Link>
                     )}
-                  </CardBody>
-                </Card>
-              )}
-
-              {address && (
-                <Card>
-                  <CardHeader title={t("address")} />
-                  <CardBody className="space-y-3">
-                    <LocationMap lat={address.latitude} lng={address.longitude} label={address.addressLine} />
-                    <div className="flex items-start gap-3">
-                      <MapPin className="mt-0.5 size-5 shrink-0 text-ink-400" />
-                      <div>
-                        {address.label && <p className="text-xs font-semibold text-ink-500">{address.label}</p>}
-                        <p dir="auto" className="text-sm font-semibold text-ink-900">{address.addressLine}</p>
-                        <p className="text-sm text-ink-500">{address.city}</p>
-                      </div>
-                    </div>
-                    <a
-                      href={mapsUrl(address)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-ink-200 text-sm font-semibold text-ink-800 hover:bg-ink-50 transition-colors"
-                    >
-                      <Navigation className="size-4" /> {t("directions")}
-                    </a>
                   </CardBody>
                 </Card>
               )}

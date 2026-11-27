@@ -2,7 +2,23 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowLeft, Banknote, CalendarClock, ChevronRight, FileText, ImageIcon, MessagesSquare, Navigation, NotebookPen, Repeat, Siren, UploadCloud, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Banknote,
+  CalendarClock,
+  ChevronRight,
+  FileText,
+  ImageIcon,
+  MapPin,
+  MessagesSquare,
+  Navigation,
+  NotebookPen,
+  Radio,
+  Repeat,
+  Siren,
+  UploadCloud,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
@@ -19,7 +35,7 @@ import { Badge } from "@shared/ui/badge";
 import { Button } from "@shared/ui/button";
 import { Card, CardBody, CardHeader } from "@shared/ui/card";
 import { FileViewer } from "@shared/ui/file-viewer";
-import { LocationMap } from "@shared/ui/location-map";
+import { LiveRouteMap } from "@shared/ui/live-route-map";
 import { Avatar, ErrorState, Skeleton } from "@shared/ui/misc";
 import { RespondCountdown } from "@shared/ui/respond-countdown";
 import type { PrescriptionSummary, Visit } from "@shared/caregiver-types";
@@ -31,6 +47,7 @@ import { keys } from "@/features/customer/lib/api/keys";
 import { BOOKING_TONE, bookingDisplayStatus, hasCancellableVisits, SOS_ELIGIBLE_STATUSES, VISIT_TONE } from "@/features/customer/lib/labels";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
+type MobileTab = "visits" | "details";
 
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -56,6 +73,7 @@ export default function BookingDetailPage() {
   const [moving, setMoving] = useState<Visit | null>(null);
   const [viewing, setViewing] = useState<PrescriptionSummary | null>(null);
   const [sosVisit, setSosVisit] = useState<Visit | null>(null);
+  const [tab, setTab] = useState<MobileTab>("visits");
   const fileInput = useRef<HTMLInputElement>(null);
 
   const cancel = useAction((reason: string) => bookingsApi.cancel(id, reason || undefined), {
@@ -83,9 +101,13 @@ export default function BookingDetailPage() {
   const open = b && (b.status === "REQUESTED" || b.status === "CONFIRMED");
   const shownStatus = b ? bookingDisplayStatus(b) : null;
   const perVisit = b ? b.rateSnapshot - b.discountAmount : 0;
+  const activeLiveVisit = b?.visits.find((v) => ["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status));
   const liveSosVisit =
-    b?.visits.find((v) => ["IN_PROGRESS", "CHECKED_IN", "EN_ROUTE"].includes(v.status)) ??
+    activeLiveVisit ??
     b?.visits.find((v) => SOS_ELIGIBLE_STATUSES.includes(v.status));
+  const addrLat = b ? Number(b.address.latitude) : NaN;
+  const addrLng = b ? Number(b.address.longitude) : NaN;
+  const hasValidCoords = Number.isFinite(addrLat) && Number.isFinite(addrLng);
 
   return (
     <div className="space-y-5">
@@ -94,44 +116,122 @@ export default function BookingDetailPage() {
       </Link>
 
       {!b ? (
-        <Skeleton className="h-72 rounded-2xl" />
+        <div className="space-y-4">
+          <Skeleton className="h-36 rounded-2xl" />
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
       ) : (
         <>
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">
-                {t("heading", { service: L.specialty(b.serviceType), patient: b.patient.name })}
-              </h1>
-              <p className="text-sm text-ink-500">{t("requestedAt", { date: f.dateTime(b.createdAt) })}</p>
+          {/* Unified Hero Card */}
+          <section className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-ink-100">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3.5">
+                {c ? (
+                  <Link href={`/customer/caregivers/${c.id}`} className="shrink-0">
+                    <Avatar name={c.user.fullName} src={c.photoUrl} size="lg" />
+                  </Link>
+                ) : caregiver.isError ? (
+                  <Avatar name="?" size="lg" />
+                ) : (
+                  <Skeleton className="size-12 rounded-full" />
+                )}
+                <div className="min-w-0">
+                  <h1 className="text-lg font-extrabold tracking-tight text-ink-900 sm:text-xl">
+                    {t("heading", { service: L.specialty(b.serviceType), patient: b.patient.name })}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-500">
+                    {c && (
+                      <Link href={`/customer/caregivers/${c.id}`} className="font-semibold text-ink-800 hover:text-brand-700">
+                        {c.user.fullName}
+                      </Link>
+                    )}
+                    {c && <Rating average={c.ratingAverage} count={c.ratingCount} />}
+                    <span>· {t("requestedAt", { date: f.dateTime(b.createdAt) })}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {b.status !== "REQUESTED" && (
+                  <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-xs sm:text-sm">
+                    {L.bookingCustomer(shownStatus!)}
+                  </Badge>
+                )}
+                {liveSosVisit && (
+                  <button
+                    type="button"
+                    onClick={() => setSosVisit(liveSosVisit)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
+                  >
+                    <Siren className="size-4" /> {ts("sos.button")}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-              {/* While REQUESTED, the "Waiting for …" banner below already states the status, so skip the redundant pill. */}
-              {b.status !== "REQUESTED" && (
-                <Badge tone={BOOKING_TONE[shownStatus!]} dot className="text-sm">
-                  {L.bookingCustomer(shownStatus!)}
-                </Badge>
-              )}
-              {liveSosVisit && (
-                <button
-                  type="button"
-                  onClick={() => setSosVisit(liveSosVisit)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border-2 border-danger-600 bg-danger-50 px-3 py-1.5 text-xs font-extrabold tracking-wide text-danger-700 uppercase transition-colors hover:bg-danger-600 hover:text-white"
-                >
-                  <Siren className="size-4" /> {ts("sos.button")}
-                </button>
-              )}
-              {hasCancellableVisits(b) && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setCancelling(true)}
-                  className="border-danger-200 text-danger-700 hover:bg-danger-50 hover:text-danger-800"
-                >
-                  <XCircle className="size-4 text-danger-600" /> {t("cancelBooking")}
-                </Button>
-              )}
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-3.5">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs sm:text-sm">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-ink-50 px-3 py-1 font-bold text-ink-800 ring-1 ring-ink-200/80 tabular">
+                  {formatMoney(perVisit)} <span className="font-normal text-ink-500">/ visit</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-ink-600">
+                  <MapPin className="size-3.5 text-ink-400" />
+                  <span className="truncate max-w-[200px] sm:max-w-xs">{b.address.label ?? b.address.city}</span>
+                </span>
+                {b.priorVisitsWithCaregiver ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                    <Repeat className="size-3" /> {t("repeatVisits", { count: b.priorVisitsWithCaregiver })}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {c && (b.status === "CONFIRMED" || b.status === "COMPLETED") && (
+                  <Link
+                    href={`/customer/messages/${b.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-700 sm:text-sm"
+                  >
+                    <MessagesSquare className="size-4" /> {t("messageCaregiver")}
+                  </Link>
+                )}
+                {hasCancellableVisits(b) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCancelling(true)}
+                    className="border-danger-200 text-danger-700 hover:bg-danger-50 hover:text-danger-800"
+                  >
+                    <XCircle className="size-4 text-danger-600" /> {t("cancelBooking")}
+                  </Button>
+                )}
+              </div>
             </div>
-          </header>
+          </section>
+
+          {/* Live Visit Banner */}
+          {activeLiveVisit && (
+            <Link
+              href={`/customer/visits/${activeLiveVisit.id}`}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-brand-700 to-brand-600 p-4 text-white shadow-sm transition-opacity hover:opacity-95"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                  <Radio className="size-5 animate-pulse" />
+                </span>
+                <div>
+                  <p className="text-sm font-extrabold">
+                    {activeLiveVisit.status === "EN_ROUTE" ? "Caregiver is on the way" : "Visit is currently in progress"}
+                  </p>
+                  <p className="text-xs text-white/80">
+                    Open live visit screen for real-time map tracking, ETA & check-in updates
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-3.5 py-2 text-xs font-extrabold text-brand-800 sm:text-sm">
+                Track live <ChevronRight className="rtl:-scale-x-100 size-4" />
+              </span>
+            </Link>
+          )}
 
           {b.status === "REQUESTED" && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-accent-50 p-4 ring-1 ring-accent-400/30">
@@ -172,21 +272,52 @@ export default function BookingDetailPage() {
             ) : null;
           })()}
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
-            <div className="space-y-5">
+          {/* Responsive Mobile Tab Bar */}
+          <div className="flex gap-1.5 rounded-xl bg-ink-100/80 p-1 lg:hidden" role="tablist">
+            {(
+              [
+                { id: "visits" as const, label: `Visits (${b.visits.length})` },
+                { id: "details" as const, label: "Location & Price" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                onClick={() => setTab(item.id)}
+                className={clsx(
+                  "flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all",
+                  tab === item.id ? "bg-white text-brand-700 shadow-xs" : "text-ink-600 hover:text-ink-900",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.45fr_1fr]">
+            <div className={clsx("space-y-5", tab !== "visits" && "hidden lg:block")}>
               <Card>
-                <CardHeader title={t("visits")} description={b.recurrenceRule ? `${f.weekdays(b.recurrenceRule.weekdays)} · ${f.timeWindow(b.timeWindowStart, b.timeWindowEnd)}` : f.timeWindow(b.timeWindowStart, b.timeWindowEnd)} />
+                <CardHeader
+                  title={t("visits")}
+                  description={
+                    b.recurrenceRule
+                      ? `${f.weekdays(b.recurrenceRule.weekdays)} · ${f.timeWindow(b.timeWindowStart, b.timeWindowEnd)}`
+                      : f.timeWindow(b.timeWindowStart, b.timeWindowEnd)
+                  }
+                />
                 <ul className="mt-3 divide-y divide-ink-100 border-t border-ink-100">
                   {b.visits.map((v) => {
                     const canMove = open && (v.status === "REQUESTED" || v.status === "CONFIRMED") && now && visitStart(v.scheduledDate, v.timeWindowStart) > now;
                     return (
-                      <li key={v.id} className={clsx("flex items-center gap-3 px-5 py-3", (v.status === "CANCELLED" || v.status === "DECLINED") && "opacity-60")}>
+                      <li key={v.id} className={clsx("flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-ink-25", (v.status === "CANCELLED" || v.status === "DECLINED") && "opacity-60")}>
                         <Link href={`/customer/visits/${v.id}`} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
                           <div className="min-w-[8rem] shrink-0 sm:w-36">
                             <p className="text-sm font-bold text-ink-900">{f.relativeDay(v.scheduledDate, now)}</p>
                             <p className="tabular text-xs whitespace-nowrap text-ink-500">{f.timeWindow(v.timeWindowStart, v.timeWindowEnd)}</p>
                           </div>
-                          <Badge tone={VISIT_TONE[v.status]} dot>
+                          <Badge tone={VISIT_TONE[v.status]} dot pulse={["EN_ROUTE", "CHECKED_IN", "IN_PROGRESS"].includes(v.status)}>
                             {L.visitCustomer(v.status)}
                           </Badge>
                           {(() => {
@@ -271,47 +402,20 @@ export default function BookingDetailPage() {
               </Card>
             </div>
 
-            <div className="space-y-5">
-              <Card>
-                <CardHeader title={t("caregiver")} />
-                <CardBody>
-                  {c ? (
-                    <Link href={`/customer/caregivers/${c.id}`} className="flex items-center gap-3">
-                      <Avatar name={c.user.fullName} src={c.photoUrl} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-ink-900">{c.user.fullName}</p>
-                        <Rating average={c.ratingAverage} count={c.ratingCount} />
-                      </div>
-                      <ChevronRight className="rtl:-scale-x-100 size-4 text-ink-300" />
-                    </Link>
-                  ) : caregiver.isError ? (
-                    <div className="flex items-center gap-3">
-                      <Avatar name="?" />
-                      <p className="text-sm text-ink-500">{t("caregiverUnavailable")}</p>
-                    </div>
-                  ) : (
-                    <Skeleton className="h-12" />
-                  )}
-                  {b.priorVisitsWithCaregiver ? (
-                    <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
-                      <Repeat className="size-3.5 shrink-0" /> {t("repeatVisits", { count: b.priorVisitsWithCaregiver })}
-                    </p>
-                  ) : null}
-                  {c && (b.status === "CONFIRMED" || b.status === "COMPLETED") && (
-                    <Link
-                      href={`/customer/messages/${b.id}`}
-                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-ink-200 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
-                    >
-                      <MessagesSquare className="size-4" /> {t("messageCaregiver")}
-                    </Link>
-                  )}
-                </CardBody>
-              </Card>
-
+            <div className={clsx("space-y-5", tab !== "details" && "hidden lg:block")}>
               <Card>
                 <CardHeader title={t("address")} />
                 <CardBody className="space-y-3">
-                  <LocationMap lat={b.address.latitude} lng={b.address.longitude} label={b.address.addressLine} />
+                  {hasValidCoords && (
+                    <LiveRouteMap
+                      lat={addrLat}
+                      lng={addrLng}
+                      destLabel={b.address.label ?? "Home"}
+                      heightClass="h-48"
+                      directionsUrl={mapsUrl(b.address)}
+                      modalTitle={b.address.addressLine}
+                    />
+                  )}
                   <p dir="auto" className="text-sm text-ink-800">
                     <b>{b.address.label ?? t("address")}</b>
                     <br />
@@ -349,7 +453,6 @@ export default function BookingDetailPage() {
                   )}
                 </CardBody>
               </Card>
-
             </div>
           </div>
         </>
