@@ -86,17 +86,7 @@ const OTP_TEMPLATES: Array<(otp: string, opts: SendWhatsAppOtpOptions) => string
   (otp, opts) => {
     const ttl = Math.max(1, Math.round(opts.ttlMinutes ?? 5));
     const category = purposeCategoryLabel(opts.purpose);
-    return `*${otp}* is your CareSaath verification code for ${category}. It expires in ${ttl} minute${ttl === 1 ? '' : 's'}. Do not share this code with anyone.`;
-  },
-  (otp, opts) => {
-    const ttl = Math.max(1, Math.round(opts.ttlMinutes ?? 5));
-    const category = purposeCategoryLabel(opts.purpose);
     return `Your CareSaath ${category} verification code is *${otp}*. Valid for ${ttl} minute${ttl === 1 ? '' : 's'}. Never share this code with anyone.`;
-  },
-  (otp, opts) => {
-    const ttl = Math.max(1, Math.round(opts.ttlMinutes ?? 5));
-    const category = purposeCategoryLabel(opts.purpose);
-    return `*${otp}* is your CareSaath ${category} code. Expires in ${ttl} minute${ttl === 1 ? '' : 's'}. For your security, do not share this code.`;
   },
 ];
 
