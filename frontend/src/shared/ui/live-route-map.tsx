@@ -121,21 +121,23 @@ function LeafletRouteCanvas({
         attributionControl: false,
       });
 
-      // CARTO Voyager tiles are fast, CDN-backed, Retina-ready, and reliable on web hosts.
+      // OpenStreetMap tiles (free, no API key) with ArcGIS World Street Map fallback on error.
       let fallbackAdded = false;
       const primaryTiles = L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
-          subdomains: "abcd",
-          maxZoom: 20,
+          maxZoom: 19,
         },
       );
       primaryTiles.on("tileerror", () => {
         if (fallbackAdded || cancelled || !mapRef.current) return;
         fallbackAdded = true;
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-        }).addTo(map);
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+          {
+            maxZoom: 19,
+          },
+        ).addTo(map);
       });
       primaryTiles.addTo(map);
 
