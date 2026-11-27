@@ -563,7 +563,7 @@ export class VisitsService {
         booking: {
           include: {
             customer: { select: { id: true, phone: true } },
-            caregiver: { select: { userId: true } },
+            caregiver: { select: { userId: true, user: { select: { fullName: true } } } },
           },
         },
       },
@@ -645,12 +645,39 @@ export class VisitsService {
         status: BookingStatus.COMPLETED,
       });
     }
+    const cgName = visit.booking.caregiver?.user?.fullName?.trim() || 'Your caregiver';
+    const serviceMap: Record<string, string> = {
+      DOCTOR: 'Doctor Consultation',
+      NURSING: 'Nursing Care',
+      PHYSIOTHERAPY: 'Physiotherapy',
+      POST_SURGERY_CARE: 'Post-Surgery Care',
+      ELDERLY_CARE: 'Elderly Care',
+    };
+    const service =
+      (visit.booking.serviceType && serviceMap[visit.booking.serviceType]) ||
+      'care visit';
+    const visitMessage = (() => {
+      switch (to) {
+        case VisitStatus.EN_ROUTE:
+          return `${cgName} is on the way for your ${service}. Open CareSaath to track live arrival.`;
+        case VisitStatus.CHECKED_IN:
+          return `${cgName} has arrived for your ${service}.`;
+        case VisitStatus.IN_PROGRESS:
+          return `${cgName} has started your ${service}.`;
+        case VisitStatus.CHECKED_OUT:
+          return `${cgName} has finished your ${service}.`;
+        case VisitStatus.COMPLETED:
+          return `Your ${service} with ${cgName} is complete. Please confirm payment and share your review.`;
+        default:
+          return `Your ${service} with ${cgName} is now ${to.replace(/_/g, ' ').toLowerCase()}.`;
+      }
+    })();
     await this.notifications.notify({
       userId: visit.booking.customer.id,
       phone: visit.booking.customer.phone,
       event: `visit.${to.toLowerCase()}`,
       payload: { visitId, bookingId: visit.bookingId, status: to },
-      message: `Your CareSaath visit status is now ${to.replace(/_/g, ' ').toLowerCase()}.`,
+      message: visitMessage,
     });
     return updated;
   }

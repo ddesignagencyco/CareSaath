@@ -42,6 +42,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -352,6 +353,21 @@ export class SearchQueryDto {
   @Min(-180)
   @Max(180)
   lng?: number;
+
+  @ApiPropertyOptional({ example: '2026-11-27', description: 'Optional YYYY-MM-DD date to filter caregivers available on that day' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date?: string;
+
+  @ApiPropertyOptional({ example: '15:20', description: 'Optional HH:mm start time (used with date & timeWindowEnd)' })
+  @IsOptional()
+  @Matches(/^\d{2}:\d{2}$/)
+  timeWindowStart?: string;
+
+  @ApiPropertyOptional({ example: '16:20', description: 'Optional HH:mm end time (used with date & timeWindowStart)' })
+  @IsOptional()
+  @Matches(/^\d{2}:\d{2}$/)
+  timeWindowEnd?: string;
 
   @ApiPropertyOptional({
     example: true,
@@ -784,12 +800,36 @@ export class CaregiversService {
   /** Public search (FR-C3, FR-C4): only APPROVED caregivers of ACTIVE users. */
   async search(query: SearchQueryDto): Promise<SearchResult> {
     const hasPoint = query.lat !== undefined && query.lng !== undefined;
-    const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${hasPoint ? `${query.lat},${query.lng}` : 'any'}:${query.page}:${query.limit}`;
+    const hasWindow = Boolean(query.date && query.timeWindowStart && query.timeWindowEnd);
+    const cacheKey = `search:caregivers:${query.specialty ?? 'all'}:${query.city ?? 'all'}:${hasPoint ? `${query.lat},${query.lng}` : 'any'}:${hasWindow ? `${query.date}_${query.timeWindowStart}-${query.timeWindowEnd}` : 'anytime'}:${query.page}:${query.limit}`;
     const ttlSeconds = await this.config.getNumber('search.cacheTtlSeconds');
     if (ttlSeconds > 0) {
       const cached = await this.redis.client.get(cacheKey);
       if (cached) {
         return { result: JSON.parse(cached) as Paginated<unknown>, cache: 'HIT' };
+      }
+    }
+
+    let availabilityFilter: Prisma.CaregiverProfileWhereInput = {};
+    if (hasWindow) {
+      const parsedDate = new Date(`${query.date!}T00:00:00.000Z`);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        const dayOfWeek = parsedDate.getUTCDay();
+        availabilityFilter = {
+          availabilityRules: {
+            some: {
+              dayOfWeek,
+              startTime: { lte: query.timeWindowStart! },
+              endTime: { gte: query.timeWindowEnd! },
+            },
+          },
+          availabilityBlocks: {
+            none: {
+              startDate: { lte: parsedDate },
+              endDate: { gte: parsedDate },
+            },
+          },
+        };
       }
     }
 
@@ -800,6 +840,7 @@ export class CaregiversService {
       ...(query.city
         ? { serviceArea: { path: ['cities'], array_contains: [query.city] } }
         : {}),
+      ...availabilityFilter,
     };
     const baseSelect = {
       id: true,

@@ -517,6 +517,25 @@ export class BookingsService {
     }
     await this.assertCaregiverCoversAddress(caregiver.id, address);
 
+    // Prevent double-booking the same patient for an overlapping date and time window
+    // (whether with the same caregiver or a different caregiver) while another booking is open.
+    const duplicate = await this.prisma.booking.findFirst({
+      where: {
+        patientId: dto.patientId,
+        status: { in: [BookingStatus.REQUESTED, BookingStatus.CONFIRMED] },
+        startDate: { lte: endDate },
+        endDate: { gte: startDate },
+        timeWindowStart: { lt: dto.timeWindowEnd },
+        timeWindowEnd: { gt: dto.timeWindowStart },
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new ConflictException(
+        'This patient already has an active or pending booking for that time',
+      );
+    }
+
     const now = new Date();
     const respondWindowMinutes = await this.config.getNumber(
       dto.isImmediate ? 'booking.immediateRespondWindowMinutes' : 'booking.respondWindowMinutes',
@@ -580,11 +599,16 @@ export class BookingsService {
       entityId: booking.id,
       metadata: { visits: occurrences.length, caregiverId: caregiver.id, discountAmount },
     });
+    const slot = formatBookingSlot(startDate, dto.timeWindowStart, dto.timeWindowEnd);
+    const service = formatServiceLabel(caregiver.specialty);
+    const reqMsg = slot
+      ? `New ${service} request for ${patient.name} on ${slot}. Please respond before it expires.`
+      : `New ${service} request for ${patient.name}. Please respond before it expires.`;
     await this.notifications.notify({
       userId: caregiver.userId,
       event: 'booking.requested',
       payload: { bookingId: booking.id, visits: occurrences.length },
-      message: 'You have a new booking request. Please respond before it expires.',
+      message: reqMsg,
     });
     this.bookingChanged(booking.id, 'created', BookingStatus.REQUESTED, user.sub, caregiver.userId);
     return this.getBooking(booking.id);
@@ -928,11 +952,25 @@ export class BookingsService {
       entityType: 'Booking',
       entityId: id,
     });
-    await this.notifyCustomer(booking.customerId, 'booking.confirmed', {
-      bookingId: id,
-    });
+    const detail = await this.getBooking(id);
+    const cgName = detail.caregiver?.user?.fullName?.trim() || 'Your caregiver';
+    const service = formatServiceLabel(detail.serviceType ?? booking.serviceType);
+    const slot = formatBookingSlot(
+      detail.startDate ?? booking.startDate,
+      detail.timeWindowStart ?? booking.timeWindowStart,
+      detail.timeWindowEnd ?? booking.timeWindowEnd,
+    );
+    const confirmMsg = slot
+      ? `${cgName} accepted your ${service} for ${slot}.`
+      : `${cgName} accepted your ${service}.`;
+    await this.notifyCustomer(
+      booking.customerId,
+      'booking.confirmed',
+      { bookingId: id },
+      confirmMsg,
+    );
     this.bookingChanged(id, 'accepted', BookingStatus.CONFIRMED, booking.customerId, user.sub);
-    return this.getBooking(id);
+    return detail;
   }
 
   async decline(user: AuthUser, id: string, dto: RejectBookingDto) {
@@ -980,10 +1018,25 @@ export class BookingsService {
       entityId: id,
       metadata: { reason: dto.reason ?? null },
     });
-    await this.notifyCustomer(booking.customerId, 'booking.declined', { bookingId: id });
+    const detail = await this.getBooking(id);
+    const cgName = detail.caregiver?.user?.fullName?.trim() || 'The caregiver';
+    const service = formatServiceLabel(detail.serviceType ?? booking.serviceType);
+    const slot = formatBookingSlot(
+      detail.startDate ?? booking.startDate,
+      detail.timeWindowStart ?? booking.timeWindowStart,
+      detail.timeWindowEnd ?? booking.timeWindowEnd,
+    );
+    const reason = dto.reason?.trim();
+    const declineMsg = `${cgName} declined your ${service}${slot ? ` for ${slot}` : ''}.${reason ? ` Reason: ${reason}` : ' You can book another available caregiver.'}`;
+    await this.notifyCustomer(
+      booking.customerId,
+      'booking.declined',
+      { bookingId: id },
+      declineMsg,
+    );
     this.bookingChanged(id, 'declined', BookingStatus.DECLINED, booking.customerId, user.sub);
     await this.caregivers.recordStrike(caregiverId, 'DECLINED', id);
-    return this.getBooking(id);
+    return detail;
   }
 
   /** FR-C13 (gap-fill): cancel a booking that has not started. */
@@ -1038,10 +1091,15 @@ export class BookingsService {
       select: { userId: true },
     });
     if (profile) {
+      const service = formatServiceLabel(booking.serviceType);
+      const slot = formatBookingSlot(booking.startDate, booking.timeWindowStart, booking.timeWindowEnd);
       await this.notifications.notify({
         userId: profile.userId,
         event: 'booking.cancelled',
         payload: { bookingId: id },
+        message: slot
+          ? `${service} for ${slot} was cancelled by the customer.`
+          : `${service} was cancelled by the customer.`,
       });
     }
     this.bookingChanged(id, 'cancelled', BookingStatus.CANCELLED, user.sub, profile?.userId);
@@ -1139,6 +1197,7 @@ export class BookingsService {
       entityId: visit.id,
       metadata: { bookingId, replacementVisitId: replacement.id, newDate: dto.newDate },
     });
+    const newSlot = formatBookingSlot(dto.newDate, dto.timeWindowStart, dto.timeWindowEnd);
     await this.notifications.notify({
       userId: booking.caregiver.userId,
       event: 'visit.rescheduled',
@@ -1148,6 +1207,9 @@ export class BookingsService {
         visitId: replacement.id,
         scheduledDate: dto.newDate,
       },
+      message: newSlot
+        ? `Visit rescheduled by customer to ${newSlot}.`
+        : 'A visit was rescheduled by the customer.',
     });
     this.realtime?.entityUpdated(
       { users: [user.sub, booking.caregiver.userId] },
@@ -1160,9 +1222,56 @@ export class BookingsService {
     customerId: string,
     event: string,
     payload: Prisma.InputJsonObject,
+    message?: string,
   ) {
-    await this.notifications.notify({ userId: customerId, event, payload });
+    await this.notifications.notify({ userId: customerId, event, payload, message });
   }}
+
+const SERVICE_LABELS: Record<string, string> = {
+  DOCTOR: 'Doctor Consultation',
+  NURSING: 'Nursing Care',
+  PHYSIOTHERAPY: 'Physiotherapy',
+  POST_SURGERY_CARE: 'Post-Surgery Care',
+  ELDERLY_CARE: 'Elderly Care',
+};
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatServiceLabel(service?: string | null): string {
+  if (!service) return 'care visit';
+  return SERVICE_LABELS[service] ?? service.replace(/_/g, ' ');
+}
+
+function formatTime12(hhmm?: string | null): string {
+  if (!hhmm || !hhmm.includes(':')) return hhmm ?? '';
+  const [hStr, mStr] = hhmm.split(':');
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function formatBookingSlot(
+  startDate?: Date | string | null,
+  start?: string | null,
+  end?: string | null,
+): string {
+  const parts: string[] = [];
+  if (startDate) {
+    const d = startDate instanceof Date ? startDate : new Date(startDate);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(`${d.getUTCDate()} ${SHORT_MONTHS[d.getUTCMonth()]}`);
+    }
+  }
+  if (start && end) {
+    parts.push(`${formatTime12(start)} – ${formatTime12(end)}`);
+  } else if (start) {
+    parts.push(formatTime12(start));
+  }
+  return parts.join(', ');
+}
 
 @ApiTags('Customer - Bookings')
 @ApiBearerAuth()
