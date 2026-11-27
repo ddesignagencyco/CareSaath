@@ -192,7 +192,10 @@
       "arriveBetween": "Arrive between",
       "and": "and",
       "summary": "<b>{count, plural, one {# visit} other {# visits}}</b> · {days} · {window}",
-      "offHours": "Outside {name}'s usual hours on {days}. They may decline; check their weekly hours on the profile."
+      "offHours": "Outside {name}'s usual hours on {days}. They may decline; check their weekly hours on the profile.",
+      "unavailable": "{name} is not available at this time on {days}. Choose another time to continue.",
+      "blocked": "{name} is unavailable on {days}. Choose another date to continue.",
+      "quickSlots": "Quick times"
     },
     "errors": {
       "chooseDate": "Choose a date",

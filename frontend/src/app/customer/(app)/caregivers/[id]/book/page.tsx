@@ -17,7 +17,7 @@ import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { Field, Input } from "@shared/ui/field";
 import { DatePicker } from "@shared/ui/date-picker";
-import { TimePicker } from "@shared/ui/time-picker";
+import { QuickTimePicker } from "@shared/ui/time-picker";
 import { Avatar, Skeleton } from "@shared/ui/misc";
 import { useToast } from "@shared/ui/toast";
 import type { Address, PatientProfile } from "@shared/caregiver-types";
@@ -53,6 +53,8 @@ function countVisits(type: "SINGLE" | "RECURRING", start: string, end: string, w
 
 /** Days of week (0 = Sun … 6 = Sat) in the plan when the requested time falls outside the caregiver's weekly hours. */
 function outsideHours(c: PublicCaregiver, dates: string[], start: string, end: string): number[] {
+  // No weekly rules means unrestricted on the API too — never block in that case.
+  if (c.availabilityRules.length === 0) return [];
   const off = new Set<number>();
   for (const d of dates) {
     const dow = new Date(`${d}T00:00:00Z`).getUTCDay();
@@ -60,6 +62,31 @@ function outsideHours(c: PublicCaregiver, dates: string[], start: string, end: s
     if (!ok) off.add(dow);
   }
   return [...off];
+}
+
+/** Dates the caregiver marked unavailable (blackout), already published on the public profile. */
+function blackoutDates(c: PublicCaregiver, dates: string[]): string[] {
+  const blocks = c.availabilityBlocks ?? [];
+  return dates.filter((d) => blocks.some((b) => d >= b.startDate && d <= b.endDate));
+}
+
+const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+/** Today's earliest valid arrival: now + 10 min, rounded up to the next 5-min slot (same rule as the app). */
+function nextBookableTime(nowMs: number): string {
+  const d = new Date(nowMs + 10 * 60_000);
+  d.setSeconds(0, 0);
+  const rem = d.getMinutes() % 5;
+  if (rem) d.setMinutes(d.getMinutes() + (5 - rem));
+  return hhmm(d);
+}
+
+function plusOneHour(value: string): string {
+  const [h, m] = value.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return "23:59";
+  const total = h * 60 + m + 60;
+  if (total >= 24 * 60) return "23:59";
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function Choice({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -103,12 +130,13 @@ export default function BookPage() {
   const [type, setType] = useState<"SINGLE" | "RECURRING">("SINGLE");
   const [immediate, setImmediate] = useState(false);
   // The emergency flow links here with ?immediate=1 — default to ASAP once the param resolves.
+  const forceImmediate = search.get("immediate") === "1";
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time default synced from the URL
-    if (search.get("immediate") === "1") setImmediate(true);
+    if (forceImmediate) setImmediate(true);
     const presetAddress = search.get("addressId");
     if (presetAddress) setAddressId(presetAddress);
-  }, [search]);
+  }, [search, forceImmediate]);
   // On the emergency path, if the family has exactly one patient, pre-select them so the ASAP
   // flow is effectively one confirm — multi-patient still has to choose who needs care.
   useEffect(() => {
@@ -129,33 +157,48 @@ export default function BookPage() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const c = caregiver.data;
+  // Urgent/ASAP is only offered when the caregiver is actually available right now
+  // (or the customer came from the emergency link), exactly like the app.
+  const showImmediate = !!c?.availableNow || forceImmediate;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- react to profile arriving
+    if (c && !showImmediate && immediate) setImmediate(false);
+  }, [c, showImmediate, immediate]);
   const today = now ? localDayKey(now) : "";
-  const nowHHmm = now ? ((d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`)(new Date(now)) : "";
+  const nowHHmm = now ? hhmm(new Date(now)) : "";
+  const earliestHHmm = now ? nextBookableTime(now) : "";
 
-  /** Pick the start date; when it's today, pre-fill a window starting at the current time
-   *  (the next 5-min slot, so it's valid and never in the past) — not some minutes ahead. */
+  /** Pick the start date; when it's today, pre-fill a future window (now + 10 min,
+   *  rounded to the next 5-min slot) so the customer never picks a past time. */
   const pickStartDate = (value: string) => {
     setStart(value);
-    if (value && value === today && now) {
-      const fmt = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-      const fromAt = new Date(now);
-      fromAt.setMinutes((Math.floor(fromAt.getMinutes() / 5) + 1) * 5, 0, 0); // next 5-min slot from now
-      if (localDayKey(fromAt.getTime()) !== today) {
+    if (value && value === today && earliestHHmm) {
+      if (earliestHHmm < nowHHmm) { // buffer rolled past midnight
         setFrom("23:50");
         setTo("23:59");
         return;
       }
-      const toAt = new Date(fromAt.getTime() + 60 * 60_000);
-      setFrom(fmt(fromAt));
-      setTo(localDayKey(toAt.getTime()) !== today ? "23:59" : fmt(toAt));
+      setFrom(earliestHHmm);
+      setTo(plusOneHour(earliestHHmm));
     }
   };
   const maxEnd = start ? new Date(new Date(`${start}T00:00:00Z`).getTime() + MAX_RANGE_DAYS * 86_400_000).toISOString().slice(0, 10) : "";
   const dates = countVisits(type, start, end, weekdays);
   const visitCount = immediate ? 1 : dates.length;
   const offDays = c && dates.length ? outsideHours(c, dates, from, to) : [];
+  const blocked = c && dates.length ? blackoutDates(c, dates) : [];
   const patient = patients.data?.find((p) => p.id === patientId);
   const address = addresses.data?.find((a) => a.id === addressId);
+
+  // Block BEFORE the review/submit step, so customers don't waste time filling
+  // every field only to be rejected by the same rule on final submit.
+  const availabilityError = !immediate && !!c && !!dates.length
+    ? blocked.length
+      ? t("when.blocked", { name: c.user.fullName.split(" ")[0], days: f.list(blocked) })
+      : offDays.length
+        ? t("when.unavailable", { name: c.user.fullName.split(" ")[0], days: f.list(offDays.map((d) => f.dayOfWeek(d))) })
+        : null
+    : null;
 
   const whenError = immediate
     ? null
@@ -163,7 +206,7 @@ export default function BookPage() {
     ? t("errors.chooseDate")
     : start < today
       ? t("errors.past")
-      : start === today && !!nowHHmm && from <= nowHHmm
+      : start === today && !!earliestHHmm && from < earliestHHmm
         ? t("errors.pastTime")
       : from >= to
         ? t("errors.endTime")
@@ -182,14 +225,13 @@ export default function BookPage() {
   const windowText = f.timeWindow(from, to);
   // Block booking a caregiver for an address outside their service area.
   const addressOutOfArea = !!(c && address && !c.serviceArea.cities.includes(address.city));
-  const stepOk = [!!patientId, !!addressId && !addressOutOfArea, !whenError, true][step];
+  const stepOk = [!!patientId, !!addressId && !addressOutOfArea, !whenError && !availabilityError, !availabilityError][step];
 
   const book = useAction(
     async () => {
       const startNow = new Date();
       const startDay = localDayKey(startNow.getTime());
       const endAt = new Date(startNow.getTime() + 60 * 60_000);
-      const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
       const immediateEnd = localDayKey(endAt.getTime()) !== startDay ? "23:59" : hhmm(endAt);
       const payload: CreateBookingInput = immediate
         ? {
@@ -381,10 +423,10 @@ export default function BookPage() {
         {step === 2 && (
           <div className="space-y-5">
             <h2 className="text-lg font-extrabold text-ink-900">{t("when.title")}</h2>
-            <div className="grid grid-cols-3 gap-1 rounded-xl bg-ink-50 p-1" role="radiogroup" aria-label={t("when.typeAria")}>
+            <div className={clsx("grid gap-1 rounded-xl bg-ink-50 p-1", showImmediate ? "grid-cols-3" : "grid-cols-2")} role="radiogroup" aria-label={t("when.typeAria")}>
               {(
                 [
-                  ["IMMEDIATE", t("when.immediate")],
+                  ...(showImmediate ? [["IMMEDIATE", t("when.immediate")] as const] : []),
                   ["SINGLE", t("when.single")],
                   ["RECURRING", t("when.recurring")],
                 ] as const
@@ -434,10 +476,10 @@ export default function BookPage() {
               {type === "SINGLE" && (
                 <>
                   <Field label={t("when.arriveBetween")} required>
-                    {(fid) => <TimePicker id={fid} min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={setFrom} />}
+                    {(fid) => <QuickTimePicker id={fid} min={start === today ? earliestHHmm || undefined : undefined} value={from} onChange={setFrom} quickLabel={t("when.quickSlots")} />}
                   </Field>
                   <Field label={t("when.and")} required>
-                    {(fid) => <TimePicker id={fid} min={from || undefined} value={to} onChange={setTo} />}
+                    {(fid) => <QuickTimePicker id={fid} min={from || undefined} value={to} onChange={setTo} quickLabel={t("when.quickSlots")} />}
                   </Field>
                 </>
               )}
@@ -470,16 +512,21 @@ export default function BookPage() {
             {!immediate && type === "RECURRING" && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label={t("when.arriveBetween")} required>
-                  {(fid) => <TimePicker id={fid} min={start === today ? nowHHmm || undefined : undefined} value={from} onChange={setFrom} />}
+                  {(fid) => <QuickTimePicker id={fid} min={start === today ? earliestHHmm || undefined : undefined} value={from} onChange={setFrom} quickLabel={t("when.quickSlots")} />}
                 </Field>
                 <Field label={t("when.and")} required>
-                  {(fid) => <TimePicker id={fid} min={from || undefined} value={to} onChange={setTo} />}
+                  {(fid) => <QuickTimePicker id={fid} min={from || undefined} value={to} onChange={setTo} quickLabel={t("when.quickSlots")} />}
                 </Field>
               </div>
             )}
             {!immediate &&
               (whenError ? (
                 start && <p className="text-sm font-medium text-danger-600">{whenError}</p>
+              ) : availabilityError ? (
+                <p className="flex items-start gap-2 rounded-xl bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  {availabilityError}
+                </p>
               ) : (
                 <div className="space-y-2">
                   <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
@@ -499,6 +546,12 @@ export default function BookPage() {
         {step === 3 && c && (
           <div className="space-y-5">
             <h2 className="text-lg font-extrabold text-ink-900">{t("review.title")}</h2>
+            {availabilityError && (
+              <p className="flex items-start gap-2 rounded-xl bg-danger-50 px-4 py-3 text-sm font-medium text-danger-700">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                {availabilityError} <button type="button" className="ms-auto font-bold underline" onClick={() => setStep(2)}>{t("when.title")}</button>
+              </p>
+            )}
             <dl className="divide-y divide-ink-100 rounded-xl border border-ink-100">
               {[
                 { icon: UserRound, label: t("review.patient"), value: patient?.name },
@@ -626,7 +679,7 @@ export default function BookPage() {
             {tc("continue")} <ArrowRight className="rtl:-scale-x-100 size-4" />
           </Button>
         ) : (
-          <Button size="lg" loading={book.isPending} onClick={() => book.mutate(undefined)}>
+          <Button size="lg" loading={book.isPending} disabled={!stepOk} onClick={() => book.mutate(undefined)}>
             {t("send")}
           </Button>
         )}

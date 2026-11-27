@@ -47,3 +47,39 @@ export function TimePicker({
     </div>
   );
 }
+
+/** Common full-hour slots so customers don't have to dial individual minutes. */
+const QUICK_SLOTS = ["08:00", "09:00", "10:00", "11:00", "12:00", "14:00", "16:00", "18:00", "20:00"];
+
+/** Time field with one-tap popular slots; the native field remains for exact times. */
+export function QuickTimePicker({
+  quickLabel,
+  ...props
+}: Parameters<typeof TimePicker>[0] & { quickLabel?: string }) {
+  const slots = props.min ? QUICK_SLOTS.filter((slot) => slot >= props.min!) : QUICK_SLOTS;
+  return (
+    <div className="space-y-2">
+      <TimePicker {...props} />
+      {slots.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={quickLabel}>
+          {slots.map((slot) => (
+            <button
+              key={slot}
+              type="button"
+              disabled={props.disabled}
+              onClick={() => props.onChange(slot)}
+              className={clsx(
+                "rounded-md border px-2 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                props.value === slot
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-ink-200 bg-white text-ink-600 hover:border-brand-400 hover:bg-brand-50",
+              )}
+            >
+              <span dir="ltr">{slot}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
